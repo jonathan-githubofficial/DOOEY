@@ -1,7 +1,6 @@
-import type { Stroke } from "@/lib/doodle";
-import type { ChecklistItem, DecorItem, Resource } from "@/components/page/types";
+import type { ChecklistItem, Resource } from "@/components/page/types";
 
-export type { ChecklistItem, DecorItem, Resource };
+export type { ChecklistItem, Resource };
 
 /** An outside row the planner interleaves with tasks (learning sessions). It
  * can optionally be timeboxed on the calendar, just like a task. */
@@ -38,9 +37,6 @@ export interface Task {
   checklist: ChecklistItem[];
   resources: Resource[];
   attachments: string[]; // PB-stored filenames
-  doodle: Stroke[]; // scrapbook pen strokes on this task's page
-  decor: DecorItem[]; // scrapbook stickers + framed photos
-  decor_photos: string[]; // PB-stored filenames backing photo decorations
   sort_order: number; // manual agenda order (float, midpoint inserts)
   start_min: number; // minutes from local midnight; 0 = unscheduled
   dur_min: number; // timebox length in minutes
@@ -62,8 +58,6 @@ export type TaskPatch = Partial<
     | "notes"
     | "checklist"
     | "resources"
-    | "doodle"
-    | "decor"
     | "sort_order"
     | "start_min"
     | "dur_min"

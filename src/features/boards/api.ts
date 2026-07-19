@@ -1,7 +1,7 @@
-import { useEffect } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import type { RecordModel } from "pocketbase";
 import { pb } from "@/lib/pb";
+import { useCollectionLive } from "@/lib/useCollectionLive";
 import { useAuthStore } from "@/stores";
 import type { BoardItem, BoardPatch, Moodboard } from "./types";
 
@@ -125,22 +125,6 @@ export function useRemoveBoardPhoto() {
 
 /** Live-follow the boards collection; any change refreshes board queries. */
 export function useBoardsLive() {
-  const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
   const qc = useQueryClient();
-  useEffect(() => {
-    if (!isAuthenticated) return;
-    let unsub: (() => void) | undefined;
-    let cancelled = false;
-    pb.collection("moodboards")
-      .subscribe("*", () => qc.invalidateQueries({ queryKey: boardKeys.list }))
-      .then((u) => {
-        if (cancelled) u();
-        else unsub = u;
-      })
-      .catch(() => {});
-    return () => {
-      cancelled = true;
-      unsub?.();
-    };
-  }, [isAuthenticated, qc]);
+  useCollectionLive("moodboards", () => qc.invalidateQueries({ queryKey: boardKeys.list }));
 }

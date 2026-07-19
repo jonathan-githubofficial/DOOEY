@@ -1,5 +1,5 @@
 import { useEffect } from "react";
-import { pb } from "@/lib/pb";
+import { useCollectionLive } from "@/lib/useCollectionLive";
 import { useAuthStore } from "@/stores";
 import { useLearningStore } from "./store";
 
@@ -13,23 +13,8 @@ export function useProgramSync() {
   const syncWithPB = useLearningStore((s) => s.syncWithPB);
 
   useEffect(() => {
-    if (!isAuthenticated) return;
-    let active = true;
-    syncWithPB();
-
-    const subscription = pb
-      .collection("learning_programs")
-      .subscribe("*", () => {
-        if (active) syncWithPB();
-      })
-      .catch((e) => {
-        console.warn("[learning] realtime subscribe failed:", e);
-        return null;
-      });
-
-    return () => {
-      active = false;
-      subscription.then((unsubscribe) => unsubscribe?.()).catch(() => {});
-    };
+    if (isAuthenticated) syncWithPB();
   }, [isAuthenticated, syncWithPB]);
+
+  useCollectionLive("learning_programs", syncWithPB);
 }

@@ -1,6 +1,7 @@
 import { useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { pb } from "@/lib/pb";
+import { nextMonth } from "@/lib/date";
 import { useAuthStore } from "@/stores";
 import { categoryFor } from "./categories";
 import { useLearningStore } from "./store";
@@ -15,14 +16,12 @@ export function useMonthProjectDots(month: string): Record<string, string[]> {
     queryKey: ["tasks", "projectDots", month] as const,
     enabled: isAuthenticated,
     queryFn: async () => {
-      const [y, m] = month.split("-").map(Number);
-      const next = m === 12 ? `${y + 1}-01` : `${y}-${String(m + 1).padStart(2, "0")}`;
       const records = await pb.collection("tasks").getFullList({
         filter: pb.filter(
           "project != '' && done_at = '' && due_date >= {:start} && due_date < {:end}",
           {
             start: new Date(`${month}-01T00:00:00.000Z`),
-            end: new Date(`${next}-01T00:00:00.000Z`),
+            end: new Date(`${nextMonth(month)}-01T00:00:00.000Z`),
           },
         ),
         fields: "due_date,project",

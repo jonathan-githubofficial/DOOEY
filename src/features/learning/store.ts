@@ -168,7 +168,7 @@ export const useLearningStore = create<LearningState>()(
         for (const r of remote) {
           if (!r.materialized) {
             try {
-              await materializeProgram(r.program, r.progress, r.timeboxes);
+              await materializeProgram(r.program);
               r.program.materialized = true;
             } catch (e) {
               console.warn("[learning] migrate existing program failed:", e);

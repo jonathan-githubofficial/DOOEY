@@ -1,6 +1,7 @@
 import { motion } from "motion/react";
 import { ChevronLeft, ChevronRight, ChevronUp } from "lucide-react";
 import { cn } from "@/lib/cn";
+import { pad2 } from "@/lib/date";
 import { localDate, useMonthOpenCounts } from "../api";
 import { addDays, toLocalNoon } from "../dates";
 
@@ -37,7 +38,7 @@ export function MonthView({
   const shiftMonth = (delta: number) => {
     const d = new Date(firstNoon);
     d.setMonth(d.getMonth() + delta);
-    onMonth(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`);
+    onMonth(`${d.getFullYear()}-${pad2(d.getMonth() + 1)}`);
   };
 
   return (

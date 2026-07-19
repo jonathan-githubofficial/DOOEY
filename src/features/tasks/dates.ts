@@ -1,4 +1,11 @@
-import { localDate } from "./api";
+import { pad2 } from "@/lib/date";
+
+/** Today's local date as YYYY-MM-DD (browser timezone), offset by whole days. */
+export function localDate(offsetDays = 0): string {
+  const d = new Date();
+  d.setDate(d.getDate() + offsetDays);
+  return `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`;
+}
 
 /** The YYYY-MM-DD part of a PB date string (due dates are date-only by contract). */
 export function dateOnly(pbDate: string): string {
@@ -18,8 +25,7 @@ export function toLocalNoon(date: string): Date {
 export function addDays(date: string, n: number): string {
   const d = toLocalNoon(date);
   d.setDate(d.getDate() + n);
-  const pad = (x: number) => String(x).padStart(2, "0");
-  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+  return `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`;
 }
 
 /** The Monday of the week containing `date`. */

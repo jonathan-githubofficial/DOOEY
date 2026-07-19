@@ -1,10 +1,13 @@
-import { useEffect } from "react";
 import { useMutation, useQuery, useQueryClient, type QueryClient } from "@tanstack/react-query";
 import type { RecordModel } from "pocketbase";
 import { pb } from "@/lib/pb";
+import { nextMonth } from "@/lib/date";
+import { useCollectionLive } from "@/lib/useCollectionLive";
 import { useAuthStore } from "@/stores";
-import { addDays } from "./dates";
+import { addDays, localDate } from "./dates";
 import type { Task, TaskPatch } from "./types";
+
+export { localDate };
 
 export const taskKeys = {
   all: ["tasks"] as const,
@@ -24,9 +27,6 @@ function toTask(r: RecordModel): Task {
     checklist: r.checklist ?? [],
     resources: r.resources ?? [],
     attachments: r.attachments ?? [],
-    doodle: r.doodle ?? [],
-    decor: r.decor ?? [],
-    decor_photos: r.decor_photos ?? [],
     sort_order: r.sort_order ?? 0,
     start_min: r.start_min ?? 0,
     dur_min: r.dur_min || 60,
@@ -36,14 +36,6 @@ function toTask(r: RecordModel): Task {
     session_key: r.session_key ?? "",
     created: r.created,
   };
-}
-
-/** Today's local date as YYYY-MM-DD (browser timezone), offset by whole days. */
-export function localDate(offsetDays = 0): string {
-  const d = new Date();
-  d.setDate(d.getDate() + offsetDays);
-  const pad = (n: number) => String(n).padStart(2, "0");
-  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
 }
 
 /** One agenda day. Today additionally carries undated + overdue open tasks;
@@ -83,12 +75,10 @@ export function useMonthOpenCounts(month: string) {
     queryKey: ["tasks", "monthCounts", month] as const,
     enabled: isAuthenticated,
     queryFn: async () => {
-      const [y, m] = month.split("-").map(Number);
-      const next = m === 12 ? `${y + 1}-01` : `${y}-${String(m + 1).padStart(2, "0")}`;
       const records = await pb.collection("tasks").getFullList({
         filter: pb.filter("done_at = '' && due_date >= {:start} && due_date < {:end}", {
           start: new Date(`${month}-01T00:00:00.000Z`),
-          end: new Date(`${next}-01T00:00:00.000Z`),
+          end: new Date(`${nextMonth(month)}-01T00:00:00.000Z`),
         }),
         fields: "due_date",
       });
@@ -130,24 +120,8 @@ export function useTask(id: string) {
 
 /** Live-follow the tasks collection; any change refreshes every tasks query. */
 export function useTasksLive() {
-  const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
   const qc = useQueryClient();
-  useEffect(() => {
-    if (!isAuthenticated) return;
-    let unsub: (() => void) | undefined;
-    let cancelled = false;
-    pb.collection("tasks")
-      .subscribe("*", () => qc.invalidateQueries({ queryKey: taskKeys.all }))
-      .then((u) => {
-        if (cancelled) u();
-        else unsub = u;
-      })
-      .catch(() => {}); // SSE is a refresh channel, not a data dependency
-    return () => {
-      cancelled = true;
-      unsub?.();
-    };
-  }, [isAuthenticated, qc]);
+  useCollectionLive("tasks", () => qc.invalidateQueries({ queryKey: taskKeys.all }));
 }
 
 // ── optimistic-cache plumbing ──────────────────────────────────────────────

@@ -4,7 +4,7 @@ import { Panel } from "@/components/surface";
 import { BoardCanvas, useBoard, useBoardsLive } from "@/features/boards";
 
 export function Board() {
-  const { id } = useParams({ from: "/board/$id" });
+  const { id } = useParams({ from: "/app/board/$id" });
   useBoardsLive();
   const { data: board, isPending, error } = useBoard(id);
   const navigate = useNavigate();

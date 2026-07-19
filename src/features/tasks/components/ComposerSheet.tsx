@@ -3,6 +3,7 @@ import { useNavigate } from "@tanstack/react-router";
 import { AnimatePresence, motion, useDragControls } from "motion/react";
 import { ArrowUpRight, Clock, StickyNote, X } from "lucide-react";
 import { cn } from "@/lib/cn";
+import { pad2 } from "@/lib/date";
 import { localDate, useCreateTask } from "../api";
 import { toLocalNoon, toPbDate } from "../dates";
 import { DueDateButton } from "./DueDateButton";
@@ -17,8 +18,7 @@ const DURATIONS = [
   { min: 180, label: "3h" },
 ];
 
-const pad = (n: number) => String(n).padStart(2, "0");
-const minToTime = (min: number) => `${pad(Math.floor(min / 60))}:${pad(min % 60)}`;
+const minToTime = (min: number) => `${pad2(Math.floor(min / 60))}:${pad2(min % 60)}`;
 const timeToMin = (str: string) => {
   const [h, m] = str.split(":").map(Number);
   return h * 60 + m;

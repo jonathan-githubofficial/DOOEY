@@ -11,16 +11,21 @@ This file is the canonical entry point. Deeper docs live in [docs/](docs/).
 
 ---
 
-## The three spaces
+## The spaces
 
-The app is three spaces behind a persistent **bottom dock** — one tap to anywhere, identical on
-phone and desktop:
+The app is a handful of spaces behind a persistent **bottom dock** — one tap to anywhere,
+identical on phone and desktop. The dock's left cluster (doodled avatar + wordmark) opens
+**Account**; the tabs are:
 
-1. **Today** — everything I have to do today in one glance: one-shot tasks, recurring-habit
-   progress, and my Google Calendar events for the day, interleaved.
-2. **Learning** — my programs as file-folder cards, plus a guided "new program" flow where
-   Claude generates a full schedule in-app (learning-architect methodology).
-3. **Journal** — free-text food log for today.
+1. **Planner** (`/`) — everything I have to do today in one glance: one-shot tasks,
+   recurring-habit progress, and calendar events for the day, interleaved.
+2. **Calendar** (`/calendar`) — the week/month view of dated + time-boxed tasks.
+3. **Boards** (`/boards`) — free-form mood boards: sticky notes, text, links, stickers,
+   doodles, groupable into folders on a canvas.
+4. **Projects** (`/projects`) — learning programs as file-folder cards, plus a guided
+   "new program" flow (learning-architect methodology).
+
+Still on the roadmap, not yet built: **Journal** — free-text food log for today.
 
 **Tasks are pages, not rows.** Every task opens into its own self-contained page with fixed,
 well-designed sections: notes, checklist, resources (links + video embeds), attachments.
@@ -69,21 +74,21 @@ The SCHEDULE.md shape matters — the app parses it. See the skill's `references
 - **Feature by feature.** One feature lands fully before the next starts. No half-finished stubs, no "coming soon" pages, no scaffolding for hypothetical phases.
 - **Simple first, smart later.** Ship the dumb version that works. Add intelligence (smart suggestions, ranking, LLM augmentation) only after the basics earn it.
 - **Personal now, SaaS-ready.** One real user, but data isolation (`owner` + server rules) is never skipped — future multi-user must not require a rewrite.
-- **Getting around is effortless.** Three spaces, one dock, one tap. Depth (task pages, program detail) is drill-in + back, never a maze.
+- **Getting around is effortless.** One dock, one tap to any space. Depth (task pages, board canvas, program detail) is drill-in + back, never a maze.
 
 ---
 
 ## Current scope (locked feature list)
 
-1. **Navigation shell** — the bottom dock + three spaces, in the tactile design language.
-2. **Tasks (Today space)** — persisted one-shot tasks, quick-add with minimum friction.
+1. **Navigation shell** — the bottom dock + spaces, in the tactile design language.
+2. **Tasks (Planner space)** — persisted one-shot tasks, quick-add with minimum friction.
 3. **Task pages** — every task opens to structured sections: notes, checklist, resources (links, video embeds), attachments.
 4. **Recurring habits** — "gym 2–4×/week": weekly target + progress, shown in Today.
 5. **Food journal (Journal space)** — free-text log of what I ate today.
 6. **Google Calendar two-way sync** — dated tasks and learning sessions appear in Google Calendar; calendar events appear in Today.
 7. **Learning generation in-app** — describe a goal on the Learning page, Claude generates the program right there (local Claude Code bridge first, API-key path later behind the same seam). Import/push stays as the power-user path.
 
-Out of scope until explicitly added: sharing/visibility UI, friends/social graph, smart suggestions, notifications, billing, mobile-native, offline.
+Out of scope until explicitly added: sharing/visibility UI, friends/social graph, smart suggestions, notifications, billing, offline.
 
 ---
 
@@ -101,10 +106,69 @@ Out of scope until explicitly added: sharing/visibility UI, friends/social graph
 | Icons | `lucide-react` + custom SVGs in `src/components/icons` |
 | Styling | Tailwind v4 (`@import "tailwindcss"`) + `tw-animate-css` |
 | Fonts | Outfit (body) + Fraunces (display) — both via `@fontsource-variable/*` |
-| Backend | PocketBase (Go binary) on a VPS |
+| Backend | PocketBase (Go binary) — API, realtime, auth, and static web serving |
 | Auth | PocketBase email + Google OAuth |
+| Native shells | Capacitor 8 — `android/` + `ios/` wrap the same Vite build |
+| Hosting | One Docker container (PocketBase serves API + built web) on Google Compute Engine |
 
-**Do not add** without asking: i18n, system theme, a third font, Redux/Jotai/SWR, a second data-fetching lib, native mobile, react-grid-layout, feature-flag service, a block-editor library.
+**Do not add** without asking: i18n, system theme, a third font, Redux/Jotai/SWR, a second data-fetching lib, react-grid-layout, feature-flag service, a block-editor library, Capacitor plugins beyond core.
+
+---
+
+## Auth & sessions
+
+Every space lives behind a router guard; `/login` is the only public route.
+
+- **Login** (`src/pages/Login.tsx`) is a dedicated full-page: email + password sign-in /
+  sign-up (`SignInCard` in `features/auth`). Google OAuth is on the roadmap, not wired yet.
+- **Guard**: the pathless `app` layout route in `src/router.tsx` redirects signed-out visitors
+  to `/login?redirect=<href>`; signing in returns you to where you were headed. Because of that
+  layout, route **ids** are prefixed `/app/...` (e.g. `useParams({ from: "/app/task/$id" })`)
+  while route **paths** are unchanged.
+- **Session**: PocketBase's auth store persists in localStorage. `initSession()`
+  (`features/auth/api.ts`) runs on boot — it refreshes the token/record, and only a definitive
+  4xx from the server drops the session (network failures never sign you out).
+- **Logout** is the sign-out stamp on Account. Any `pb.authStore` change (in or out) calls
+  `router.invalidate()`, so guards re-run and a stale screen can't outlive its session.
+
+---
+
+## Native iOS & Android (Capacitor)
+
+The native apps are **thin Capacitor shells around the exact same web build** — no separate
+mobile codebase, no React Native. Web-first stays the rule: build features for the browser;
+the shells just package `dist/`.
+
+```bash
+npm run mobile:sync      # tsc + vite build, then copies dist/ into android/ + ios/
+npx cap open android     # opens Android Studio (build/run from there)
+npx cap open ios         # opens Xcode — requires a Mac
+```
+
+- `capacitor.config.ts` is the single config (`appId com.dooey.app`, `webDir dist`).
+- **A device can't reach `127.0.0.1`** — set `VITE_PB_URL` to the real PocketBase host before
+  `mobile:sync`, or the native app talks to nothing.
+- Safe areas: `index.html` uses `viewport-fit=cover`; the app layout and dock pad with
+  `env(safe-area-inset-*)` (resolves to 0 in desktop browsers). Any new fixed/edge-hugging UI
+  must do the same.
+- `android/` and `ios/` are generated-but-committed. Don't hand-edit generated files inside
+  them beyond standard native config (icons, splash, signing).
+
+---
+
+## Deployment (Docker → Google Cloud)
+
+The whole app is **one Docker image**: a multi-stage build compiles the web app, then
+PocketBase 0.39.7 (pinned to match `pb/pocketbase.exe` — bump both together) serves the API
+*and* the built SPA from `pb_public`, with SQLite on a mounted disk.
+
+- `docker compose up --build` → production-like run at `http://localhost:8090`.
+- `src/lib/pb.ts` resolves the API host: explicit `VITE_PB_URL` (mobile builds) → dev
+  `127.0.0.1:8090` → **same-origin** in production, so the image is domain-agnostic.
+- Production home is a Compute Engine `e2-micro` + persistent disk, with PocketBase's built-in
+  Let's Encrypt — **not Cloud Run** (SQLite must not live on a network filesystem).
+- Full runbook: [docs/deploy-google-cloud.md](docs/deploy-google-cloud.md) — push to Artifact
+  Registry, create the VM, DNS/TLS, superuser, updates, backups.
 
 ---
 
@@ -155,10 +219,16 @@ panels, not hairline-divided columns.
 ```
 DOOEY/
 ├── CLAUDE.md                ← you are here
+├── capacitor.config.ts      ← native shell config (appId, webDir)
+├── Dockerfile               ← the whole app as one container (web build + PocketBase)
+├── docker-compose.yml       ← local production-like run (port 8090)
 ├── docs/
 │   ├── architecture.md      ← data model, sync, realtime
+│   ├── deploy-google-cloud.md ← Artifact Registry + GCE runbook
 │   └── roadmap.md           ← feature-by-feature delivery plan
 ├── src/                     ← Vite app
+├── android/                 ← Capacitor Android shell (generated, committed)
+├── ios/                     ← Capacitor iOS shell (generated, committed)
 └── pb/                      ← PocketBase binary + pb_hooks + pb_migrations
 ```
 
@@ -171,7 +241,7 @@ src/
     icons/ornaments/   ← decorative SVGs
     surface.tsx        ← Panel, Eyebrow (shared tactile primitives)
   features/
-    <feature>/         ← one folder per delivered feature (tasks, learning, journal, calendar, auth)
+    <feature>/         ← one folder per delivered feature (tasks, learning, boards, style, auth)
       components/      ← feature-specific UI
       api.ts           ← PB queries/mutations for this feature
       types.ts         ← feature-local types

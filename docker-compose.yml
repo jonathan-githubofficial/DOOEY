@@ -1,0 +1,13 @@
+# Local, production-like run of the whole app in one container:
+#   docker compose up --build   →   http://localhost:8090
+# Day-to-day development stays on `npm run dev:all` (hot reload).
+services:
+  dooey:
+    build: .
+    ports:
+      - "8090:8090"
+    volumes:
+      - pb_data:/pb/pb_data
+
+volumes:
+  pb_data:

@@ -1,0 +1,16 @@
+node_modules
+dist
+android
+ios
+pb/pb_data
+pb/pocketbase.exe
+.env.local
+.env.*.local
+.git
+.claude
+.playwright-mcp
+.vscode
+docs
+programs
+scripts
+CLAUDE.md

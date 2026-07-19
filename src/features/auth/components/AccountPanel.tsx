@@ -1,23 +1,14 @@
-import { useState } from "react";
 import { LogOut, Moon, Sun } from "lucide-react";
 import { motion } from "motion/react";
 import { cn } from "@/lib/cn";
 import { Eyebrow, Panel, StampButton } from "@/components/surface";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { useAuthStore, useThemeStore } from "@/stores";
-import { useLearningStore } from "@/features/learning";
-import { signIn, signOut, signUp } from "../api";
+import { signOut } from "../api";
 import { AvatarDoodle } from "./AvatarDoodle";
 
-/** The account space: sign in / sign up when signed out; your doodled self,
- * email and sign-out when signed in. */
+/** The account space: your doodled self, email, appearance and sign-out.
+ * The route guard guarantees a session, so there's no signed-out branch. */
 export function AccountPanel() {
-  const isAuthed = useAuthStore((s) => s.isAuthenticated);
-  return isAuthed ? <SignedIn /> : <SignInForm />;
-}
-
-function SignedIn() {
   const user = useAuthStore((s) => s.user);
   return (
     <Panel className="p-8 md:p-10">
@@ -75,70 +66,5 @@ function ThemeToggle() {
         {dark ? <Moon className="h-4 w-4 text-sky" /> : <Sun className="h-4 w-4 text-honey" />}
       </motion.span>
     </button>
-  );
-}
-
-function SignInForm() {
-  const syncWithPB = useLearningStore((s) => s.syncWithPB);
-  const [mode, setMode] = useState<"in" | "up">("in");
-  const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-
-  const submit = async () => {
-    if (!email.trim() || !password || busy) return;
-    setBusy(true);
-    setError(null);
-    try {
-      if (mode === "up") await signUp(email.trim(), password);
-      else await signIn(email.trim(), password);
-      await syncWithPB();
-      setPassword("");
-    } catch (e) {
-      setError(e instanceof Error ? e.message : "Could not sign in");
-    } finally {
-      setBusy(false);
-    }
-  };
-
-  return (
-    <Panel className="p-8 md:p-10">
-      <div className="flex items-baseline justify-between">
-        <Eyebrow>{mode === "in" ? "sign in" : "create account"}</Eyebrow>
-        <button
-          onClick={() => setMode((m) => (m === "in" ? "up" : "in"))}
-          className="text-[10px] uppercase tracking-[0.22em] text-zest transition-colors hover:text-ink"
-        >
-          {mode === "in" ? "new here?" : "have an account?"}
-        </button>
-      </div>
-      <h2 className="mt-2 font-display text-3xl font-bold tracking-tight text-ink">
-        {mode === "in" ? "Welcome back." : "Make it yours."}
-      </h2>
-      <div className="mt-5 max-w-sm space-y-2">
-        <Input
-          type="email"
-          value={email}
-          onChange={(e) => setEmail(e.target.value)}
-          placeholder="email"
-          autoComplete="email"
-        />
-        <Input
-          type="password"
-          value={password}
-          onChange={(e) => setPassword(e.target.value)}
-          onKeyDown={(e) => e.key === "Enter" && submit()}
-          placeholder="password"
-          autoComplete={mode === "in" ? "current-password" : "new-password"}
-        />
-      </div>
-      {error && <p className="mt-3 text-xs text-clay">{error}</p>}
-      <div className="mt-5">
-        <Button size="sm" onClick={submit} disabled={busy || !email.trim() || !password}>
-          {busy ? "…" : mode === "in" ? "sign in" : "sign up"}
-        </Button>
-      </div>
-    </Panel>
   );
 }

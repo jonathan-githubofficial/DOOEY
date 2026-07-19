@@ -14,18 +14,6 @@ export interface Resource {
   kind: "link" | "youtube";
 }
 
-/** A placed page decoration: an emoji sticker, or a photo framed as polaroid/stamp. */
-export interface DecorItem {
-  id: string;
-  kind: "sticker" | "photo";
-  emoji?: string;
-  file?: string; // stored filename, resolved by the page's urlFor
-  x: number; // % of page width (item center)
-  y: number; // % of page height (item center)
-  rot: number; // degrees
-  style?: "polaroid" | "stamp";
-}
-
 /** File plumbing a page provides when it can store attachments. */
 export interface PageAttach {
   files: string[];

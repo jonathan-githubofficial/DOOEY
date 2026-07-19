@@ -34,7 +34,7 @@ export function Dock() {
   return (
     <nav
       aria-label="Spaces"
-      className="fixed inset-x-0 bottom-4 z-40 flex justify-center md:bottom-6"
+      className="fixed inset-x-0 bottom-[max(1rem,env(safe-area-inset-bottom))] z-40 flex justify-center md:bottom-[max(1.5rem,env(safe-area-inset-bottom))]"
     >
       <div className="grain flex items-center gap-0.5 rounded-full border border-rule/70 bg-surface/90 p-1 shadow-soft backdrop-blur-md">
         <AccountCluster isActive={active === "/account"} />

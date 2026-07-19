@@ -2,6 +2,7 @@ import { useState } from "react";
 import { AnimatePresence, motion } from "motion/react";
 import { Paintbrush } from "lucide-react";
 import { cn } from "@/lib/cn";
+import { pad2 } from "@/lib/date";
 import { DoodleSvg } from "@/components/doodle-svg";
 import { FolderShell } from "@/components/icons/folder-shell";
 import { useProjectTasks } from "@/features/tasks";
@@ -10,8 +11,6 @@ import { projectStat, relDay } from "../metrics";
 import { programCoverUrl } from "../api";
 import { FOLDER_FONT_CLASS, type GeneratedProgram } from "../types";
 import { FolderStudio } from "./FolderStudio";
-
-const pad2 = (n: number) => String(n).padStart(2, "0");
 
 /**
  * A project as a real folder: a deep-hue shell with a contoured tab, papers

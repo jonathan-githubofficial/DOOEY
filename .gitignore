@@ -5,4 +5,4 @@ dist
 .claude/settings.local.json
 pb/pocketbase.exe
 pb/pb_data
-programs/
+.playwright-mcp

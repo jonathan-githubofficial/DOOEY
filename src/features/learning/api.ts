@@ -44,20 +44,13 @@ export function programCoverUrl(pbId: string, filename: string): string {
   return `${pb.baseURL}/api/files/learning_programs/${pbId}/${encodeURIComponent(filename)}`;
 }
 
-/** Per-session timebox carried over from the old layout map, if any. */
-export type SessionTimebox = Record<string, { start_min?: number; dur_min?: number } | undefined>;
-
 /**
  * Turn a program's SCHEDULE.md sessions into real project tasks — once. Skips
  * any session that already has a task (matched by `session_key`), so importing
- * or re-syncing never duplicates them. Carries over each session's done state
- * and any timebox it had, then flags the program materialized.
+ * or re-syncing never duplicates them. Carries over each session's done state,
+ * then flags the program materialized.
  */
-export async function materializeProgram(
-  program: GeneratedProgram,
-  progress: Record<string, boolean> = {},
-  timeboxes: SessionTimebox = {},
-): Promise<void> {
+export async function materializeProgram(program: GeneratedProgram): Promise<void> {
   const pbId = program.pbId;
   if (!canSync() || !pbId) return;
 
@@ -76,20 +69,18 @@ export async function materializeProgram(
   for (const s of sessions) {
     if (s.key && have.has(s.key)) continue;
     const dateMs = s.date ? new Date(`${s.date}T00:00:00.000Z`).getTime() : 0;
-    const done = progress[s.key] ?? s.doneInFile;
-    const tb = timeboxes[s.key] ?? {};
     await pb.collection("tasks").create(
       {
         owner: ownerId,
         title: s.label,
         description: s.topic,
         due_date: s.date ? new Date(`${s.date}T00:00:00.000Z`) : "",
-        done_at: done ? now : "",
+        done_at: s.doneInFile ? now : "",
         gate: s.isGate,
         project: pbId,
         session_key: s.key,
-        start_min: tb.start_min ?? 0,
-        dur_min: tb.dur_min || 60,
+        start_min: 0,
+        dur_min: 60,
         sort_order: dateMs + s.line,
       },
       { requestKey: null },
@@ -105,36 +96,28 @@ export async function deleteProgramFromPB(pbId: string): Promise<void> {
   await pb.collection("learning_programs").delete(pbId);
 }
 
-/** A program fetched from PocketBase, plus the legacy per-session state still
- * needed to migrate it into tasks the first time. */
+/** A program fetched from PocketBase, with whether its sessions have already
+ * been materialized into tasks. */
 export interface HydratedProgram {
   program: GeneratedProgram;
   materialized: boolean;
-  /** Legacy session progress + timeboxes, used once at materialization. */
-  progress: Record<string, boolean>;
-  timeboxes: SessionTimebox;
 }
 
 export async function listProgramsFromPB(): Promise<HydratedProgram[]> {
   if (!canSync()) return [];
   const records = await pb.collection("learning_programs").getFullList({ sort: "-created" });
-  return records.map((r) => {
-    const layout = (r.layout ?? {}) as Record<string, { start_min?: number; dur_min?: number }>;
-    return {
-      program: {
-        id: r.id,
-        pbId: r.id,
-        goal: r.goal,
-        why: r.why ?? "",
-        files: r.files ?? {},
-        createdAt: r.created,
-        folder: (r.folder ?? undefined) as FolderStyle | undefined,
-        cover: (r.cover as string) || undefined,
-        materialized: !!r.materialized,
-      },
+  return records.map((r) => ({
+    program: {
+      id: r.id,
+      pbId: r.id,
+      goal: r.goal,
+      why: r.why ?? "",
+      files: r.files ?? {},
+      createdAt: r.created,
+      folder: (r.folder ?? undefined) as FolderStyle | undefined,
+      cover: (r.cover as string) || undefined,
       materialized: !!r.materialized,
-      progress: (r.progress ?? {}) as Record<string, boolean>,
-      timeboxes: layout,
-    };
-  });
+    },
+    materialized: !!r.materialized,
+  }));
 }
