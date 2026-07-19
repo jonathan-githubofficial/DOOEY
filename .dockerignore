@@ -4,6 +4,7 @@ android
 ios
 pb/pb_data
 pb/pocketbase.exe
+.env
 .env.local
 .env.*.local
 .git

@@ -1,0 +1,27 @@
+# Production run on a plain VM — build the image on the box and serve the whole
+# app on 80/443 with PocketBase's built-in Let's Encrypt. No registry, no CI.
+#
+#   echo "DOOEY_DOMAIN=your.duckdns.org" > .env     # a free DuckDNS name works
+#   sudo docker compose -f docker-compose.prod.yml up -d --build
+#
+# Update later:  git pull && sudo docker compose -f docker-compose.prod.yml up -d --build
+# Data lives in the pb_data named volume (on the VM's boot disk) and survives
+# rebuilds — back it up from the PocketBase dashboard.
+services:
+  dooey:
+    build: .
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    command:
+      - ./pocketbase
+      - serve
+      - ${DOOEY_DOMAIN}
+      - --http=0.0.0.0:80
+      - --https=0.0.0.0:443
+    volumes:
+      - pb_data:/pb/pb_data
+
+volumes:
+  pb_data:

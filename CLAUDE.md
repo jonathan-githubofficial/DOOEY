@@ -160,15 +160,22 @@ npx cap open ios         # opens Xcode — requires a Mac
 
 The whole app is **one Docker image**: a multi-stage build compiles the web app, then
 PocketBase 0.39.7 (pinned to match `pb/pocketbase.exe` — bump both together) serves the API
-*and* the built SPA from `pb_public`, with SQLite on a mounted disk.
+*and* the built SPA from `pb_public`, with SQLite on a mounted volume.
 
-- `docker compose up --build` → production-like run at `http://localhost:8090`.
+- `docker compose up --build` → production-like run at `http://localhost:8090` (local).
 - `src/lib/pb.ts` resolves the API host: explicit `VITE_PB_URL` (mobile builds) → dev
   `127.0.0.1:8090` → **same-origin** in production, so the image is domain-agnostic.
-- Production home is a Compute Engine `e2-micro` + persistent disk, with PocketBase's built-in
-  Let's Encrypt — **not Cloud Run** (SQLite must not live on a network filesystem).
-- Full runbook: [docs/deploy-google-cloud.md](docs/deploy-google-cloud.md) — push to Artifact
-  Registry, create the VM, DNS/TLS, superuser, updates, backups.
+- Production home is a free-tier Compute Engine `e2-micro` (Ubuntu) running PocketBase's
+  built-in Let's Encrypt — **not Cloud Run** (SQLite must not live on a network filesystem).
+  The whole stack fits GCP's always-free tier.
+- **Deploy builds on the VM — no registry**: `docker-compose.prod.yml` builds the image on
+  the box and serves on 80/443; `pb_data` is a named volume that survives rebuilds. Manually
+  it's SSH + `git pull` + `docker compose -f docker-compose.prod.yml up -d --build`.
+- **Auto-deploy**: pushing to `main` runs [.github/workflows/deploy.yml](.github/workflows/deploy.yml),
+  which SSHes into the VM and runs that same rebuild (no cloud creds — just an SSH-key secret,
+  the VM still builds). It's the lightweight alternative to a registry+CI pipeline.
+- Full runbook: [docs/deploy-google-cloud.md](docs/deploy-google-cloud.md) — VM creation
+  (console), DNS/TLS, superuser, auto-deploy setup, backups, and the free-tier ($0) checklist.
 
 ---
 
@@ -222,9 +229,10 @@ DOOEY/
 ├── capacitor.config.ts      ← native shell config (appId, webDir)
 ├── Dockerfile               ← the whole app as one container (web build + PocketBase)
 ├── docker-compose.yml       ← local production-like run (port 8090)
+├── docker-compose.prod.yml  ← on-VM production run (build on box, serve 80/443)
 ├── docs/
 │   ├── architecture.md      ← data model, sync, realtime
-│   ├── deploy-google-cloud.md ← Artifact Registry + GCE runbook
+│   ├── deploy-google-cloud.md ← free-tier GCE VM runbook (SSH + docker compose)
 │   └── roadmap.md           ← feature-by-feature delivery plan
 ├── src/                     ← Vite app
 ├── android/                 ← Capacitor Android shell (generated, committed)

@@ -1,0 +1,33 @@
+# Push to main → SSH into the free-tier VM → pull + rebuild. No registry, no
+# cloud credentials: the VM builds the image itself, exactly like a manual
+# deploy. Setup (SSH key + 3 secrets): docs/deploy-google-cloud.md § Auto-deploy.
+name: Deploy
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch: {}
+
+concurrency:
+  group: deploy
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Deploy over SSH
+        env:
+          SSH_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
+          HOST: ${{ secrets.DEPLOY_HOST }}
+          USER: ${{ secrets.DEPLOY_USER }}
+        run: |
+          printf '%s\n' "$SSH_KEY" > key
+          chmod 600 key
+          ssh -i key -o StrictHostKeyChecking=accept-new "$USER@$HOST" '
+            set -e
+            cd ~/DOOEY
+            git pull --ff-only
+            sudo docker compose -f docker-compose.prod.yml up -d --build
+            sudo docker image prune -f
+          '
