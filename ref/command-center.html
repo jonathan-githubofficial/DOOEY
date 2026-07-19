@@ -1,0 +1,517 @@
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Launch — personal command center</title>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500;700&display=swap');
+
+:root{
+  --bg:#EAEEF4; --surface:#FFFFFF; --surface-2:#F5F7FB;
+  --ink:#141C2B; --ink-2:#4A5568; --ink-3:#8A94A6;
+  --line:#DCE2EC; --line-2:#EDF1F7;
+  --french:#4C6EF5; --gym:#E64980; --aws:#F08C00; --trip:#0CA678;
+  --cobalt:#2952E3; --signal:#141C2B;
+  --shadow:0 1px 2px rgba(20,28,43,.04),0 8px 24px rgba(20,28,43,.06);
+  --disp:'Space Grotesk',system-ui,sans-serif;
+  --body:'Inter',system-ui,sans-serif;
+  --mono:'JetBrains Mono',ui-monospace,monospace;
+}
+*{box-sizing:border-box}
+html,body{margin:0}
+body{background:var(--bg);color:var(--ink);font-family:var(--body);font-size:15px;line-height:1.5;-webkit-font-smoothing:antialiased}
+.wrap{max-width:1080px;margin:0 auto;padding:24px 20px 80px}
+h1,h2,h3{font-family:var(--disp);margin:0;letter-spacing:-.01em}
+a{color:var(--cobalt)}
+button{font-family:var(--body);cursor:pointer}
+.mono{font-family:var(--mono)}
+
+/* ---- Header / hero ---- */
+.hero{background:var(--surface);border:1px solid var(--line);border-radius:20px;box-shadow:var(--shadow);padding:26px 28px;margin-bottom:18px;position:relative;overflow:hidden}
+.hero::after{content:"";position:absolute;right:-60px;top:-60px;width:220px;height:220px;border-radius:50%;background:radial-gradient(circle at center,rgba(41,82,227,.10),transparent 70%)}
+.eyebrow{font-family:var(--mono);font-size:11px;letter-spacing:.22em;text-transform:uppercase;color:var(--ink-3)}
+.hero h1{font-size:30px;margin:6px 0 2px;font-weight:700}
+.hero .sub{color:var(--ink-2);font-size:14px}
+.count-row{display:flex;flex-wrap:wrap;gap:26px;align-items:flex-end;margin-top:20px}
+.count-main{display:flex;align-items:baseline;gap:4px}
+.count-main .num{font-family:var(--mono);font-weight:700;font-size:56px;line-height:.9;color:var(--ink);letter-spacing:-.02em}
+.count-main .lbl{font-family:var(--mono);font-size:12px;color:var(--ink-3);text-transform:uppercase;letter-spacing:.1em;margin-left:6px}
+.count-sub{font-size:13px;color:var(--ink-2)}
+.count-sub b{font-family:var(--mono);color:var(--ink)}
+
+/* ---- Runway timeline ---- */
+.runway{margin-top:22px;padding-top:18px;border-top:1px dashed var(--line)}
+.runway-track{position:relative;height:46px;margin-top:30px}
+.runway-line{position:absolute;left:0;right:0;top:22px;height:2px;background:repeating-linear-gradient(90deg,var(--line) 0 8px,transparent 8px 16px)}
+.runway-fill{position:absolute;left:0;top:21px;height:4px;border-radius:2px;background:linear-gradient(90deg,var(--cobalt),#5B7BFF)}
+.runway-start{position:absolute;top:30px;left:0;font-family:var(--mono);font-size:10px;color:var(--ink-3);letter-spacing:.05em}
+.runway-window{position:absolute;top:14px;height:18px;border-radius:9px;background:rgba(20,28,43,.05);border:1px dashed var(--ink-3)}
+.runway-window .wlab{position:absolute;bottom:24px;right:0;font-family:var(--mono);font-size:10px;color:var(--ink-2);white-space:nowrap;letter-spacing:.04em}
+.today-pin{position:absolute;top:22px;transform:translate(-50%,-50%);width:18px;height:18px;border-radius:50%;background:var(--cobalt);border:3px solid #fff;box-shadow:0 0 0 4px rgba(41,82,227,.18);z-index:3}
+.today-pin .plabel{position:absolute;top:22px;left:50%;transform:translateX(-50%);white-space:nowrap;font-family:var(--mono);font-size:10px;font-weight:700;color:var(--cobalt)}
+.today-pin.near-end .plabel{left:auto;right:0;transform:none}
+.runway-legend{display:flex;gap:8px 18px;flex-wrap:wrap;margin-top:16px;font-family:var(--mono);font-size:11px}
+.runway-legend span{display:flex;align-items:center;gap:7px;color:var(--ink-2)}
+.runway-legend i{width:9px;height:9px;border-radius:3px;flex:none}
+.runway-legend b{color:var(--ink);font-weight:500}
+
+/* ---- Nav ---- */
+.nav{display:flex;gap:6px;flex-wrap:wrap;margin:18px 0}
+.nav button{border:1px solid var(--line);background:var(--surface);color:var(--ink-2);padding:9px 15px;border-radius:11px;font-size:14px;font-weight:500;display:flex;align-items:center;gap:8px;transition:.15s}
+.nav button .swatch{width:9px;height:9px;border-radius:3px;background:var(--ink-3)}
+.nav button.active{background:var(--ink);color:#fff;border-color:var(--ink)}
+.nav button.active .swatch{background:#fff}
+.nav button:hover:not(.active){border-color:var(--ink-3)}
+
+/* ---- Cards grid (dashboard) ---- */
+.grid{display:grid;grid-template-columns:repeat(2,1fr);gap:16px}
+.card{background:var(--surface);border:1px solid var(--line);border-radius:18px;box-shadow:var(--shadow);padding:20px 22px}
+.card.click{cursor:pointer;transition:.15s}
+.card.click:hover{transform:translateY(-2px);box-shadow:0 4px 8px rgba(20,28,43,.06),0 16px 40px rgba(20,28,43,.09)}
+.card-top{display:flex;justify-content:space-between;align-items:flex-start;gap:14px}
+.tag{font-family:var(--mono);font-size:10px;letter-spacing:.14em;text-transform:uppercase;padding:4px 8px;border-radius:6px;font-weight:500}
+.card h3{font-size:19px;margin-top:12px}
+.card .goal{color:var(--ink-2);font-size:13.5px;margin-top:3px;min-height:38px}
+.card .next{margin-top:14px;padding:11px 13px;background:var(--surface-2);border-radius:11px;font-size:13px}
+.card .next .k{font-family:var(--mono);font-size:10px;letter-spacing:.1em;text-transform:uppercase;color:var(--ink-3)}
+.card .next .v{color:var(--ink);font-weight:500;margin-top:2px}
+
+/* progress ring */
+.ring-wrap{display:flex;align-items:center;gap:12px;margin-top:16px}
+.ring{position:relative;width:52px;height:52px;flex:none}
+.ring svg{transform:rotate(-90deg)}
+.ring .pct{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-family:var(--mono);font-size:13px;font-weight:700}
+.ring-meta{font-size:12.5px;color:var(--ink-2)}
+.ring-meta b{color:var(--ink)}
+
+/* ---- Detail panels ---- */
+.panel-head{display:flex;justify-content:space-between;align-items:center;gap:16px;margin-bottom:16px;flex-wrap:wrap}
+.panel-head h2{font-size:24px}
+.panel-head .desc{color:var(--ink-2);font-size:14px;margin-top:4px;max-width:640px}
+.bar{height:8px;border-radius:6px;background:var(--line-2);overflow:hidden;margin-top:14px}
+.bar > i{display:block;height:100%;border-radius:6px}
+
+/* checklist rows */
+.list{background:var(--surface);border:1px solid var(--line);border-radius:16px;box-shadow:var(--shadow);overflow:hidden}
+.phase-h{padding:12px 18px;background:var(--surface-2);font-family:var(--mono);font-size:11px;letter-spacing:.12em;text-transform:uppercase;color:var(--ink-2);border-top:1px solid var(--line)}
+.phase-h:first-child{border-top:none}
+.row{display:flex;align-items:center;gap:14px;padding:12px 18px;border-top:1px solid var(--line-2)}
+.row:hover{background:var(--surface-2)}
+.row.gate{background:linear-gradient(90deg,rgba(240,140,0,.06),transparent)}
+.row.done .txt{color:var(--ink-3);text-decoration:line-through}
+.row.today-row{box-shadow:inset 3px 0 0 var(--cobalt)}
+.cb{width:22px;height:22px;border-radius:7px;border:2px solid var(--line);flex:none;display:flex;align-items:center;justify-content:center;transition:.12s}
+.cb.on{background:var(--ok,var(--cobalt));border-color:var(--ok,var(--cobalt));color:#fff}
+.cb svg{width:13px;height:13px;opacity:0;transition:.12s}
+.cb.on svg{opacity:1}
+.row .idx{font-family:var(--mono);font-size:12px;color:var(--ink-3);width:52px;flex:none}
+.row .txt{flex:1;font-size:14px}
+.row .date{font-family:var(--mono);font-size:11.5px;color:var(--ink-3);white-space:nowrap}
+.row .badge{font-family:var(--mono);font-size:9.5px;letter-spacing:.08em;text-transform:uppercase;padding:3px 7px;border-radius:5px;color:#fff}
+
+/* ---- AWS domains ---- */
+.dom{background:var(--surface);border:1px solid var(--line);border-radius:16px;box-shadow:var(--shadow);padding:18px 20px;margin-bottom:12px}
+.dom-h{display:flex;align-items:center;justify-content:space-between;gap:12px}
+.dom-h h3{font-size:16px}
+.weight{font-family:var(--mono);font-size:12px;color:#fff;background:var(--aws);padding:3px 9px;border-radius:6px;font-weight:700}
+.dom .topics{display:flex;flex-wrap:wrap;gap:8px;margin-top:12px}
+.chip{border:1px solid var(--line);background:var(--surface-2);border-radius:9px;padding:7px 11px;font-size:12.5px;display:flex;align-items:center;gap:7px;cursor:pointer;user-select:none}
+.chip .mini{width:15px;height:15px;border-radius:5px;border:1.5px solid var(--line);display:flex;align-items:center;justify-content:center}
+.chip.on{border-color:var(--aws);background:rgba(240,140,0,.08)}
+.chip.on .mini{background:var(--aws);border-color:var(--aws)}
+.chip.on .mini::after{content:"✓";color:#fff;font-size:10px;line-height:1}
+.chip.on .lab{color:var(--ink-3);text-decoration:line-through}
+
+/* ---- Trip sub tabs ---- */
+.subnav{display:flex;gap:6px;margin-bottom:14px;flex-wrap:wrap}
+.subnav button{border:1px solid var(--line);background:var(--surface);color:var(--ink-2);padding:7px 13px;border-radius:9px;font-size:13px;font-weight:500}
+.subnav button.active{background:var(--trip);color:#fff;border-color:var(--trip)}
+.country-h{font-family:var(--disp);font-weight:600;font-size:15px;margin:16px 0 8px;display:flex;align-items:center;gap:9px}
+.flag{font-size:18px}
+.places{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:9px}
+.place{border:1px solid var(--line);background:var(--surface);border-radius:11px;padding:11px 13px;cursor:pointer;display:flex;gap:10px;align-items:flex-start}
+.place.on{border-color:var(--trip);background:rgba(12,166,120,.06)}
+.place .mini{width:18px;height:18px;border-radius:6px;border:2px solid var(--line);flex:none;margin-top:1px;display:flex;align-items:center;justify-content:center}
+.place.on .mini{background:var(--trip);border-color:var(--trip)}
+.place.on .mini::after{content:"✓";color:#fff;font-size:11px}
+.place .nm{font-weight:600;font-size:13.5px}
+.place .ds{font-size:12px;color:var(--ink-2);margin-top:1px}
+
+/* cost table */
+.costs{background:var(--surface);border:1px solid var(--line);border-radius:16px;box-shadow:var(--shadow);overflow:hidden}
+.ctr{display:grid;grid-template-columns:1fr 70px 90px 100px;gap:10px;align-items:center;padding:11px 16px;border-top:1px solid var(--line-2)}
+.ctr.head{background:var(--surface-2);font-family:var(--mono);font-size:10px;letter-spacing:.1em;text-transform:uppercase;color:var(--ink-3);border-top:none}
+.ctr input{border:1px solid var(--line);border-radius:8px;padding:6px 8px;font-family:var(--mono);font-size:13px;width:100%;text-align:right;color:var(--ink)}
+.ctr input.label{text-align:left;font-family:var(--body);font-size:13.5px}
+.ctr .line-tot{font-family:var(--mono);font-size:13px;text-align:right;color:var(--ink)}
+.cost-total{display:flex;justify-content:space-between;align-items:center;padding:16px 18px;background:var(--ink);color:#fff}
+.cost-total .lbl{font-family:var(--mono);font-size:11px;letter-spacing:.14em;text-transform:uppercase;opacity:.7}
+.cost-total .amt{font-family:var(--mono);font-size:26px;font-weight:700}
+.note{font-size:12.5px;color:var(--ink-2);margin-top:10px}
+
+/* tips */
+.tips{list-style:none;padding:0;margin:0;display:grid;gap:9px}
+.tips li{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:12px 15px;font-size:13.5px;display:flex;gap:11px}
+.tips li .t{font-family:var(--mono);font-size:11px;color:var(--trip);font-weight:700;flex:none;margin-top:1px}
+
+/* itinerary */
+.leg{display:grid;grid-template-columns:26px 1fr 70px;gap:12px;align-items:center;padding:11px 16px;border-top:1px solid var(--line-2)}
+.leg .n{font-family:var(--mono);color:var(--ink-3);font-size:12px}
+.leg input{border:1px solid var(--line);border-radius:8px;padding:7px 9px;font-size:13px;width:100%;font-family:var(--body)}
+.leg input.nights{font-family:var(--mono);text-align:center}
+
+.small-input{border:1px solid var(--line);border-radius:9px;padding:8px 11px;font-family:var(--mono);font-size:13px}
+.hint{font-size:12px;color:var(--ink-3);margin-top:6px;font-family:var(--mono)}
+.saved-flash{position:fixed;bottom:20px;left:50%;transform:translateX(-50%) translateY(20px);background:var(--ink);color:#fff;padding:9px 18px;border-radius:10px;font-size:13px;font-family:var(--mono);opacity:0;transition:.25s;pointer-events:none;z-index:20}
+.saved-flash.show{opacity:1;transform:translateX(-50%) translateY(0)}
+.foot{margin-top:26px;font-size:12px;color:var(--ink-3);text-align:center;line-height:1.7}
+.reset{background:none;border:1px solid var(--line);color:var(--ink-3);padding:6px 12px;border-radius:8px;font-size:12px}
+@media(max-width:720px){
+  .grid{grid-template-columns:1fr}
+  .count-main .num{font-size:44px}
+  .ctr{grid-template-columns:1fr 54px 74px 78px;gap:6px}
+  .hero{padding:20px}
+}
+</style>
+
+<div class="wrap">
+  <div class="hero">
+    <div class="eyebrow">Personal command center</div>
+    <h1>Everything points to Paris.</h1>
+    <div class="sub">Four efforts, one launch window. Here's where you stand.</div>
+    <div class="count-row">
+      <div>
+        <div class="count-main"><span class="num" id="cd-days">–</span><span class="lbl">days<br>to&nbsp;flight</span></div>
+      </div>
+      <div class="count-sub" id="cd-detail"></div>
+    </div>
+    <div class="runway">
+      <div class="eyebrow">Runway · Jul 13 → Aug 16</div>
+      <div class="runway-track" id="runway"></div>
+      <div class="runway-legend" id="legend"></div>
+    </div>
+  </div>
+
+  <div class="nav" id="nav"></div>
+  <div id="view"></div>
+
+  <div class="foot">
+    Progress saves automatically on this device. Content is grounded in cited sources (CEFR A2 course structure, evidence-based hypertrophy guidance, and the official AWS SAA-C03 exam guide).<br>
+    <button class="reset" id="reset">Reset all progress</button>
+  </div>
+</div>
+<div class="saved-flash" id="flash">saved ✓</div>
+
+<script>
+/* ============ storage (window.storage with in-memory shim) ============ */
+const KEY='launch-command-center-v1';
+const mem={};
+const store={
+  async get(k){ if(window.storage) return window.storage.get(k); return mem[k]?{value:mem[k]}:null; },
+  async set(k,v){ if(window.storage) return window.storage.set(k,v); mem[k]=v; return {value:v}; }
+};
+
+/* ============ dates ============ */
+const FLIGHT=new Date('2026-08-16T00:00:00');
+function d(y,m,day){return new Date(y,m-1,day);}
+function iso(dt){return dt.toISOString().slice(0,10);}
+function fmt(dt){return dt.toLocaleDateString('en-US',{weekday:'short',month:'short',day:'numeric'});}
+function today(){const t=new Date();return new Date(t.getFullYear(),t.getMonth(),t.getDate());}
+function addDays(dt,n){const x=new Date(dt);x.setDate(x.getDate()+n);return x;}
+function daysBetween(a,b){return Math.round((b-a)/864e5);}
+
+/* ============ seed data ============ */
+const START=d(2026,7,13);
+const frTopics=["Politesse: bonjour, merci, s'il vous plaît, excusez-moi; tu vs vous","Numbers 0–69; asking « c'est combien ? »","Numbers 70–100; prices, paying, coins & notes","Café basics: « je voudrais un café, s'il vous plaît »","Restaurant: menu words, « l'addition », water, allergies","Café/restaurant full order practice + polite requests","GATE 1 — Order a full café/restaurant meal (roleplay)","Directions: « où est…? », gauche / droite / tout droit","Transport: métro, billet, « un aller simple / retour »","Train station & buying tickets; times & schedules","Shops: « je cherche… », « vous avez…? », sizes","Quantities & groceries: un peu, beaucoup, une bouteille de","Getting-around review + shop roleplay practice","GATE 2 — Navigate a route + shop for items (roleplay)","Meeting people: introductions, « enchanté », origin, job","Small talk: weather, weekend, responding to « ça va ? »","Likes / dislikes: « j'aime / je n'aime pas », preferences","Meeting your girlfriend's family & friends: polite phrases","Making plans: « on peut…? », proposing, agreeing","Phone / reservation: « je voudrais réserver une table »","GATE 3 — Social scene: meet, small talk, make a plan","Passé composé basics: « j'ai mangé, je suis allé »","Talking about your day / what you did","Problems & complaints: « il y a une erreur », service issues","Pharmacy & health: « j'ai mal à… », basic needs","Emergencies & help: « pouvez-vous m'aider ? »","Combined scenario A: arrival, taxi, apartment / hotel","Combined scenario B: café + shopping + directions","Heavy spaced review: weakest items from your log","Combined scenario C: social evening + making plans","Listening focus: fast speech, asking someone to repeat","Full dry-run of the final gate (practice, untested)","Targeted review of any remaining weak items","FINAL GATE — Sustained multi-scene travel roleplay"];
+const frGates=new Set([7,14,21,34]);
+const frPhases=[[1,"Phase 1 · Survival & politeness"],[8,"Phase 2 · Getting around & shops"],[15,"Phase 3 · Social interaction"],[22,"Phase 4 · Consolidation & real scenarios"]];
+
+// gym M/W/F Jul13→Aug14
+const gymDates=[];{let x=new Date(START);while(x<=d(2026,8,14)){if([1,3,5].includes(x.getDay()))gymDates.push(new Date(x));x=addDays(x,1);}}
+const gym=gymDates.map((dt,i)=>{
+  const ab=i%2===0?'A':'B';
+  const gate=iso(dt)===iso(d(2026,8,14));
+  let label=`Workout ${ab} — progressive overload`;
+  if(dt<addDays(START,7)) label=`Workout ${ab} — technique focus (light, learn the lifts)`;
+  if(gate) label=`GATE — Workout ${ab} + technique & progress check`;
+  return {dt,label,gate};
+});
+const workoutA=["Squat (goblet/back) 3×8–12","Bench / DB press 3×8–12","Lat pulldown / assisted pull-up 3×8–12","Seated row 3×10–12","DB shoulder press 2×10–12","Plank 3×30–45s"];
+const workoutB=["Romanian deadlift 3×8–12","Incline DB press 3×8–12","One-arm DB row 3×8–12","Leg press 3×10–15","Lateral raise 2×12–15","Curls + triceps pushdown 2×12"];
+
+const awsDomains=[
+ {n:"Design Secure Architectures",w:30,topics:["IAM least-privilege policies & roles","VPC design; Security Groups vs NACLs","Encryption: KMS, ACM (at rest & in transit)","Secrets Manager & credential rotation","VPC endpoints (private service access)","WAF, Shield, GuardDuty basics"]},
+ {n:"Design Resilient Architectures",w:26,topics:["Multi-AZ vs Multi-Region trade-offs","RDS Multi-AZ vs read replicas","Auto Scaling (target/step/scheduled)","ELB types: ALB / NLB / GLB","Route 53 routing policies & health checks","Backup & disaster-recovery patterns"]},
+ {n:"Design High-Performing Architectures",w:24,topics:["EC2 instance families & selection","CloudFront + caching strategies","ElastiCache (Redis/Memcached)","EBS volume types & storage choice","S3 performance & transfer acceleration","Decoupling: SQS, SNS, EventBridge"]},
+ {n:"Design Cost-Optimized Architectures",w:20,topics:["S3 storage classes & Intelligent-Tiering","EC2 pricing: On-Demand/RI/Spot/Savings Plans","Budgets, Cost Explorer, Trusted Advisor","Right-sizing & auto-scaling for cost","Data-transfer cost awareness (NAT, regions)"]}
+];
+const awsBooking=["Create / sign in to AWS Certification account (aws.amazon.com/certification)","Check for a 50%-off retake or partner/employer voucher first","Choose delivery: Pearson VUE test center or OnlineProctored","Pick and lock your exam date","Pay the $150 USD fee","Request +30 min ESL accommodation if English isn't your first language","Confirm valid photo ID matches your registration name"];
+const awsResources=["AWS Skill Builder — free official SAA-C03 exam-prep path","Stephane Maarek's SAA-C03 course (Udemy, ~$12–15 on sale)","Adrian Cantrill's course — deeper architecture diagrams","freeCodeCamp full SAA-C03 video (~16h, free)","AWS Free Tier — build/break real architectures (labs)","Practice exams — aim for 4–6 full sets before booking"];
+
+const trip={
+ places:{
+  "🇫🇷 France (your base)":[["Paris — Louvre, Eiffel, Montmartre, Seine walks","Home base with your girlfriend"],["Versailles day trip","Easy train from Paris"],["Lyon","Food capital, midway south"],["Nice / Provence","Riviera + lavender country"]],
+  "🇪🇸 Spain":[["Barcelona — Sagrada Família, Gothic Quarter","Direct trains/flights from France"],["Madrid — Prado, Retiro Park","Central hub, high-speed rail"],["Seville","Andalusian heat & flamenco"],["San Sebastián","Beaches + pintxos"]],
+  "🇵🇹 Portugal":[["Lisbon — Alfama, Belém, trams","Cheapest capital of the four"],["Porto — Ribeira, port cellars","Riverside + wine"],["Sintra","Fairytale palaces, day trip"]],
+  "🇩🇪 Germany":[["Berlin — Brandenburg Gate, museums","History + nightlife"],["Munich","Bavaria, gateway to Alps"],["Cologne","Cathedral + easy rail hub"]]
+ },
+ stays:["Lock your travel dates for the loop","Book Paris base (with your girlfriend or nearby)","Reserve refundable/free-cancellation rooms first","Book hostels/dorms in Barcelona, Lisbon, Porto","Book hostels/dorms in Madrid, Berlin","Prefer central-but-near-transit locations","Confirm each check-in time & luggage storage"],
+ itinerary:[["Paris (base) → warm up, plan","2"],["Paris → Barcelona","3"],["Barcelona → Lisbon (flight)","3"],["Lisbon → Porto","2"],["Porto → Madrid (flight)","3"],["Madrid → Berlin (flight)","3"],["Berlin → Paris (flight)","1"]],
+ costs:[["Intercity transport (rail pass / budget flights)",1,320],["Accommodation (nights × avg)",15,32],["Food & drink (per day)",17,25],["Local transit & city cards",1,120],["Activities & museums",1,140],["Buffer / emergencies",1,150]],
+ tips:[
+  ["ID","Get an ISIC student card — discounts on museums, transport, and many attractions across all four countries."],
+  ["FLY","Book budget airlines early (Ryanair, easyJet, Vueling, Transavia). Travel carry-on only to dodge checked-bag fees."],
+  ["RAIL","Compare a youth Interrail pass (under-28 price) against point-to-point tickets. Overnight trains save you a hotel night."],
+  ["STAY","Hostel dorms + free-cancellation bookings keep you flexible. Kitchens let you cook a few meals and cut food costs."],
+  ["EAT","Lunch menus (menu du jour / menú del día) are far cheaper than dinner. Tap water is fine; picnic from markets."],
+  ["SEE","Use city tourist cards and free-museum days (many EU museums are free the first Sunday of the month). Free walking tours everywhere."],
+  ["TIME","Fly midweek (Tue–Thu) for cheaper fares. Set Google Flights / Skyscanner price alerts on your routes now."],
+  ["TRAIN","Spain's Renfe and France's SNCF have youth discount cards — worth it if you take several long trains."]
+ ]
+};
+
+/* ============ state ============ */
+let state={fr:{},gym:{},aws:{topics:{},book:{},date:'2026-09-30'},trip:{places:{},stays:{},itinerary:trip.itinerary.map(x=>x[1]),costs:trip.costs.map(x=>[x[1],x[2]])}};
+let tab='home', subtab='places';
+
+async function load(){
+  try{const r=await store.get(KEY); if(r&&r.value){const s=JSON.parse(r.value);state=Object.assign(state,s);
+    state.aws=Object.assign({topics:{},book:{},date:'2026-09-30'},s.aws||{});
+    state.trip=Object.assign({places:{},stays:{},itinerary:trip.itinerary.map(x=>x[1]),costs:trip.costs.map(x=>[x[1],x[2]])},s.trip||{});
+  }}catch(e){}
+}
+let flashT;
+async function save(){
+  try{await store.set(KEY,JSON.stringify(state));const f=document.getElementById('flash');f.classList.add('show');clearTimeout(flashT);flashT=setTimeout(()=>f.classList.remove('show'),1200);}catch(e){}
+}
+
+/* ============ progress helpers ============ */
+function frDone(){return frTopics.reduce((a,_,i)=>a+(state.fr[i+1]?1:0),0);}
+function gymDone(){return gym.reduce((a,_,i)=>a+(state.gym[i]?1:0),0);}
+function awsTotal(){return awsDomains.reduce((a,dm)=>a+dm.topics.length,0)+awsBooking.length;}
+function awsDone(){let n=0;awsDomains.forEach((dm,di)=>dm.topics.forEach((_,ti)=>{if(state.aws.topics[di+'-'+ti])n++;}));awsBooking.forEach((_,i)=>{if(state.aws.book[i])n++;});return n;}
+function tripTotal(){let n=0;Object.values(trip.places).forEach(a=>n+=a.length);return n+trip.stays.length;}
+function tripDone(){let n=0;Object.keys(trip.places).forEach(c=>trip.places[c].forEach((_,i)=>{if(state.trip.places[c+'|'+i])n++;}));trip.stays.forEach((_,i)=>{if(state.trip.stays[i])n++;});return n;}
+
+const TRACKS=[
+ {id:'fr',name:'French',color:'var(--french)',tag:'Deadline Aug 15',goal:'From simple sentences to ordering, shopping & socializing on the trip.',done:frDone,total:()=>frTopics.length,unit:'sessions'},
+ {id:'gym',name:'Gym',color:'var(--gym)',tag:'Deadline Aug 14',goal:'Rebuild the habit, master technique, build the strength base muscle grows on.',done:gymDone,total:()=>gym.length,unit:'sessions'},
+ {id:'aws',name:'AWS SAA-C03',color:'var(--aws)',tag:'Exam: you set the date',goal:'Cover all four exam domains and book the Solutions Architect Associate exam.',done:awsDone,total:awsTotal,unit:'items'},
+ {id:'trip',name:'Euro trip',color:'var(--trip)',tag:'From Paris',goal:'Places, stays, a day-by-day plan, and a live budget with student savings.',done:tripDone,total:tripTotal,unit:'items'}
+];
+
+/* ============ next action per track ============ */
+function nextFr(){const t=today();for(let i=0;i<frTopics.length;i++){const dt=addDays(START,i);if(!state.fr[i+1]){const rel=daysBetween(t,dt);const when=rel===0?'today':rel<0?`overdue ${-rel}d`:`in ${rel}d`;return `Day ${i+1} (${when}): ${frTopics[i].replace(/GATE.*—\s?/,'⛳ ')}`;}}return 'All sessions complete — bon voyage!';}
+function nextGym(){for(let i=0;i<gym.length;i++){if(!state.gym[i]){const rel=daysBetween(today(),gym[i].dt);const when=rel===0?'today':rel<0?`overdue ${-rel}d`:`in ${rel}d`;return `Session ${i+1} (${when}): ${gym[i].label}`;}}return 'All 15 sessions logged — foundation built.';}
+function nextAws(){if(!Object.values(state.aws.book).some(Boolean))return 'Start by booking the exam — locking a date drives everything.';for(const dm of awsDomains){for(let ti=0;ti<dm.topics.length;ti++){const di=awsDomains.indexOf(dm);if(!state.aws.topics[di+'-'+ti])return `${dm.n}: ${dm.topics[ti]}`;}}return 'All domains covered — take a full practice exam.';}
+function nextTrip(){for(const c in trip.places)for(let i=0;i<trip.places[c].length;i++)if(state.trip.places[c+'|'+i]) {return 'Places chosen — move to Stays & Costs tabs.';}return 'Pick the cities you want to hit in the Places tab.';}
+const NEXT={fr:nextFr,gym:nextGym,aws:nextAws,trip:nextTrip};
+
+/* ============ render: countdown + runway ============ */
+function renderTop(){
+  const rel=daysBetween(today(),FLIGHT);
+  document.getElementById('cd-days').textContent=rel>=0?rel:0;
+  document.getElementById('cd-detail').innerHTML=
+    `Gym gate <b>${fmt(d(2026,8,14))}</b> · French final <b>${fmt(d(2026,8,15))}</b> · AWS exam <b>${new Date(state.aws.date+'T00:00:00').toLocaleDateString('en-US',{month:'short',day:'numeric'})}</b> (your pick)`;
+
+  const a=START, b=FLIGHT, span=daysBetween(a,b), t=today();
+  const pos=dt=>Math.max(0,Math.min(100,daysBetween(a,dt)/span*100));
+  const tp=pos(t);
+  const winStart=pos(d(2026,8,14));
+  const rw=document.getElementById('runway');
+  rw.innerHTML=`
+    <div class="runway-line"></div>
+    <div class="runway-fill" style="width:${tp}%"></div>
+    <div class="runway-start">Jul 13 · start</div>
+    <div class="runway-window" style="left:${winStart}%;right:0">
+      <div class="wlab">launch window · Aug 14–16</div>
+    </div>
+    <div class="today-pin ${tp>78?'near-end':''}" style="left:${tp}%">
+      <div class="plabel">TODAY · ${rel>=0?rel:0}d to go</div>
+    </div>`;
+
+  document.getElementById('legend').innerHTML=`
+    <span><i style="background:var(--gym)"></i>Gym gate <b>Aug 14</b></span>
+    <span><i style="background:var(--french)"></i>French final <b>Aug 15</b></span>
+    <span><i style="background:var(--ink)"></i>✈ Fly to Paris <b>Aug 16</b></span>`;
+}
+
+/* ============ render: nav ============ */
+function renderNav(){
+  const n=document.getElementById('nav');
+  const items=[['home','Mission control','var(--ink)'],...TRACKS.map(t=>[t.id,t.name,t.color])];
+  n.innerHTML=items.map(([id,label,c])=>`<button class="${tab===id?'active':''}" data-tab="${id}"><span class="swatch" style="background:${c}"></span>${label}</button>`).join('');
+  n.querySelectorAll('button').forEach(b=>b.onclick=()=>{tab=b.dataset.tab;render();window.scrollTo({top:0,behavior:'smooth'});});
+}
+
+/* ring svg */
+function ring(pct,color){
+  const r=22,c=2*Math.PI*r,off=c*(1-pct/100);
+  return `<div class="ring"><svg width="52" height="52"><circle cx="26" cy="26" r="${r}" fill="none" stroke="var(--line-2)" stroke-width="6"/><circle cx="26" cy="26" r="${r}" fill="none" stroke="${color}" stroke-width="6" stroke-linecap="round" stroke-dasharray="${c}" stroke-dashoffset="${off}"/></svg><div class="pct">${Math.round(pct)}%</div></div>`;
+}
+
+/* ============ render: dashboard ============ */
+function viewHome(){
+  return `<div class="grid">`+TRACKS.map(t=>{
+    const done=t.done(),tot=t.total(),pct=tot?done/tot*100:0;
+    return `<div class="card click" data-go="${t.id}">
+      <div class="card-top">
+        <span class="tag" style="color:${t.color};background:color-mix(in srgb, ${t.color} 14%, transparent)">${t.tag}</span>
+        ${ring(pct,t.color)}
+      </div>
+      <h3>${t.name}</h3>
+      <div class="goal">${t.goal}</div>
+      <div class="ring-meta" style="margin-top:6px"><b>${done}</b> / ${tot} ${t.unit} done</div>
+      <div class="next"><div class="k">Next up</div><div class="v">${NEXT[t.id]()}</div></div>
+    </div>`;
+  }).join('')+`</div>`;
+}
+
+/* ============ render: French ============ */
+function viewFr(){
+  const done=frDone(),pct=done/frTopics.length*100;
+  let rows='';let lastPhase=-1;
+  frTopics.forEach((tx,i)=>{
+    const num=i+1, ph=frPhases.filter(p=>num>=p[0]).pop();
+    if(ph&&ph[0]!==lastPhase){rows+=`<div class="phase-h">${ph[1]}</div>`;lastPhase=ph[0];}
+    const dt=addDays(START,i),isToday=iso(dt)===iso(today()),gate=frGates.has(num),on=!!state.fr[num];
+    rows+=`<div class="row ${on?'done':''} ${gate?'gate':''} ${isToday?'today-row':''}" data-fr="${num}">
+      <div class="cb ${on?'on':''}" style="--ok:var(--french)">${chk()}</div>
+      <div class="idx">Day ${num}</div>
+      <div class="txt">${tx}${gate?' <span class="badge" style="background:var(--french)">gate</span>':''}</div>
+      <div class="date">${fmt(dt)}</div>
+    </div>`;
+  });
+  return head('French','A2 travel track · ~25 min/day, evenings, with lunch (12–1) for micro-review. Ordered the way real A2 courses build: politeness & prices first, then café, then getting around, then social, then real combined scenarios.',pct,'var(--french)')
+    +`<div class="list">${rows}</div>`;
+}
+
+/* ============ render: Gym ============ */
+function viewGym(){
+  const done=gymDone(),pct=done/gym.length*100;
+  let rows='';
+  gym.forEach((g,i)=>{
+    const isToday=iso(g.dt)===iso(today()),on=!!state.gym[i];
+    const wk=(i%2===0)?'A':'B';
+    rows+=`<div class="row ${on?'done':''} ${g.gate?'gate':''} ${isToday?'today-row':''}" data-gym="${i}">
+      <div class="cb ${on?'on':''}" style="--ok:var(--gym)">${chk()}</div>
+      <div class="idx">#${i+1}</div>
+      <div class="txt">${g.label}${g.gate?' <span class="badge" style="background:var(--gym)">gate</span>':''}</div>
+      <div class="date">${fmt(g.dt)}</div>
+    </div>`;
+  });
+  const list=w=>w.map(x=>`<li>${x}</li>`).join('');
+  return head('Gym','Full-body A/B, Mon·Wed·Fri — the evidence-based beginner path to muscle: compound-focused, 6–12 reps, double progression (add reps to the top of the range, then add load). Week 1 gates on technique before any weight goes up.',pct,'var(--gym)')
+    +`<div class="list">${rows}</div>
+      <div class="grid" style="margin-top:16px">
+        <div class="card"><span class="tag" style="color:var(--gym);background:color-mix(in srgb, var(--gym) 14%, transparent)">Workout A</span><ul style="margin:12px 0 0;padding-left:18px;font-size:13.5px;line-height:1.9">${list(workoutA)}</ul></div>
+        <div class="card"><span class="tag" style="color:var(--gym);background:color-mix(in srgb, var(--gym) 14%, transparent)">Workout B</span><ul style="margin:12px 0 0;padding-left:18px;font-size:13.5px;line-height:1.9">${list(workoutB)}</ul></div>
+      </div>`;
+}
+
+/* ============ render: AWS ============ */
+function viewAws(){
+  const done=awsDone(),pct=done/awsTotal()*100;
+  let doms=awsDomains.map((dm,di)=>{
+    const chips=dm.topics.map((tp,ti)=>{
+      const on=!!state.aws.topics[di+'-'+ti];
+      return `<div class="chip ${on?'on':''}" data-aws="${di}-${ti}"><span class="mini"></span><span class="lab">${tp}</span></div>`;
+    }).join('');
+    return `<div class="dom"><div class="dom-h"><h3>${di+1}. ${dm.n}</h3><span class="weight">${dm.w}%</span></div><div class="topics">${chips}</div></div>`;
+  }).join('');
+  const bk=awsBooking.map((b,i)=>{const on=!!state.aws.book[i];return `<div class="row ${on?'done':''}" data-book="${i}"><div class="cb ${on?'on':''}" style="--ok:var(--aws)">${chk()}</div><div class="txt">${b}</div></div>`;}).join('');
+  const res=awsResources.map(r=>`<li><span class="t">·</span>${r}</li>`).join('');
+  return head('AWS Solutions Architect Associate','SAA-C03 · 65 questions, 130 min, pass 720/1000, $150, valid 3 years. Study weighted by domain — Security is 30% and the #1 place people fail, so give it the most time. Plan for ~60–120 hours total.',pct,'var(--aws)')
+   +`<div class="card" style="margin-bottom:14px;display:flex;justify-content:space-between;align-items:center;gap:14px;flex-wrap:wrap">
+       <div><div class="eyebrow">Target exam date</div><div style="font-size:13px;color:var(--ink-2);margin-top:3px">Set a date to anchor your study — locking it is the single biggest motivator.</div></div>
+       <input type="date" id="aws-date" class="small-input" value="${state.aws.date}">
+     </div>
+     <div class="eyebrow" style="margin:4px 0 10px">Book the exam</div>
+     <div class="list" style="margin-bottom:18px">${bk}</div>
+     <div class="eyebrow" style="margin:4px 0 10px">Study by domain (tap to mark covered)</div>
+     ${doms}
+     <div class="card" style="margin-top:14px"><span class="tag" style="color:var(--aws);background:color-mix(in srgb, var(--aws) 14%, transparent)">Grounded resources</span><ul class="tips" style="margin-top:12px">${res}</ul></div>`;
+}
+
+/* ============ render: Trip ============ */
+function viewTrip(){
+  const done=tripDone(),pct=done/tripTotal()*100;
+  const subs=[['places','Places'],['stays','Stays'],['itinerary','Itinerary'],['costs','Costs & savings']];
+  let body='';
+  if(subtab==='places'){
+    body=Object.keys(trip.places).map(c=>{
+      const items=trip.places[c].map((p,i)=>{const on=!!state.trip.places[c+'|'+i];
+        return `<div class="place ${on?'on':''}" data-place="${c}|${i}"><span class="mini"></span><div><div class="nm">${p[0]}</div><div class="ds">${p[1]}</div></div></div>`;}).join('');
+      return `<div class="country-h">${c}</div><div class="places">${items}</div>`;
+    }).join('');
+  } else if(subtab==='stays'){
+    body=`<div class="list">`+trip.stays.map((s,i)=>{const on=!!state.trip.stays[i];
+      return `<div class="row ${on?'done':''}" data-stay="${i}"><div class="cb ${on?'on':''}" style="--ok:var(--trip)">${chk()}</div><div class="txt">${s}</div></div>`;}).join('')+`</div>
+      <div class="note">Tip: book refundable rooms first so you can rearrange the route as flight prices move. The Costs tab shows how nights drive your budget.</div>`;
+  } else if(subtab==='itinerary'){
+    body=`<div class="note" style="margin:0 0 12px">Suggested loop from Paris — dates are open, so edit nights freely. Flights between far-apart cities (Lisbon, Berlin) usually beat long trains on both time and cost.</div>
+      <div class="costs">`+trip.itinerary.map((leg,i)=>`
+        <div class="leg"><span class="n">${i+1}</span>
+          <input value="${leg[0]}" data-leg="${i}" data-f="route">
+          <input class="nights" value="${state.trip.itinerary[i]}" data-leg="${i}" data-f="nights" title="nights"></div>`).join('')+`</div>`;
+  } else {
+    let rows=state.trip.costs.map((c,i)=>{
+      const label=trip.costs[i][0],qty=c[0],unit=c[1];
+      return `<div class="ctr"><input class="label" value="${label}" data-cost="${i}" data-f="label"><input value="${qty}" data-cost="${i}" data-f="qty" inputmode="decimal"><input value="${unit}" data-cost="${i}" data-f="unit" inputmode="decimal"><div class="line-tot">€${(qty*unit).toLocaleString()}</div></div>`;
+    }).join('');
+    const total=state.trip.costs.reduce((a,c)=>a+c[0]*c[1],0);
+    body=`<div class="costs">
+        <div class="ctr head"><div>Line item</div><div>Qty</div><div>€ / unit</div><div>Subtotal</div></div>
+        ${rows}
+        <div class="cost-total"><span class="lbl">Estimated total · per person</span><span class="amt" id="grand">€${total.toLocaleString()}</span></div>
+      </div>
+      <div class="note">Editable estimates in euros — tune every number to your real quotes. Defaults assume budget/student travel (dorms, carry-on flights, cooking some meals).</div>
+      <div class="eyebrow" style="margin:22px 0 10px">Money-saving playbook · student edition</div>
+      <ul class="tips">${trip.tips.map(t=>`<li><span class="t">${t[0]}</span><div>${t[1]}</div></li>`).join('')}</ul>`;
+  }
+  return head('Euro trip','France · Portugal · Spain · Germany, launched from your Paris base. Pick places, track bookings, shape the route, and keep a live budget.',pct,'var(--trip)')
+    +`<div class="subnav">`+subs.map(([id,l])=>`<button class="${subtab===id?'active':''}" data-sub="${id}">${l}</button>`).join('')+`</div>${body}`;
+}
+
+function head(title,desc,pct,color){
+  return `<div class="panel-head"><div><h2>${title}</h2><div class="desc">${desc}</div></div>${ring(pct,color)}</div>
+    <div class="bar"><i style="width:${pct}%;background:${color}"></i></div><div style="height:16px"></div>`;
+}
+function chk(){return '<svg viewBox="0 0 16 16"><path d="M3 8.5l3.2 3.2L13 5" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg>';}
+
+/* ============ main render + events ============ */
+function render(){
+  renderTop();renderNav();
+  const v=document.getElementById('view');
+  v.innerHTML = tab==='home'?viewHome():tab==='fr'?viewFr():tab==='gym'?viewGym():tab==='aws'?viewAws():viewTrip();
+  bind();
+}
+function bind(){
+  document.querySelectorAll('[data-go]').forEach(el=>el.onclick=()=>{tab=el.dataset.go;render();window.scrollTo({top:0,behavior:'smooth'});});
+  document.querySelectorAll('[data-fr]').forEach(el=>el.onclick=()=>{const n=el.dataset.fr;state.fr[n]=!state.fr[n];save();render();});
+  document.querySelectorAll('[data-gym]').forEach(el=>el.onclick=()=>{const n=el.dataset.gym;state.gym[n]=!state.gym[n];save();render();});
+  document.querySelectorAll('[data-aws]').forEach(el=>el.onclick=()=>{const k=el.dataset.aws;state.aws.topics[k]=!state.aws.topics[k];save();render();});
+  document.querySelectorAll('[data-book]').forEach(el=>el.onclick=()=>{const k=el.dataset.book;state.aws.book[k]=!state.aws.book[k];save();render();});
+  document.querySelectorAll('[data-place]').forEach(el=>el.onclick=()=>{const k=el.dataset.place;state.trip.places[k]=!state.trip.places[k];save();render();});
+  document.querySelectorAll('[data-stay]').forEach(el=>el.onclick=()=>{const k=el.dataset.stay;state.trip.stays[k]=!state.trip.stays[k];save();render();});
+  document.querySelectorAll('[data-sub]').forEach(el=>el.onclick=()=>{subtab=el.dataset.sub;render();});
+  const ad=document.getElementById('aws-date');if(ad)ad.onchange=()=>{state.aws.date=ad.value;save();render();};
+  document.querySelectorAll('[data-cost]').forEach(inp=>inp.oninput=()=>{
+    const i=+inp.dataset.cost,f=inp.dataset.f;
+    if(f==='label'){trip.costs[i][0]=inp.value;} else {state.trip.costs[i][f==='qty'?0:1]=parseFloat(inp.value)||0;}
+    const total=state.trip.costs.reduce((a,c)=>a+c[0]*c[1],0);
+    const g=document.getElementById('grand');if(g)g.textContent='€'+total.toLocaleString();
+    inp.closest('.ctr').querySelector('.line-tot').textContent='€'+(state.trip.costs[i][0]*state.trip.costs[i][1]).toLocaleString();
+    save();
+  });
+  document.querySelectorAll('[data-leg]').forEach(inp=>inp.oninput=()=>{
+    const i=+inp.dataset.leg,f=inp.dataset.f;
+    if(f==='route')trip.itinerary[i][0]=inp.value; else state.trip.itinerary[i]=inp.value;
+    save();
+  });
+}
+document.getElementById('reset').onclick=async()=>{
+  state={fr:{},gym:{},aws:{topics:{},book:{},date:'2026-09-30'},trip:{places:{},stays:{},itinerary:trip.itinerary.map(x=>x[1]),costs:trip.costs.map(x=>[x[1],x[2]])}};
+  await save();render();
+};
+
+(async()=>{await load();render();})();
+</script>

@@ -1,0 +1,32 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(mkdir -p \"c:/Users/hanba/Desktop/_Code/K1/docs\")",
+      "Bash(mkdir -p \"c:/Users/hanba/.claude/projects/c--Users-hanba-Desktop--Code-K1/memory\")",
+      "Bash(npm create *)",
+      "Bash(cd \"c:/Users/hanba/Desktop/_Code\" && npm create vite@latest k1-scaffold -- --template react-ts 2>&1)",
+      "Read(//c/Users/hanba/Desktop/_Code/**)",
+      "Bash(cp \"c:/Users/hanba/Desktop/_Code/k1-scaffold/index.html\" \"c:/Users/hanba/Desktop/_Code/K1/index.html\")",
+      "Bash(cp \"c:/Users/hanba/Desktop/_Code/k1-scaffold/vite.config.ts\" \"c:/Users/hanba/Desktop/_Code/K1/vite.config.ts\")",
+      "Bash(cp \"c:/Users/hanba/Desktop/_Code/k1-scaffold/tsconfig.json\" \"c:/Users/hanba/Desktop/_Code/K1/tsconfig.json\")",
+      "Bash(cp \"c:/Users/hanba/Desktop/_Code/k1-scaffold/tsconfig.app.json\" \"c:/Users/hanba/Desktop/_Code/K1/tsconfig.app.json\")",
+      "Bash(cp \"c:/Users/hanba/Desktop/_Code/k1-scaffold/tsconfig.node.json\" \"c:/Users/hanba/Desktop/_Code/K1/tsconfig.node.json\")",
+      "Bash(npm install *)",
+      "Bash(npx tsc *)",
+      "Bash(npm run *)",
+      "Bash(node scripts/extract-ref.mjs --list components/layout)",
+      "Bash(node scripts/extract-ref.mjs lib/page-tools.tsx)",
+      "Bash(Get-ChildItem -Recurse \"c:\\\\Users\\\\hanba\\\\Desktop\\\\_Code\\\\K1\\\\pb\")",
+      "Bash(Select-Object FullName)",
+      "Bash(node scripts/extract-ref.mjs components/layout/Header.tsx)",
+      "PowerShell(Remove-Item -Recurse -Force ref, scripts -ErrorAction SilentlyContinue; Get-ChildItem -Force | Where-Object { $_.Name -notmatch '^\\\\.' } | Select-Object -ExpandProperty Name)",
+      "Bash(npm uninstall *)",
+      "Bash(curl -s -o /tmp/index.html -w \"HTTP %{http_code} | %{size_download} bytes\\\\n\" http://localhost:5174/)",
+      "Read(//tmp/**)",
+      "Bash(curl -s \"http://localhost:5174/src/main.tsx\" -o /dev/null -w \"main.tsx: HTTP %{http_code}\\\\n\")",
+      "Bash(curl -s \"http://localhost:5174/src/pages/Home.tsx\" -o /dev/null -w \"Home.tsx: HTTP %{http_code}\\\\n\")",
+      "Bash(curl -s \"http://localhost:5174/src/styles/global.css\" -o /tmp/css.out -w \"global.css: HTTP %{http_code}, %{size_download} bytes\\\\n\")",
+      "Bash(gh api *)"
+    ]
+  }
+}

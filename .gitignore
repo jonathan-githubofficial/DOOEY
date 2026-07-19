@@ -1,0 +1,8 @@
+node_modules
+dist
+.env.local
+.env.*.local
+.claude/settings.local.json
+pb/pocketbase.exe
+pb/pb_data
+programs/
