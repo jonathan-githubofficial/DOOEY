@@ -229,6 +229,44 @@ R10 SPIKE PHASE: the Phase 0 spike is a HARNESS phase, not a story file. It appe
     "## Phase 0 spike findings (this run)" to docs/lynx-migration.md before L1
     executes; stories that reference spike findings read them there.
 
+R11 WEB-TARGET THREADING (root-cause ruling from run 1's L1 halt): on the Lynx web
+    target the app runs in a Web Worker with NO window/document/localStorage
+    (verified in @lynx-js/web-core 0.22.2 source; createWebWorker is unconditional).
+    Therefore, FOR ALL UNITS:
+    - App code under src/ must NEVER touch window/document/localStorage/BOM globals,
+      not even behind typeof guards at module init. Lint-grep for them in DONE MEANS.
+    - The storage seam (lib/storage.ts) is backed by a Lynx NativeModule
+      ("NativeStorageModule": async getItem/setItem/removeItem) registered by the
+      HOST PAGE, where localStorage exists. Web host pages (the e2e host, the boot
+      probe host, and 8.1's production pb_public host) all register it, backed by
+      main-thread localStorage. Native hosts later implement the same interface
+      (8.5 runbook). Verify the exact web-core registration mechanism from
+      node_modules source + https://lynxjs.org/guide/use-native-modules before
+      wiring; if registration is genuinely unsupported on this web-core version
+      after a real attempt, FALL BACK to the in-memory adapter and record a
+      "web reload-persistence parity gap" for the operator - never fake it.
+    - The adapter always keeps an in-memory fallback (mirrors PocketBase's
+      LocalAuthStore.storageFallback) with a single console.warn, so a missing
+      module degrades to boot-with-no-persistence, never a crash.
+    - Auth: pb AsyncAuthStore hydrates ASYNCHRONOUSLY from the seam; boot must
+      tolerate late hydration; the definitive-4xx-only drop rule is unchanged.
+    - Theme/style application happens via the root-view CSS-variable cascade
+      (state-driven), NEVER document.documentElement. 3.4 builds the full
+      mechanism; L1 keeps only a minimal thread-safe seam.
+    - Host/origin resolution: the host page passes the PB origin into the app
+      (globalProps or equivalent lynx-view input); PUBLIC_PB_URL env stays as the
+      build-time override. 8.1's prod host page must pass same-origin. Never read
+      window.location in app code.
+    - E2E sign-in seeding: with the NativeModule backing, seeding main-thread
+      localStorage (key "pb_auth") from Playwright IS the storage seam - keys are
+      documented in e2e/README.md.
+R12 COMMIT HYGIENE + WINDOWS LOCKS (from run 1): any unit that changes
+    package.json/package-lock.json commits IMMEDIATELY when its own gate is green -
+    lockfiles cannot be split by file-level staging, and uncommitted install state
+    entangles the next unit. Before mass renames/deletes (8.2 src-legacy broom),
+    stop dev servers/watchers you started (Windows dir-handle locks block git mv /
+    rmdir); if a lock persists, per-file git mv/rm works.
+
 ## End state
 
 Branch lynx/migration in the worktree: new Lynx app with web parity, E2E suite green,
