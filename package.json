@@ -13,13 +13,9 @@
     "lint": "eslint .",
     "test:e2e": "playwright test",
     "test:e2e:l1": "playwright test --grep @l1",
-    "mobile:sync": "npm run build && cap sync",
     "preview": "rspeedy preview"
   },
   "dependencies": {
-    "@capacitor/android": "^8.4.2",
-    "@capacitor/core": "^8.4.2",
-    "@capacitor/ios": "^8.4.2",
     "@fontsource-variable/fraunces": "^5.2.9",
     "@fontsource-variable/outfit": "^5.1.1",
     "@lynx-js/react": "^0.123.0",
@@ -37,7 +33,6 @@
     "zustand": "^5.0.5"
   },
   "devDependencies": {
-    "@capacitor/cli": "^8.4.2",
     "@eslint/js": "^10.0.1",
     "@lynx-js/config-rsbuild-plugin": "^0.1.1",
     "@lynx-js/css-serializer": "^0.1.6",
