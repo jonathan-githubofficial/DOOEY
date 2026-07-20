@@ -15,13 +15,9 @@ import { Gallery } from "@/pages/Gallery";
 import { Account } from "@/pages/Account";
 import { Style } from "@/pages/Style";
 import { TaskPage } from "@/pages/Task";
+import { Today } from "@/pages/Today";
 import { StatusSurface } from "@/components/status-surface";
-import {
-  InterimBoards,
-  InterimCalendar,
-  InterimIndex,
-  InterimProjects,
-} from "@/pages/_interim";
+import { InterimBoards, InterimCalendar, InterimProjects } from "@/pages/_interim";
 
 // SPEC 1 (crib "Routing"; doc https://lynxjs.org/react/routing/tanstack-router): Lynx has
 // no History API, so the router runs on an explicit MEMORY history. `createMemoryHistory` is
@@ -97,14 +93,13 @@ const appRoute = createRoute({
   ),
 });
 
-// SPEC 6 (incremental-tree rule): only the guarded index exists by end of 3.1. `todayRoute`
-// (path "/", id "/app/") carries an INTERIM landing component until unit 4.1 lands Today.
-// The remaining app routes (projects/task/account/style/calendar/boards/board) are registered
-// by their owning later units (3.3/3.4/4.2/5.1/6.1/7.1/7.2), each replacing an interim.
+// The guarded index. Unit 4.1 replaces 3.1's interim landing with the real Today (Planner) page
+// (path "/", id "/app/"). The remaining app routes (calendar/boards/projects) still carry interim
+// screens until their owning layer lands (5.1 / 7.1 / 6.1).
 const todayRoute = createRoute({
   getParentRoute: () => appRoute,
   path: "/",
-  component: InterimIndex,
+  component: Today,
 });
 
 // Unit 3.3 routes. `accountRoute` is the real Account page; /style is now the real Style studio
