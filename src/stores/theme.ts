@@ -10,8 +10,16 @@ interface ThemeStore {
   set: (t: Theme) => void;
 }
 
+/** Resolved light/dark mode as a plain module value (ruling R11). The web target runs in a
+ * Web Worker with no document, so there is no `.dark` class on an <html> element to read; the
+ * style layer reads the mode from here (features/style/store.ts applyStyle) to pick the
+ * palette. Unit 3.4 replaces this with a reactive root-view CSS-variable cascade. */
+export let activeMode: Theme = "light";
+
+/** R11 thread-safe seam: record the active mode without touching the BOM (no document in the
+ * web worker). Unit 3.4 replaces the imperative apply with the reactive root-view mechanism. */
 export function applyTheme(theme: Theme) {
-  document.documentElement.classList.toggle("dark", theme === "dark");
+  activeMode = theme;
 }
 
 export const useThemeStore = create<ThemeStore>()(

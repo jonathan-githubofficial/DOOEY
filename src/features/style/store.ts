@@ -4,7 +4,7 @@ import type { RecordModel } from "pocketbase";
 import { pb } from "@/lib/pb";
 import { appStorage } from "@/lib/storage";
 import type { Stroke } from "@/lib/doodle";
-import { useAuthStore, useThemeStore } from "@/stores";
+import { activeMode, useAuthStore, useThemeStore } from "@/stores";
 import {
   deleteStoredBackdrop,
   loadStoredBackdrop,
@@ -213,15 +213,23 @@ export async function loadBackdrop() {
 
 const stackOf = (key: FontKey) => FONT_STACKS.find((f) => f.key === key)!.stack;
 
-/** Push the saved customisations onto <html> as inline CSS variables — inline
- * beats both `:root` and `.dark`, so the same mechanism covers both modes.
- * Values still at factory default are removed so global.css stays in charge. */
+/** Computed CSS variables for the active mode (ruling R11). In L1 this is the thread-safe seam
+ * the app holds in memory - the web target runs in a Web Worker with no document. Unit 3.4
+ * binds it onto the root <view> so the variables cascade to descendants (the reactive
+ * CSS-variable seam that replaces the old document.documentElement writes). */
+export const styleVars: Record<string, string> = {};
+
+/** Recompute styleVars from the store for the active light/dark mode. Values still at factory
+ * default are omitted so the design tokens in global.css stay in charge. Never touches the BOM
+ * (R11): the mode comes from theme state (activeMode), not a document class, and the vars land
+ * in styleVars, not on document.documentElement. */
 export function applyStyle() {
   const s = useStyleStore.getState();
-  const mode: Mode = document.documentElement.classList.contains("dark") ? "dark" : "light";
-  const css = document.documentElement.style;
-  const put = (prop: string, value: string | null) =>
-    value === null ? css.removeProperty(prop) : css.setProperty(prop, value);
+  const mode: Mode = activeMode;
+  const put = (prop: string, value: string | null) => {
+    if (value === null) delete styleVars[prop];
+    else styleVars[prop] = value;
+  };
 
   for (const { key } of COLOR_TOKENS) put(`--${key}`, s.colors[mode][key] ?? null);
   put("--app-font-sans", s.fontSans === BASE.fontSans ? null : stackOf(s.fontSans));

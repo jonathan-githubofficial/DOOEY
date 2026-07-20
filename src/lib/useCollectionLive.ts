@@ -8,6 +8,10 @@ import { useAuthStore } from "@/stores";
  * leak a live subscription, and holds `onChange` in a ref so callers can pass an
  * inline callback without re-subscribing on every render. SSE is a refresh
  * channel, not a data dependency — subscribe failures are swallowed.
+ *
+ * Transport note: the SDK's realtime layer uses the browser EventSource on the web
+ * target and lynx.EventSource on native (wired in lib/pb.ts, SPEC 3); this hook is
+ * transport-agnostic and works over whichever is active.
  */
 export function useCollectionLive(collection: string, onChange: () => void) {
   const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
