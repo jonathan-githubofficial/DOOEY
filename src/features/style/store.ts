@@ -1,7 +1,8 @@
 import { create } from "zustand";
-import { persist } from "zustand/middleware";
+import { persist, createJSONStorage } from "zustand/middleware";
 import type { RecordModel } from "pocketbase";
 import { pb } from "@/lib/pb";
+import { appStorage } from "@/lib/storage";
 import type { Stroke } from "@/lib/doodle";
 import { useAuthStore, useThemeStore } from "@/stores";
 import {
@@ -156,6 +157,7 @@ export const useStyleStore = create<StyleStore>()(
     }),
     {
       name: "dooey-style",
+      storage: createJSONStorage(() => appStorage),
       // pageDoodles are intentionally NOT persisted locally — they live on the
       // user record (savePageDoodles / syncPageDoodlesFromUser) so they follow
       // the account across browsers, like the profile avatar.

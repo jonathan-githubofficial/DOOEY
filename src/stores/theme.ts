@@ -1,5 +1,6 @@
 import { create } from "zustand";
-import { persist } from "zustand/middleware";
+import { persist, createJSONStorage } from "zustand/middleware";
+import { appStorage } from "@/lib/storage";
 
 export type Theme = "light" | "dark";
 
@@ -27,6 +28,6 @@ export const useThemeStore = create<ThemeStore>()(
         set({ theme });
       },
     }),
-    { name: "dooey-theme" },
+    { name: "dooey-theme", storage: createJSONStorage(() => appStorage) },
   ),
 );

@@ -1,6 +1,7 @@
 import { create } from "zustand";
-import { persist } from "zustand/middleware";
+import { persist, createJSONStorage } from "zustand/middleware";
 import { ClientResponseError } from "pocketbase";
+import { appStorage } from "@/lib/storage";
 import {
   canSync,
   deleteProgramFromPB,
@@ -194,6 +195,7 @@ export const useLearningStore = create<LearningState>()(
     }),
     {
       name: "dooey-learning",
+      storage: createJSONStorage(() => appStorage),
       // Only the data is durable — transient sync errors must not survive a reload.
       partialize: (s) => ({ programs: s.programs, activeId: s.activeId }),
     },
