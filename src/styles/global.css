@@ -128,3 +128,42 @@ body {
   animation-timing-function: cubic-bezier(0.34, 1.56, 0.5, 1);
   animation-fill-mode: both;
 }
+
+/* Bottom-sheet open/close motion (unit 4.3, SPEC 3): the sheet slides up from the bottom edge
+   on mount and slides back down on close; the backdrop cross-fades. Keyframes only - the
+   duration + timing-function ride inline `animation` styles from src/lib/motion/easing.ts
+   (SETTLE for the settle-in, PEEL for the peel-away), so the tokens stay the single source of
+   truth. Reduced-motion swaps the translate for an opacity-only fade (same keyframe names below).
+   Removal is driven by the component's bindanimationend on the out-animation, never a timer. */
+@keyframes dooey-sheet-in {
+  from {
+    transform: translateY(100%);
+  }
+  to {
+    transform: translateY(0);
+  }
+}
+@keyframes dooey-sheet-out {
+  from {
+    transform: translateY(0);
+  }
+  to {
+    transform: translateY(100%);
+  }
+}
+@keyframes dooey-fade-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+@keyframes dooey-fade-out {
+  from {
+    opacity: 1;
+  }
+  to {
+    opacity: 0;
+  }
+}
