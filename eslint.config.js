@@ -20,4 +20,18 @@ export default defineConfig([
       globals: globals.browser,
     },
   },
+  {
+    // The E2E harness (unit 1.5) and the Playwright config run in Node (global-setup spawns
+    // PocketBase, fixtures read the filesystem) and drive a browser (page.evaluate callbacks
+    // use DOM globals), so both environments are in scope here.
+    files: ['e2e/**/*.{ts,tsx}', 'playwright.config.ts'],
+    languageOptions: {
+      globals: { ...globals.node, ...globals.browser },
+    },
+    rules: {
+      // No React here; the react-hooks plugin otherwise mis-flags Playwright's `use()`
+      // fixture callback as the React 19 `use` hook.
+      'react-hooks/rules-of-hooks': 'off',
+    },
+  },
 ])
