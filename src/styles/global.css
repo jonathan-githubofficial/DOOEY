@@ -105,3 +105,26 @@ body {
 .dark .stamp-btn {
   filter: drop-shadow(0 1.5px 1.5px rgb(0 0 0 / 0.5));
 }
+
+/* Enter motion (unit 4.2): fade + rise that settles with a gentle cubic-bezier overshoot
+   (CLAUDE.md motion "settle, don't snap"). One-shot on mount - replaces the old framer-motion
+   entrances on the task page and the checklist/resource list items. The Lynx crib sanctions CSS
+   transitions/keyframes for enter/exit. Reduced-motion is honoured at the CALL SITE (the class is
+   simply omitted when useReducedMotion() is true), so this needs no media query - the web worker
+   has no `prefers-reduced-motion` (R11); the signal is the stores/theme pref. */
+@keyframes dooey-enter {
+  from {
+    opacity: 0;
+    transform: translateY(14px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+.animate-enter {
+  animation-name: dooey-enter;
+  animation-duration: 360ms;
+  animation-timing-function: cubic-bezier(0.34, 1.56, 0.5, 1);
+  animation-fill-mode: both;
+}

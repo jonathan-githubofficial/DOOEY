@@ -11,7 +11,7 @@ import type { Page, Worker } from '@playwright/test'
 // the worker, so the worker is re-resolved on every call.
 
 interface RouterBridge {
-  navigate(opts: { to: string }): Promise<unknown>
+  navigate(opts: { to: string; params?: Record<string, string> }): Promise<unknown>
   state: { location: { pathname: string } }
 }
 type WithBridge = { __dooeyRouter?: RouterBridge }
@@ -36,12 +36,20 @@ async function routerWorker(page: Page, timeout = 20_000): Promise<Worker> {
   throw new Error(`__dooeyRouter bridge worker not found within ${timeout}ms (last: ${lastErr})`)
 }
 
-/** Navigate the memory-history router to `to` and wait for the navigation to settle. */
-export async function navigateVia(page: Page, to: string): Promise<void> {
+/** Navigate the memory-history router to `to` and wait for the navigation to settle. Pass `params`
+ * for a dynamic route template (e.g. `navigateVia(page, '/task/$id', { id })` for unit 4.2). */
+export async function navigateVia(
+  page: Page,
+  to: string,
+  params?: Record<string, string>,
+): Promise<void> {
   const w = await routerWorker(page)
-  await w.evaluate(async (dest) => {
-    await (globalThis as unknown as WithBridge).__dooeyRouter?.navigate({ to: dest })
-  }, to)
+  await w.evaluate(
+    async ({ dest, p }) => {
+      await (globalThis as unknown as WithBridge).__dooeyRouter?.navigate({ to: dest, params: p })
+    },
+    { dest: to, p: params },
+  )
 }
 
 /** The router's current pathname (memory history: pathname + search, no address bar). */

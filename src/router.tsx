@@ -14,6 +14,7 @@ import { Login } from "@/pages/Login";
 import { Gallery } from "@/pages/Gallery";
 import { Account } from "@/pages/Account";
 import { Style } from "@/pages/Style";
+import { TaskPage } from "@/pages/Task";
 import { StatusSurface } from "@/components/status-surface";
 import {
   InterimBoards,
@@ -137,6 +138,13 @@ const styleRoute = createRoute({
   path: "/style",
   component: Style,
 });
+// Unit 4.2: the task page. Route id "/app/task/$id" (guard parent + path), path "/task/$id"
+// (CLAUDE.md Auth); TaskPage reads the id via useParams({ from: "/app/task/$id" }).
+const taskRoute = createRoute({
+  getParentRoute: () => appRoute,
+  path: "/task/$id",
+  component: TaskPage,
+});
 
 export const router = createRouter({
   routeTree: rootRoute.addChildren([
@@ -149,6 +157,7 @@ export const router = createRouter({
       boardsRoute,
       projectsRoute,
       styleRoute,
+      taskRoute,
     ]),
   ]),
   history: memoryHistory,
