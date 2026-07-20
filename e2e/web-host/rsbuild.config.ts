@@ -15,6 +15,18 @@ export default defineConfig({
   source: {
     entry: { index: path.resolve(here, 'index.ts') },
   },
+  // Deterministic test oracle, NOT a developer loop: disable HMR and live-reload. `rsbuild
+  // dev` otherwise injects @rsbuild/core's HMR client into EVERY chunk - including the Web
+  // Worker chunk that @lynx-js/web-core spins up to run the Lynx app. When a background
+  // rebuild lands mid-test, that worker-side client calls a bareword `location.reload()`;
+  // in a worker `self.location` is a WorkerLocation with no `reload`, throwing an uncaught
+  // "TypeError: location.reload is not a function" (and, when it does resolve, reloading the
+  // page mid-assertion - a flake). Tests serve a pre-built static bundle, so neither HMR nor
+  // live-reload is wanted here. (L2-design-gate-fix; benefits every layer's E2E run.)
+  dev: {
+    hmr: false,
+    liveReload: false,
+  },
   server: {
     port: 4173,
     strictPort: true,
