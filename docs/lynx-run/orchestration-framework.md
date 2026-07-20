@@ -176,7 +176,9 @@ Staged validation ladder (never blind, stop at first REAL defect):
 - Little Lynx knowledge exists in model training data: when an API is uncertain,
   FETCH THE DOC PAGE, do not guess.
 - LOCAL SKILL LIBRARY (operator-provided, prefer over web fetches - cheaper and
-  offline): .scratch/lynx-skills/skills/<name>/SKILL.md. Most load-bearing:
+  offline): PRIMARY at .claude/skills/<name>/SKILL.md (worktree root; may also
+  appear as invocable Skills - use them if offered); mirror at
+  .scratch/lynx-skills/skills/<name>/SKILL.md. Most load-bearing:
   reactlynx-best-practices (dual-thread model, lifecycle, MTS, globalProps),
   lynx-check-css-support (query @lynx-js/css-defines for CSS property support by
   backend/version - use BEFORE assuming a CSS feature works), lynx-ui,
