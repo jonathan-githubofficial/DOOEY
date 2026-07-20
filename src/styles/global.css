@@ -4,8 +4,9 @@
 @import "./fonts.css";
 
 /* DOOEY design tokens — colour / font / radius / shadow, plus the paper-grain
-   tile class (unit 2.2). The remaining fancy utility classes (.inset-well,
-   .stamp-edge, .stamp-btn, ::selection) are deferred to unit 2.3 (primitives). */
+   tile class (unit 2.2) and the stamp-edge/stamp-btn primitive classes (unit 2.3). The
+   remaining fancy utility classes (.inset-well, ::selection) stay deferred - no unit-2.3
+   consumer needs them yet. */
 
 :root {
   /* Runtime style tokens — the Style studio (unit 3.4) overrides these; the
@@ -79,4 +80,28 @@ body {
 }
 .dark .grain-tile {
   mix-blend-mode: overlay;
+}
+
+/* Postage-stamp perforated edge: notches punched along all four sides (unit 2.3's
+   StampButton). Only the standard mask + mask-composite pair below is kept - Lynx documents
+   the standard mask shorthand but not the non-standard vendor-prefixed mask-composite
+   extension (https://lynxjs.org/api/css/properties/mask), so the vendor-prefixed pair the
+   old app dual-declared is dropped as dead redundancy, not ported. */
+.stamp-edge {
+  --r: 3.5px; /* perforation radius */
+  --s: 12px; /* spacing between perforations */
+  mask:
+    radial-gradient(var(--r) at 50% 0, #0000 98%, #000) 50% 0 / var(--s) 100% repeat-x,
+    radial-gradient(var(--r) at 50% 100%, #0000 98%, #000) 50% 100% / var(--s) 100% repeat-x,
+    radial-gradient(var(--r) at 0 50%, #0000 98%, #000) 0 50% / 100% var(--s) repeat-y,
+    radial-gradient(var(--r) at 100% 50%, #0000 98%, #000) 100% 50% / 100% var(--s) repeat-y;
+  mask-composite: intersect;
+}
+
+/* Drop-shadow that follows the stamp silhouette (box-shadow can't). */
+.stamp-btn {
+  filter: drop-shadow(0 1.5px 1.5px rgb(40 32 24 / 0.2));
+}
+.dark .stamp-btn {
+  filter: drop-shadow(0 1.5px 1.5px rgb(0 0 0 / 0.5));
 }
