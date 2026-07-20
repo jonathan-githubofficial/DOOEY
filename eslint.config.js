@@ -7,8 +7,9 @@ import { defineConfig, globalIgnores } from 'eslint/config'
 export default defineConfig([
   // src-legacy is READ-ONLY reference (Vite/React-DOM, not Lynx types); pb/ is
   // PocketBase's world (generated types + server hooks with PB globals); dist is
-  // build output; .scratch is disposable.
-  globalIgnores(['dist', 'pb', 'src-legacy', '.scratch', 'docs']),
+  // build output; .scratch is disposable; .agents is untracked local Claude/skill
+  // tooling (not repo source, ships its own .cjs loaders that trip TS-only rules).
+  globalIgnores(['dist', 'pb', 'src-legacy', '.scratch', 'docs', '.agents']),
   {
     files: ['**/*.{ts,tsx}'],
     extends: [
