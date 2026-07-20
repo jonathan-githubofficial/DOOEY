@@ -1,37 +1,22 @@
-@import "tailwindcss";
-@import "tw-animate-css";
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
 
-/* DOOEY — clean skeuomorphism on warm paper. Soft cards, gentle shadows, grain.
-   Palette: paper + ink, with leaf (green) · zest (orange) · sky (blue) · clay (red)
-   · honey (amber) as category accents. */
-
-@theme inline {
-  --font-sans: var(--app-font-sans);
-  --font-display: var(--app-font-display);
-
-  --color-paper: hsl(var(--paper));
-  --color-surface: hsl(var(--surface));
-  --color-ink: hsl(var(--ink));
-  --color-ink-muted: hsl(var(--ink-muted));
-  --color-rule: hsl(var(--rule));
-  --color-leaf: hsl(var(--leaf));
-  --color-zest: hsl(var(--zest));
-  --color-sky: hsl(var(--sky));
-  --color-clay: hsl(var(--clay));
-  --color-honey: hsl(var(--honey));
-
-  --radius-card: var(--app-radius-card);
-}
+/* DOOEY design tokens — colour / font / radius / shadow only.
+   The paper-grain data-URI and the fancy utility classes (.grain, .inset-well,
+   .stamp-edge, .stamp-btn, ::selection, body::before) are deferred to units
+   2.2 (grain + backdrop) and 2.3 (primitives). This file ports ONLY the tokens
+   plus .shadow-soft and the base body rule. */
 
 :root {
-  /* Runtime style tokens — the Style studio overrides these (and the colour
-     triplets below) as inline styles on <html>; the values here are the
-     factory defaults. */
+  /* Runtime style tokens — the Style studio (unit 3.4) overrides these; the
+     values here are the factory defaults. */
   --app-font-sans: "Outfit Variable", "Outfit", system-ui, sans-serif;
   --app-font-display: "Fraunces Variable", "Fraunces", Georgia, serif;
   --app-radius-card: 1.5rem;
   --radius-card: var(--app-radius-card);
 
+  /* Colour triplets — light ("H S% L%"), consumed as hsl(var(--token)). */
   --paper: 44 26% 95%;
   --surface: 44 40% 99%;
   --ink: 28 12% 14%;
@@ -42,10 +27,12 @@
   --sky: 208 66% 52%;
   --clay: 10 60% 53%;
   --honey: 36 78% 50%;
+
+  /* --shadow-strength / --grain-strength are runtime multipliers (default 1)
+     set by the Style studio (unit 3.4); keep the references, default via calc. */
   --soft-shadow:
     0 1px 1px rgb(40 32 24 / calc(0.04 * var(--shadow-strength, 1))),
     0 3px 8px -4px rgb(40 32 24 / calc(0.06 * var(--shadow-strength, 1)));
-  --grain: url("data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20width='160'%20height='160'%3E%3Cfilter%20id='n'%3E%3CfeTurbulence%20type='fractalNoise'%20baseFrequency='0.85'%20numOctaves='2'%20stitchTiles='stitch'/%3E%3C/filter%3E%3Crect%20width='100%25'%20height='100%25'%20filter='url(%23n)'/%3E%3C/svg%3E");
   color-scheme: light;
 }
 
@@ -66,94 +53,14 @@
   color-scheme: dark;
 }
 
+/* Web-target convenience: Lynx <text> does NOT inherit CSS, so per-<text>
+   colour / font come with the components in L2+. */
 body {
   font-family: var(--app-font-sans);
   color: hsl(var(--ink));
   background-color: hsl(var(--paper));
-  min-height: 100dvh;
-  -webkit-font-smoothing: antialiased;
 }
 
-/* Paper-grain background wash. */
-body::before {
-  content: "";
-  position: fixed;
-  inset: 0;
-  z-index: -1;
-  pointer-events: none;
-  background-image: var(--grain);
-  opacity: calc(0.7 * var(--grain-strength, 1));
-  mix-blend-mode: multiply;
-}
-
-/* Soft, layered elevation for the card system. */
 .shadow-soft {
   box-shadow: var(--soft-shadow);
-}
-
-/* Printed-paper grain on a card. Sits over the surface, under nothing
-   readable-critical. In the components layer so positioning utilities
-   (fixed/absolute) on the same element still win the cascade. */
-@layer components {
-  .grain {
-    position: relative;
-    isolation: isolate;
-  }
-}
-.grain::after {
-  content: "";
-  position: absolute;
-  inset: 0;
-  border-radius: inherit;
-  pointer-events: none;
-  background-image: var(--grain);
-  /* Fixed to the viewport so the grain is continuous across adjacent grained
-     elements (e.g. a folder tab and its card sample the same texture → same colour). */
-  background-attachment: fixed;
-  opacity: calc(0.5 * var(--grain-strength, 1));
-  mix-blend-mode: multiply;
-}
-.dark body::before,
-.dark .grain::after {
-  mix-blend-mode: overlay;
-  opacity: calc(0.12 * var(--grain-strength, 1));
-}
-
-/* Pressed / embossed inset (progress tracks, wells). */
-.inset-well {
-  box-shadow: inset 0 1px 3px rgb(20 16 12 / calc(0.14 * var(--shadow-strength, 1)));
-}
-.dark .inset-well {
-  box-shadow: inset 0 1px 3px rgb(0 0 0 / calc(0.45 * var(--shadow-strength, 1)));
-}
-
-/* Postage-stamp perforated edge: notches punched along all four sides. */
-.stamp-edge {
-  --r: 3.5px; /* perforation radius */
-  --s: 12px; /* spacing between perforations */
-  -webkit-mask:
-    radial-gradient(var(--r) at 50% 0, #0000 98%, #000) 50% 0 / var(--s) 100% repeat-x,
-    radial-gradient(var(--r) at 50% 100%, #0000 98%, #000) 50% 100% / var(--s) 100% repeat-x,
-    radial-gradient(var(--r) at 0 50%, #0000 98%, #000) 0 50% / 100% var(--s) repeat-y,
-    radial-gradient(var(--r) at 100% 50%, #0000 98%, #000) 100% 50% / 100% var(--s) repeat-y;
-  mask:
-    radial-gradient(var(--r) at 50% 0, #0000 98%, #000) 50% 0 / var(--s) 100% repeat-x,
-    radial-gradient(var(--r) at 50% 100%, #0000 98%, #000) 50% 100% / var(--s) 100% repeat-x,
-    radial-gradient(var(--r) at 0 50%, #0000 98%, #000) 0 50% / 100% var(--s) repeat-y,
-    radial-gradient(var(--r) at 100% 50%, #0000 98%, #000) 100% 50% / 100% var(--s) repeat-y;
-  -webkit-mask-composite: source-in, source-in, source-in;
-  mask-composite: intersect;
-}
-
-/* Drop-shadow that follows the stamp silhouette (box-shadow can't). */
-.stamp-btn {
-  filter: drop-shadow(0 1.5px 1.5px rgb(40 32 24 / 0.2));
-}
-.dark .stamp-btn {
-  filter: drop-shadow(0 1.5px 1.5px rgb(0 0 0 / 0.5));
-}
-
-::selection {
-  background: hsl(var(--zest) / 0.25);
-  color: hsl(var(--ink));
 }

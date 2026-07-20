@@ -16,7 +16,7 @@ import { fileURLToPath } from "node:url";
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const isWin = process.platform === "win32";
 
-const VITE_PORT = 5173;
+const RSPEEDY_PORT = 3000; // matches lynx.config.ts server.port
 const PB_PORT = pbPortFromEnv() ?? 8090;
 
 function pbPortFromEnv() {
@@ -165,11 +165,11 @@ process.on("SIGTERM", () => shutdown(0));
 
 // ── go ────────────────────────────────────────────────────────────────────
 const pbBin = join(ROOT, "pb", isWin ? "pocketbase.exe" : "pocketbase");
-const viteBin = join(ROOT, "node_modules", "vite", "bin", "vite.js");
+const rspeedyBin = join(ROOT, "node_modules", "@lynx-js", "rspeedy", "bin", "rspeedy.js");
 
 for (const [path, hint] of [
   [pbBin, "Download it from https://pocketbase.io/docs/ and put it in pb/."],
-  [viteBin, "Run `npm install` first."],
+  [rspeedyBin, "Run `npm install` first."],
 ]) {
   if (!existsSync(path)) {
     console.error(`\x1b[31m[dev] not found: ${path}\x1b[0m\n      ${hint}`);
@@ -178,11 +178,12 @@ for (const [path, hint] of [
 }
 
 await freePort(PB_PORT, "backend");
-await freePort(VITE_PORT, "frontend");
+await freePort(RSPEEDY_PORT, "frontend");
 
 run("backend", "36", pbBin, ["serve", `--http=127.0.0.1:${PB_PORT}`]);
-run("frontend", "35", process.execPath, [viteBin, "--port", String(VITE_PORT), "--strictPort"]);
+// rspeedy dev takes its port from lynx.config.ts (server.port); no CLI --port flag.
+run("frontend", "35", process.execPath, [rspeedyBin, "dev"]);
 
 console.log(
-  `\x1b[90m[dev] frontend → http://localhost:${VITE_PORT}   backend → http://127.0.0.1:${PB_PORT}/_/   (Ctrl+C stops both)\x1b[0m`,
+  `\x1b[90m[dev] frontend → http://localhost:${RSPEEDY_PORT}   backend → http://127.0.0.1:${PB_PORT}/_/   (Ctrl+C stops both)\x1b[0m`,
 );
