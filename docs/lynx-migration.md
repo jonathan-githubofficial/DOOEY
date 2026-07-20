@@ -324,3 +324,126 @@ needs it.
 - Fonts: https://lynxjs.org/api/css/at-rule/font-face.html · https://lynxjs.org/api/lynx-api/lynx/lynx-add-font
 - Native modules & limits: https://lynxjs.org/guide/use-native-modules · https://lynxjs.org/blog/lynx-open-source-roadmap-2026
 - RN New Architecture (context for the perf comparison): https://www.bolderapps.com/blog-posts/react-natives-2026-new-architecture-how-jsi-and-fabric-finally-killed-the-performance-bridge
+
+---
+
+## Phase 0 spike findings (this run)
+
+Ran 2026-07-20 in `.scratch/spike/lynx-app` (throwaway ReactLynx app) on the WEB target
+only, verified in headless Chromium via Playwright 1.61.1. Disposable PocketBase on
+127.0.0.1:8091 with `.scratch/spike/pb_data` (migrations + hooks loaded, `pb/pb_data`
+never touched). GATE: GO. No web-target fundamental is broken.
+
+WARNING for unit 1.5 (E2E fixture) - pb_migrations pollution: serving the disposable PB
+with `--migrationsDir pb/pb_migrations` (as the charter's serve line does) and then
+creating a collection through the API/Dashboard makes PocketBase AUTOMIGRATE write a new
+`pb/pb_migrations/<ts>_created_*.js` into the operator's real migrations dir. During this
+spike that produced a stray `..._created_spike.js`, which was removed to restore pb/ to
+untouched. The E2E fixture must NOT create schema against that dir: either point
+`--migrationsDir` at a throwaway copy under `.scratch/`, run with automigrate off, or
+seed only RECORDS (not collections) and reuse the existing collections (`users`, `tasks`,
+`calendar_events`, ...). pb_hooks/calendar-sync.js loaded without crashing the instance
+(no calendar_links -> the cron is a soft no-op).
+
+WEB-PROVEN vs NATIVE-UNKNOWN: everything below is proven on the Lynx **web output**
+only. iOS/Android native rendering is NATIVE-UNKNOWN on this Windows box (no Xcode /
+Android SDK) - specifically PrimJS TextDecoder/TextEncoder for SSE and Android static
+font loading. That is EXPECTED and is NOT a no-go; park it for on-device QA.
+
+Verified engine versions (pin these): `@lynx-js/rspeedy@0.16.0`, `@lynx-js/react@0.123.0`,
+`@lynx-js/react-rsbuild-plugin@0.18.0`, `@lynx-js/web-core@0.22.2`,
+`@lynx-js/web-elements@0.12.6`, `@lynx-js/lynx-core@0.1.4`,
+`@lynx-js/css-serializer@0.1.6`, `@lynx-js/tailwind-preset@0.5.0`,
+`rsbuild-plugin-tailwindcss@0.2.4`, `tailwindcss@3.4.19`,
+`@lynx-js/config-rsbuild-plugin@0.1.1`, `@rsbuild/core@2.1.6`, `pocketbase@0.27.0`,
+`@lynx-js/types@4.0.0`, node v24.14.0.
+
+### R6 - EXACT working create-rspeedy invocation + web-output config (unit 1.1 reuses verbatim)
+
+1. Scaffold (non-interactive, no TTY): the working call is
+   `npx -y create-rspeedy@latest <DIR> --template react-ts`
+   (create-rspeedy@0.16.0; templates: `react-ts`, `react-js`; optional `--tools eslint,prettier`).
+2. Enable WEB output: add `environments: { web: {} }` to `lynx.config.ts`. `rspeedy build`
+   then emits `dist/main.web.bundle` (a web-decodable template) in addition to native.
+3. Install the browser host runtime as devDeps:
+   `@lynx-js/web-core @lynx-js/web-elements` PLUS its peers
+   `@lynx-js/lynx-core@0.1.4 @lynx-js/css-serializer@0.1.6 tslib`. web-core dynamically
+   imports `@lynx-js/lynx-core/web`; WITHOUT the peer the background thread throws
+   "Cannot find module '@lynx-js/lynx-core/web'" and only the static main-thread paint shows.
+4. Browser host page `web/index.ts`: import `@lynx-js/web-elements/index.css` then
+   `@lynx-js/web-core/client` (registers `<lynx-view>`), then create a `lynx-view`
+   element with attribute `url="/main.web.bundle"`, size it 100vw/100vh, append to body.
+5. Serve host + bundle with a plain rsbuild server (`rsbuild.config.ts`): entry
+   `./web/index.ts`, `server.publicDir = [{ name: 'dist', copyOnBuild: false }]` so
+   `/main.web.bundle` sits next to the host. `npx rspeedy build && npx rsbuild dev`.
+   (For the 1.5 E2E harness any static server over `dist/` + host works; the bundle is
+   just a file.) Lynx renders inside the `<lynx-view>` shadow DOM; the app's element ids
+   survive to DOM nodes (`x-view`, `x-svg`, `x-text`), so Playwright can deep-query
+   through shadow roots.
+
+### 1. rspeedy WEB output boots in headless Chromium - PASS
+`hello` text rendered and read out of the lynx-view shadow DOM; screenshot at
+`.scratch/spike/boot-hello.png`. Clean console once the lynx-core peer is present.
+
+### 2. PocketBase auth + realtime subscription round-trip - PASS (key de-risk)
+Standard `pocketbase` SDK with the DEFAULT browser transport works unchanged inside the
+Lynx web background thread. Runtime probe from that thread: `fetch=true EventSource=true`
+- the web worker HAS both globals, so NO `lynx.EventSource` / TextDecoder shim is needed
+on web. `authWithPassword` -> `auth:ok`; `collection('spike').subscribe('*', ...)` ->
+`sub:active`; an EXTERNAL create (fetch to :8091) fired the SSE event observed in the app
+(`event:create:roundtrip-<ts>`), PB_ROUNDTRIP=PASS. CAVEAT for E2E: an open PB
+subscription keeps the SSE socket open, so Playwright `waitUntil:'networkidle'` never
+settles - use `'domcontentloaded'`. NATIVE-UNKNOWN: PrimJS TextDecoder for SSE on
+iOS/Android is untested here (park for device QA); it does not gate the web run.
+
+### 3. Tailwind v3 + @lynx-js/tailwind-preset (tactile Panel) - PASS
+`tailwind.config.ts` = `presets:[preset]` + `theme.extend.colors/borderRadius/boxShadow`
+mapping tokens to CSS vars (`paper -> var(--paper)`, etc.); vars defined in a `:root`
+block in a `@tailwind base/components/utilities` css file; plugins
+`pluginTailwindCSS({ config })` + `pluginLynxConfig({ enableCSSInlineVariables: true })`.
+A Panel with `bg-paper rounded-card shadow-soft` + `text-ink`/`text-leaf` rendered with
+computed `background-color: rgb(243,234,217)`,
+`box-shadow: rgba(31,26,18,.45) 0 10px 30px -12px`, `border-radius: 22px`, title
+`rgb(31,26,18)`, sub `rgb(46,125,50)`. CSS-var tokens, soft shadow, radius all resolve.
+Every `<text>` must set color explicitly (no inheritance). Screenshot
+`.scratch/spike/panel.png`.
+
+### 4. Lynx <svg> render + freehand append - PASS
+Lynx `<svg>` takes a `content="<svg>...</svg>"` RAW-STRING attribute (or `src`); it does
+NOT render child `<path>` JSX. Static path rendered from `content`. Freehand: an MTS
+`main-thread:bindtouchstart/move/end` handler appends `L x y` to the path `d` and calls
+`svgRef.current.setAttribute('content', <rebuilt svg string>)` each move - the path grew
+point-by-point under a synthetic drag (data-moves=8, data-points=9). Screenshot
+`.scratch/spike/draw-freehand.png`.
+GOTCHA (load-bearing for 5.2/7.2/7.3): outer-scope helper functions are NOT callable
+inside a `'main thread'` worklet (calling one throws "x is not a function"); build the
+svg string INLINE in the handler. Use `useMainThreadRef` for the points array + element
+ref. Read coords from `event.touches[0]`; on web they arrived page-relative, not
+element-relative - normalize against the target rect when drawing.
+
+### 5. lucide-react on Lynx web - NO (does not render); fallback PROVEN
+`<Check/>` builds and maps to an `x-svg` with a child `path`, but the Lynx svg element
+ignores child elements (renders only `content`/`src`) and lucide's attrs get
+lowercased/mangled (`viewBox -> viewbox`, `strokeWidth -> strokewidth`), so the icon
+paints BLANK. Confirmed side-by-side: lucide blank, same glyph via
+`<svg content="<svg ...><path d=.../></svg>"/>` renders correctly (screenshot
+`.scratch/spike/lucide-vs-fallback.png`). FALLBACK (PLAN 5.9, unit 2.4): ship the ~20
+used icons as inline Lynx `<svg content={rawSvgString}>` (extract lucide's raw markup /
+path d). Do not depend on `lucide-react` at runtime on the web target.
+
+### 6. R9 - Playwright synthetic touch reaches main-thread:bindtouch* on web - PASS
+Working recipe: Playwright context `{ hasTouch: true, isMobile: true }`, then a CDP
+session (`context.newCDPSession(page)`) driving `Input.dispatchTouchEvent` with
+`type:'touchStart'` then N x `type:'touchMove'` then `type:'touchEnd'` (empty
+touchPoints), coords in CSS px relative to the element's on-screen rect (deep-query the
+id through shadow roots for the rect). Both web-core and web-elements forward native DOM
+`touchstart/touchmove/touchend` into Lynx events, so the `main-thread:bindtouch*` worklet
+ran and mutated observable state. `page.mouse` alone is NOT sufficient (host listens to
+touch, not pointer). So drag/draw specs (5.2, 7.2, 7.3) CAN drive real MTS gestures under
+Playwright and assert post-gesture persisted state - no faked greens needed. Recipe in
+`.scratch/spike/lynx-app/pw-draw.mjs`.
+
+### Not spiked here (out of web-only scope / this box)
+- Static-instance fonts on a physical Android device (PLAN 5.7): NATIVE-UNKNOWN, parked.
+- Reduced-motion signal (PLAN 5.3): not exercised; confirm during L2/L3.
+- Paper-grain tiled PNG (PLAN 5.6): trivial background image, not a risk; not spiked.
