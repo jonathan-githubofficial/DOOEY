@@ -66,8 +66,8 @@ const LAYERS = [
     units: ['3.1-router-guard.md', '3.2-auth-ui-session.md', '3.3-dock-masthead-account.md', '3.4-style-theme.md'],
     note: 'HIGH-RISK: auth/session semantics. No improvisation; blocked > wrong.' },
   { id: 'L4-tasks', tier: M.heavy, tag: '@l4',
-    units: ['4.1-today-composer-habits.md', '4.2-task-pages.md', '4.3-interactions-sheets.md'],
-    note: 'Core domain. Full task lifecycle + realtime is the gate.' },
+    units: ['4.2-task-pages.md', '4.3-interactions-sheets.md', '4.1-today-composer-habits.md'],
+    note: 'Core domain. Land order per ruling R4 (intra-layer deps). Full task lifecycle + realtime is the gate.' },
   { id: 'L5-calendar', tier: M.heavy, tag: '@l5',
     units: ['5.1-calendar-views.md', '5.2-timebox-drag.md', '5.3-gcal-events.md'],
     note: 'MTS gesture work. gcal events come from seeded fixtures, never real Google.' },
@@ -245,6 +245,10 @@ const spike = await agent(
   `  3. Tailwind v3 + @lynx-js/tailwind-preset: one tactile Panel with CSS-var tokens + soft shadow renders.\n` +
   `  4. Lynx <svg>: render a path; then append points to a path "d" from a pointer/gesture handler (freehand proof).\n` +
   `  5. lucide-react: does one icon render on the Lynx web target? yes/no + fallback note (PLAN 5.9).\n` +
+  `  6. (ruling R9) Prove/disprove: Playwright-synthesized touch/pointer input reaching main-thread:bindtouch*\n` +
+  `     handlers on the web target - record the exact working recipe or the failure.\n` +
+  `  7. (ruling R6) Record the EXACT working create-rspeedy invocation + web-output config in the findings\n` +
+  `     note so unit 1.1 reuses it verbatim.\n` +
   `Record honestly what is WEB-PROVEN vs NATIVE-UNKNOWN (PrimJS TextDecoder, Android fonts - this box cannot test\n` +
   `native; that is expected and NOT a no-go). no-go ONLY if a web-target fundamental is broken with no workaround\n` +
   `(e.g. rspeedy web output will not boot at all, or PB SSE cannot work on the web target).\n` +

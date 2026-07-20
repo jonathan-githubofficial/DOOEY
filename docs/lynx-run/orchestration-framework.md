@@ -189,6 +189,46 @@ Staged validation ladder (never blind, stop at first REAL defect):
   DONE MEANS: the mechanical gate (commands + expected results + E2E tag if any).
   PARKED: anything this machine cannot verify (explicit list, may be empty).
 
+## Top-brain rulings (pre-answered STOPs; these override story-level uncertainty)
+
+R1  HABITS: recurring habits do NOT exist in the current client (pb_migrations/
+    006_tasks_reset.js dropped the collections; Task has no cadence/target fields).
+    They are OUT of this run's scope - building them means pb_migrations changes
+    (HIGH-RISK, forbidden). Record as an explicit parity gap in 8.4. Parity means
+    parity with today's app.
+R2  GOOGLE EVENTS: the current client renders no calendar_events, but rendering them
+    read-only needs NO schema change and is required by CLAUDE.md locked feature 6 +
+    PLAN Phase 5 gate. Unit 5.3 builds it (read-only, superuser-seeded fixtures).
+    4.1 keeps the AgendaExternal/extern seam with an empty default; no L4 unit
+    brooms that seam away.
+R3  DRAG BOUNDARY: ALL pointer drags (timebox drag/resize, AgendaSheet reorder,
+    ComposerSheet drag-dismiss) belong to unit 5.2. L4 ships the sheet UI without
+    drags.
+R4  L4 LAND ORDER: 4.2 -> 4.3 -> 4.1 (intra-layer dependencies; the harness lists
+    them in this order).
+R5  SEAMS: 1.3 creates minimal lib/pb.ts + lib/useCollectionLive.ts with stable
+    exported shapes; 1.4 rewrites them in place. packs.ts and backdrop.ts belong to
+    1.3 (PLAN section 3 mislabels them as pure logic). DOM lib types are allowed in
+    the new tree for web-target code; native equivalents are PARKED.
+R6  SCAFFOLD COMMAND: the Spike phase must record the exact working create-rspeedy
+    invocation and web-output config in its findings note (appended to the PLAN);
+    unit 1.1 reuses it verbatim instead of re-verifying flags.
+R7  FILE PICKING (attachments-add 4.2, backdrop custom image 3.4): attempt on the
+    web target; the FIRST unit to hit it records the capability finding in its
+    result and the other reuses it. If impossible on Lynx web, ship read-only +
+    record a parity gap. Do NOT block a layer on it. Native file picking is PARKED.
+R8  PRIMITIVES SCOPE: 2.3 ports ALL FOUR surface.tsx exports (Panel, Eyebrow,
+    StampButton, Stamp) - five later stories depend on the stamps.
+R9  MTS TOUCH UNDER PLAYWRIGHT: the Spike must specifically prove/disprove that
+    Playwright-synthesized touch/pointer input reaches main-thread:bindtouch*
+    handlers on the web target and record the working recipe. If synthetic input
+    cannot reach MTS handlers, drag/draw specs (5.2, 7.2, 7.3) assert persisted
+    post-gesture state via the best available simulation and say so honestly, or
+    the unit returns blocked - never a faked green.
+R10 SPIKE PHASE: the Phase 0 spike is a HARNESS phase, not a story file. It appends
+    "## Phase 0 spike findings (this run)" to docs/lynx-migration.md before L1
+    executes; stories that reference spike findings read them there.
+
 ## End state
 
 Branch lynx/migration in the worktree: new Lynx app with web parity, E2E suite green,
