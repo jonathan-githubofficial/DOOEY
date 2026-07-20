@@ -16,8 +16,9 @@ import { Account } from "@/pages/Account";
 import { Style } from "@/pages/Style";
 import { TaskPage } from "@/pages/Task";
 import { Today } from "@/pages/Today";
+import { Calendar } from "@/pages/Calendar";
 import { StatusSurface } from "@/components/status-surface";
-import { InterimBoards, InterimCalendar, InterimProjects } from "@/pages/_interim";
+import { InterimBoards, InterimProjects } from "@/pages/_interim";
 
 // SPEC 1 (crib "Routing"; doc https://lynxjs.org/react/routing/tanstack-router): Lynx has
 // no History API, so the router runs on an explicit MEMORY history. `createMemoryHistory` is
@@ -105,8 +106,8 @@ const todayRoute = createRoute({
 // Unit 3.3 routes. `accountRoute` is the real Account page; /style is now the real Style studio
 // (unit 3.4, below). /calendar, /boards, /projects remain INTERIM screens registered so the dock's
 // four typed navigations + Account's "Style studio" link compile and land. Their owning layers
-// replace each interim: /calendar -> 5.1, /boards -> 7.1, /projects -> 6.1. IDs follow the
-// /app/<path> convention (auto from the parent + path).
+// replace each interim: /calendar -> 5.1 (LANDED, real Calendar below), /boards -> 7.1,
+// /projects -> 6.1. IDs follow the /app/<path> convention (auto from the parent + path).
 const accountRoute = createRoute({
   getParentRoute: () => appRoute,
   path: "/account",
@@ -115,7 +116,7 @@ const accountRoute = createRoute({
 const calendarRoute = createRoute({
   getParentRoute: () => appRoute,
   path: "/calendar",
-  component: InterimCalendar,
+  component: Calendar,
 });
 const boardsRoute = createRoute({
   getParentRoute: () => appRoute,
