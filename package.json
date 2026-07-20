@@ -23,7 +23,6 @@
     "@tanstack/react-router": "^1.120.14",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
-    "lucide-react": "^0.511.0",
     "motion": "^12.18.0",
     "pocketbase": "^0.26.0",
     "react": "^19.2.6",

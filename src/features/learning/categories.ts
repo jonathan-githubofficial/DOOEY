@@ -4,12 +4,12 @@ import {
   GraduationCap,
   Languages,
   Palette,
-  type LucideIcon,
-} from "lucide-react";
+  type IconComponent,
+} from "@/components/icons/lucide";
 
 export interface CategoryStyle {
   label: string;
-  Icon: LucideIcon;
+  Icon: IconComponent;
   /** Icon chip / badge background + text. */
   chip: string;
   /** Solid accent for progress fills, dots. */

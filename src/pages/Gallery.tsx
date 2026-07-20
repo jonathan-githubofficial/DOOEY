@@ -10,6 +10,9 @@ import { Panel, Eyebrow, StampButton, Stamp } from "@/components/surface";
 import { Button } from "@/components/ui/button";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
+import { Plus, Trash2, ChevronRight } from "@/components/icons/lucide";
+import { FolderShell } from "@/components/icons/folder-shell";
+import { Squiggle } from "@/components/icons/ornaments/squiggle";
 
 const COLOR_TOKENS = ["paper", "surface", "ink", "ink-muted", "rule", "leaf", "zest", "sky", "clay", "honey"];
 
@@ -71,6 +74,23 @@ export function Gallery() {
 
       <view className="mt-6" data-testid="gallery-input">
         <Input placeholder="Type here" />
+      </view>
+
+      <view className="mt-6 flex flex-col gap-3" data-testid="gallery-icons">
+        <view className="flex gap-3">
+          <Plus className="h-5 w-5 text-ink" />
+          <Trash2 className="h-5 w-5 text-clay" />
+          <ChevronRight className="h-5 w-5 text-ink-muted" />
+        </view>
+        <view className="relative h-16 w-16" data-testid="gallery-folder-shell">
+          <FolderShell fill="hsl(var(--zest))" />
+        </view>
+        {/* Squiggle (like FolderShell) only takes fill/className, not arbitrary rest props
+            (SPEC step 5 pins that contract) - so the testid goes on a wrapping <view>,
+            matching the FolderShell pattern just above rather than a bare pass-through prop. */}
+        <view data-testid="gallery-squiggle">
+          <Squiggle className="h-2 w-24 text-zest" />
+        </view>
       </view>
     </view>
   );

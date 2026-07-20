@@ -38,4 +38,20 @@ test.describe("Gallery @l2", () => {
     );
     expect(Number(grainOpacity)).toBeGreaterThan(0);
   });
+
+  test("renders the resolved icon set, folder shell, and squiggle", async ({ page }) => {
+    await page.goto("/");
+    await expect(page.getByTestId("gallery-icons")).toBeVisible();
+    // Lynx's <svg> host element renders on web as the custom element <x-svg> (its `content`
+    // XML is loaded through an internal blob-URL <img> in that element's own shadow root,
+    // not exposed as nested real <svg>/<path> DOM nodes) - confirmed via @lynx-js/web-elements
+    // XSvg source and a build+screenshot smoke test (this unit's commit message has the
+    // finding, including a real xmlns-less-content bug the smoke test caught: the internal
+    // <img> silently fails to decode - and paint - without an `xmlns` on the standalone SVG
+    // document, so every hand-authored icon's `content` string declares its own xmlns).
+    const iconSvgCount = await page.locator('[data-testid="gallery-icons"] x-svg').count();
+    expect(iconSvgCount).toBeGreaterThanOrEqual(3);
+    await expect(page.getByTestId("gallery-folder-shell")).toBeVisible();
+    await expect(page.getByTestId("gallery-squiggle")).toBeVisible();
+  });
 });
