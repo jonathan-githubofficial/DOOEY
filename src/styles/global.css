@@ -1,6 +1,7 @@
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
+@import "./fonts.css";
 
 /* DOOEY design tokens — colour / font / radius / shadow only.
    The paper-grain data-URI and the fancy utility classes (.grain, .inset-well,
@@ -11,8 +12,8 @@
 :root {
   /* Runtime style tokens — the Style studio (unit 3.4) overrides these; the
      values here are the factory defaults. */
-  --app-font-sans: "Outfit Variable", "Outfit", system-ui, sans-serif;
-  --app-font-display: "Fraunces Variable", "Fraunces", Georgia, serif;
+  --app-font-sans: "Outfit-400", system-ui, sans-serif;
+  --app-font-display: "Fraunces-700", Georgia, serif;
   --app-radius-card: 1.5rem;
   --radius-card: var(--app-radius-card);
 
