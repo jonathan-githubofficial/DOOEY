@@ -1,3 +1,3 @@
-export { useThemeStore, applyTheme, activeMode } from "./theme";
+export { useThemeStore } from "./theme";
 export type { Theme } from "./theme";
 export { useAuthStore } from "./auth";

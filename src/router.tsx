@@ -8,17 +8,18 @@ import {
 } from "@tanstack/react-router";
 import { pb } from "@/lib/pb";
 import { Backdrop } from "@/features/style/components/Backdrop";
+import { ThemeVars } from "@/features/style";
 import { Dock } from "@/components/dock";
 import { Login } from "@/pages/Login";
 import { Gallery } from "@/pages/Gallery";
 import { Account } from "@/pages/Account";
+import { Style } from "@/pages/Style";
 import { StatusSurface } from "@/components/status-surface";
 import {
   InterimBoards,
   InterimCalendar,
   InterimIndex,
   InterimProjects,
-  InterimStyle,
 } from "@/pages/_interim";
 
 // SPEC 1 (crib "Routing"; doc https://lynxjs.org/react/routing/tanstack-router): Lynx has
@@ -28,13 +29,16 @@ import {
 // in lynx.config.ts per SPEC 2; URLSearchParams is polyfilled at the entry per SPEC 3.)
 const memoryHistory = createMemoryHistory({ initialEntries: ["/"] });
 
-// SPEC 4 - root route ported verbatim in shape: just the backdrop + the outlet.
+// SPEC 4 - root route: the backdrop + the outlet, now wrapped by <ThemeVars> (unit 3.4). ThemeVars
+// is the app-root <view> that carries the resolved CSS-variable palette inline + the `dark` class,
+// so BOTH the <Backdrop/> and every routed screen are inside it and inherit the theme (ruling R11:
+// theme applies via the root-view CSS-variable cascade, never document).
 const rootRoute = createRootRoute({
   component: () => (
-    <>
+    <ThemeVars>
       <Backdrop />
       <Outlet />
-    </>
+    </ThemeVars>
   ),
 });
 
@@ -102,10 +106,11 @@ const todayRoute = createRoute({
   component: InterimIndex,
 });
 
-// Unit 3.3 routes. `accountRoute` is the real Account page; the others are INTERIM screens
-// registered so the dock's four typed navigations + Account's "Style studio" link compile and
-// land. The owning layers replace each interim: /calendar -> 5.1, /boards -> 7.1, /projects ->
-// 6.1, /style -> 3.4. IDs follow the /app/<path> convention (auto from the parent + path).
+// Unit 3.3 routes. `accountRoute` is the real Account page; /style is now the real Style studio
+// (unit 3.4, below). /calendar, /boards, /projects remain INTERIM screens registered so the dock's
+// four typed navigations + Account's "Style studio" link compile and land. Their owning layers
+// replace each interim: /calendar -> 5.1, /boards -> 7.1, /projects -> 6.1. IDs follow the
+// /app/<path> convention (auto from the parent + path).
 const accountRoute = createRoute({
   getParentRoute: () => appRoute,
   path: "/account",
@@ -126,10 +131,11 @@ const projectsRoute = createRoute({
   path: "/projects",
   component: InterimProjects,
 });
+// Unit 3.4 replaces 3.3's interim /style with the real Style studio page.
 const styleRoute = createRoute({
   getParentRoute: () => appRoute,
   path: "/style",
-  component: InterimStyle,
+  component: Style,
 });
 
 export const router = createRouter({

@@ -10,31 +10,24 @@ interface ThemeStore {
   set: (t: Theme) => void;
 }
 
-/** Resolved light/dark mode as a plain module value (ruling R11). The web target runs in a
- * Web Worker with no document, so there is no `.dark` class on an <html> element to read; the
- * style layer reads the mode from here (features/style/store.ts applyStyle) to pick the
- * palette. Unit 3.4 replaces this with a reactive root-view CSS-variable cascade. */
-export let activeMode: Theme = "light";
-
-/** R11 thread-safe seam: record the active mode without touching the BOM (no document in the
- * web worker). Unit 3.4 replaces the imperative apply with the reactive root-view mechanism. */
-export function applyTheme(theme: Theme) {
-  activeMode = theme;
-}
-
+/** Light/dark mode as plain reactive state (ruling R11). Unit 3.4 replaced the old L1 seam
+ * (activeMode / applyTheme, which stood in for the missing document.documentElement.classList):
+ * the theme is now driven purely from this store. The reactive <ThemeVars> root view
+ * (src/features/style/ThemeVars.tsx) subscribes to `theme`, emits the resolved CSS-variable
+ * palette inline on the app-root <view>, and toggles the `dark` class there so `.dark ...`
+ * descendant rules + Tailwind `dark:` variants activate (Lynx theming doc: descendant-selector
+ * class toggling + CSS-variable cascade, https://lynxjs.org/api/css/properties/css-variable.html).
+ * The web target runs in a Web Worker with no document, so no BOM global is ever touched here.
+ *
+ * Light is the DEFAULT (CLAUDE.md: "Theme is light + dark only. No system. Light is the
+ * default."): initial `theme: "light"`, no system-theme query. Persistence rides the 1.4 storage
+ * adapter (async hydration; a pre-hydration flash of the light default is acceptable per SPEC 2). */
 export const useThemeStore = create<ThemeStore>()(
   persist(
     (set, get) => ({
       theme: "light",
-      toggle: () => {
-        const next: Theme = get().theme === "dark" ? "light" : "dark";
-        applyTheme(next);
-        set({ theme: next });
-      },
-      set: (theme) => {
-        applyTheme(theme);
-        set({ theme });
-      },
+      toggle: () => set({ theme: get().theme === "dark" ? "light" : "dark" }),
+      set: (theme) => set({ theme }),
     }),
     { name: "dooey-theme", storage: createJSONStorage(() => appStorage) },
   ),

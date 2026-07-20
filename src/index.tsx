@@ -10,16 +10,16 @@ import { root } from '@lynx-js/react'
 import { App } from './App.js'
 import './styles/global.css'
 
-import { applyTheme, useThemeStore } from '@/stores'
-import { applyStyle } from '@/features/style/store'
 import { initSession, signOut } from '@/features/auth/api'
 
 // Boot side-effects (ported from src-legacy/main.tsx, minus router/query which land at
 // unit 3.1). initSession() validates the persisted session on boot and only a
 // definitive 4xx drops it (features/auth/api.ts); with the AsyncAuthStore seam the
 // store hydrates asynchronously, so a returning session surfaces via authStore.onChange.
-applyTheme(useThemeStore.getState().theme)
-applyStyle()
+//
+// Theme/style are applied REACTIVELY by <ThemeVars> at the app root (unit 3.4, ruling R11), so the
+// old imperative applyTheme()/applyStyle() boot calls are gone - the store's persisted state drives
+// the root-view CSS variables as soon as zustand hydrates (async; a light-default flash is fine).
 void initSession()
 
 // E2E-only auth bridge (unit 3.2). The app runs in the web-core worker, so specs cannot import

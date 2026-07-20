@@ -4,7 +4,7 @@ import type { RecordModel } from "pocketbase";
 import { pb } from "@/lib/pb";
 import { appStorage } from "@/lib/storage";
 import type { Stroke } from "@/lib/doodle";
-import { activeMode, useAuthStore, useThemeStore } from "@/stores";
+import { useAuthStore } from "@/stores";
 import {
   deleteStoredBackdrop,
   loadStoredBackdrop,
@@ -12,8 +12,6 @@ import {
   storeBackdrop,
 } from "./backdrop";
 import {
-  COLOR_TOKENS,
-  FONT_STACKS,
   PRESETS,
   type ColorKey,
   type FontKey,
@@ -106,21 +104,17 @@ export const useStyleStore = create<StyleStore>()(
       },
       setColor: (mode, key, triplet) => {
         set({ colors: { ...get().colors, [mode]: { ...get().colors[mode], [key]: triplet } } });
-        applyStyle();
       },
       resetColor: (mode, key) => {
         const palette = { ...get().colors[mode] };
         delete palette[key];
         set({ colors: { ...get().colors, [mode]: palette } });
-        applyStyle();
       },
       setFont: (slot, font) => {
         set(slot === "sans" ? { fontSans: font } : { fontDisplay: font });
-        applyStyle();
       },
       setShape: (patch) => {
         set(patch);
-        applyStyle();
       },
       setBackdrop: (patch) => set({ backdrop: { ...get().backdrop, ...patch } }),
       setBackdropCrop: (device, patch) =>
@@ -147,11 +141,9 @@ export const useStyleStore = create<StyleStore>()(
         const preset = PRESETS.find((p) => p.key === key);
         if (!preset) return;
         set({ colors: { light: { ...preset.colors.light }, dark: { ...preset.colors.dark } } });
-        applyStyle();
       },
       resetAll: () => {
         set({ colors: { light: {}, dark: {} }, ...BASE });
-        applyStyle();
         void get().removeBackdropImage();
       },
     }),
@@ -211,33 +203,8 @@ export async function loadBackdrop() {
   if (blob) useStyleStore.setState({ backdropUrl: URL.createObjectURL(blob) });
 }
 
-const stackOf = (key: FontKey) => FONT_STACKS.find((f) => f.key === key)!.stack;
-
-/** Computed CSS variables for the active mode (ruling R11). In L1 this is the thread-safe seam
- * the app holds in memory - the web target runs in a Web Worker with no document. Unit 3.4
- * binds it onto the root <view> so the variables cascade to descendants (the reactive
- * CSS-variable seam that replaces the old document.documentElement writes). */
-export const styleVars: Record<string, string> = {};
-
-/** Recompute styleVars from the store for the active light/dark mode. Values still at factory
- * default are omitted so the design tokens in global.css stay in charge. Never touches the BOM
- * (R11): the mode comes from theme state (activeMode), not a document class, and the vars land
- * in styleVars, not on document.documentElement. */
-export function applyStyle() {
-  const s = useStyleStore.getState();
-  const mode: Mode = activeMode;
-  const put = (prop: string, value: string | null) => {
-    if (value === null) delete styleVars[prop];
-    else styleVars[prop] = value;
-  };
-
-  for (const { key } of COLOR_TOKENS) put(`--${key}`, s.colors[mode][key] ?? null);
-  put("--app-font-sans", s.fontSans === BASE.fontSans ? null : stackOf(s.fontSans));
-  put("--app-font-display", s.fontDisplay === BASE.fontDisplay ? null : stackOf(s.fontDisplay));
-  put("--app-radius-card", s.radius === BASE.radius ? null : `${s.radius}rem`);
-  put("--grain-strength", s.grain === BASE.grain ? null : String(s.grain));
-  put("--shadow-strength", s.shadow === BASE.shadow ? null : String(s.shadow));
-}
-
-// Re-apply the active mode's palette whenever light/dark flips.
-useThemeStore.subscribe(applyStyle);
+// The old imperative applyStyle() (which wrote the resolved palette to a module object, itself a
+// stand-in for the src-legacy document.documentElement writes) is GONE (unit 3.4). Style is now
+// applied REACTIVELY: <ThemeVars> (src/features/style/ThemeVars.tsx) subscribes to this store +
+// useThemeStore and renders the full CSS-variable palette inline on the app-root <view>, so every
+// setter above just updates state and the root view re-renders. See ThemeVars for the mechanism.
