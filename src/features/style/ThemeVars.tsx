@@ -1,6 +1,7 @@
 import type { ReactNode } from "react";
 
 import { cn } from "@/lib/cn";
+import { GrainOverlay } from "@/components/grain-overlay";
 import { useThemeStore } from "@/stores";
 import { useStyleStore } from "./store";
 import { COLOR_TOKENS, DEFAULT_COLORS, FONT_STACKS, type FontKey, type Mode } from "./tokens";
@@ -72,13 +73,25 @@ export function ThemeVars({ children }: { children?: ReactNode }) {
   vars["--grain-strength"] = String(grain);
   vars["--shadow-strength"] = String(shadow);
   vars["--soft-shadow"] = SOFT_SHADOW[mode];
+  // The DOM app painted the page via `body { background-color: hsl(var(--paper));
+  // font-family: var(--app-font-sans) }` + a `body::before` grain wash. On the Lynx web
+  // target that body is dead (the app runs in a worker; the host page's body carries no
+  // app CSS), which left every route on stark white with serif text. Reinstate both here
+  // on the app-root <view> so they apply to EVERY route:
+  //   - bg-paper paints the warm page colour (below the fixed grain wash mounted as the
+  //     first child, which itself sits above <Backdrop/> at -z-20 and below content);
+  //   - font-family cascades the sans default to every descendant <text> (verified: on the
+  //     web target font-family DOES inherit through to the text element; explicit font-*
+  //     classes still win on headings/labels via higher specificity).
+  vars["fontFamily"] = "var(--app-font-sans)";
 
   return (
     <view
       data-testid="theme-root"
-      className={cn("min-h-dvh w-full", mode === "dark" && "dark")}
+      className={cn("relative min-h-dvh w-full bg-paper", mode === "dark" && "dark")}
       style={vars}
     >
+      <GrainOverlay className="grain-page fixed inset-0 -z-10" />
       {children}
     </view>
   );

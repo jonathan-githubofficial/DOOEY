@@ -37,6 +37,24 @@ interface ButtonProps extends VariantProps<typeof buttonVariants> {
   onClick?: (e: unknown) => void;
 }
 
+/** A bare string/number child would render as a `<raw-text>` directly inside the button
+ * `<view>`, which collapses to a 0x0 box on the Lynx web target (only a proper `<text>`
+ * lays out as a flex child) - so the label is invisible. Wrap primitive children in a
+ * `<text>`; pass element children (icons, or a consumer's own `<text>`) through untouched.
+ * Colour + font cascade to the wrapping `<text>` from the button view's variant classes. */
+function labelChildren(children: ReactNode): ReactNode {
+  const wrap = (c: string | number, key?: number) => (
+    <text key={key} className="text-inherit">
+      {c}
+    </text>
+  );
+  if (typeof children === "string" || typeof children === "number") return wrap(children);
+  if (Array.isArray(children)) {
+    return children.map((c, i) => (typeof c === "string" || typeof c === "number" ? wrap(c, i) : c));
+  }
+  return children;
+}
+
 export function Button({ className, variant, size, disabled, onClick, children, ...rest }: ButtonProps) {
   return (
     <view
@@ -49,7 +67,7 @@ export function Button({ className, variant, size, disabled, onClick, children, 
       user-interaction-enabled={!disabled}
       {...rest}
     >
-      {children}
+      {labelChildren(children)}
     </view>
   );
 }

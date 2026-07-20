@@ -72,8 +72,11 @@ export function SignInCard({ onSignedIn }: { onSignedIn: () => void }) {
         </text>
       )}
       <view className="mt-5">
+        {/* self-start: the button is inline-flex (content width) in the DOM original, but a Lynx
+            <view>'s default cross-axis stretch would blow it out to full width. */}
         <Button
           size="sm"
+          className="self-start"
           onClick={submit}
           disabled={busy || !email.trim() || !password}
           data-testid="signin-submit"

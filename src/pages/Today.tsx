@@ -19,6 +19,7 @@ import { useState } from "react";
 import { useNavigate } from "@tanstack/react-router";
 
 import { Panel, Eyebrow } from "@/components/surface";
+import { GrainOverlay } from "@/components/grain-overlay";
 import { useAuthStore, useReducedMotion } from "@/stores";
 import { MonthView, WeekStrip, localDate, useTasksLive } from "@/features/tasks";
 import { PlannerBook } from "@/features/tasks/components/PlannerBook";
@@ -50,35 +51,41 @@ function Planner() {
 
   return (
     <>
-      {/* The date shelf (restored from 4.1's defer). CSS enter on view swap (not motion); a keyed
-          remount replays it. */}
-      <view
-        key={view}
-        className={reduced ? "animate-enter-fade" : view === "month" ? "animate-cal-month" : "animate-cal-week"}
-      >
-        {view === "week" ? (
-          <WeekStrip
-            selected={selected}
-            onSelect={pick}
-            onToggleView={() => {
-              setMonth(selected.slice(0, 7));
-              setView("month");
-            }}
-          />
-        ) : (
-          <MonthView
-            month={month}
-            onMonth={setMonth}
-            selected={selected}
-            onSelect={(d) => {
-              pick(d);
-              setView("week");
-            }}
-            onToggleView={() => setView("week")}
-            // L6: sessionDots={useMonthProjectDots(month)}
-            sessionDots={{}}
-          />
-        )}
+      {/* The date shelf (restored from 4.1's defer): a raised, grained surface card holding the
+          week ribbon / month grid - mirrors the DOM original's shelf wrapper
+          (`grain rounded-3xl border border-rule/70 bg-surface/95 shadow-soft`), which the Lynx
+          port had dropped (leaving the ribbon floating on the page). CSS enter on view swap (not
+          motion); a keyed remount replays it. */}
+      <view className="relative rounded-3xl border border-rule/70 bg-surface/95 px-3 py-2 shadow-soft">
+        <GrainOverlay className="absolute inset-0 rounded-3xl" />
+        <view
+          key={view}
+          className={reduced ? "animate-enter-fade" : view === "month" ? "animate-cal-month" : "animate-cal-week"}
+        >
+          {view === "week" ? (
+            <WeekStrip
+              selected={selected}
+              onSelect={pick}
+              onToggleView={() => {
+                setMonth(selected.slice(0, 7));
+                setView("month");
+              }}
+            />
+          ) : (
+            <MonthView
+              month={month}
+              onMonth={setMonth}
+              selected={selected}
+              onSelect={(d) => {
+                pick(d);
+                setView("week");
+              }}
+              onToggleView={() => setView("week")}
+              // L6: sessionDots={useMonthProjectDots(month)}
+              sessionDots={{}}
+            />
+          )}
+        </view>
       </view>
 
       <view className="mt-8 pb-4">

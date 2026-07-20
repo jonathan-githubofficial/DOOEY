@@ -35,6 +35,20 @@ export default defineConfig({
   environments: {
     web: {},
   },
+  output: {
+    // Root-relative prefix for emitted assets, matching how every web host serves `dist/`
+    // (e2e 4173, fidelity 4175, 8.1 prod same-origin). Without it, most CSS `url(...)`
+    // refs bake as `webpack:///static/...` (an invalid runtime scheme).
+    assetPrefix: '/',
+    // The @font-face `src: url(...)` refs are NOT rewritten by assetPrefix on this
+    // rspeedy/web pipeline - they stay `webpack:///static/font/*.woff2`, so every font
+    // fails to load (ERR_UNKNOWN_URL_SCHEME / CORS) and text falls back to serif/system.
+    // Inline the woff2 files (and the paper-grain PNG) as data URIs instead: self-contained,
+    // no URL resolution, so they load on any host. dataUriLimit is a byte ceiling per asset
+    // type; the fonts are ~13-40 kB each and the grain PNG ~76 kB, so a 1 MB font ceiling
+    // and 128 kB image ceiling inline exactly these without pulling in anything larger.
+    dataUriLimit: { font: 1_000_000, image: 131_072 },
+  },
   source: {
     alias: {
       // React-18/19 compat: TanStack Query/Router and other React-18 libraries resolve to

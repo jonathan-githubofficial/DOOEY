@@ -65,6 +65,42 @@ body {
   box-shadow: var(--soft-shadow);
 }
 
+/* Pressed / embossed inset (progress tracks, wells) - ported verbatim from src-legacy
+   global.css (unit 1.1 deferred it; the date-shelf day tray in WeekStrip and the agenda
+   counter chip both use `.inset-well` and were rendering flat without it). */
+.inset-well {
+  box-shadow: inset 0 1px 3px rgb(20 16 12 / calc(0.14 * var(--shadow-strength, 1)));
+}
+.dark .inset-well {
+  box-shadow: inset 0 1px 3px rgb(0 0 0 / calc(0.45 * var(--shadow-strength, 1)));
+}
+
+/* text-transform utilities. The @lynx-js/tailwind-preset omits the `uppercase`/`lowercase`/
+   `capitalize`/`normal-case` core utilities (text-transform is not in the Lynx CSS dataset),
+   so eyebrows/stamps that use `uppercase` were rendering in their source casing. On the WEB
+   target text-transform is real CSS (Chromium), so re-add the utilities as plain classes. */
+.uppercase {
+  text-transform: uppercase;
+}
+.lowercase {
+  text-transform: lowercase;
+}
+.capitalize {
+  text-transform: capitalize;
+}
+.normal-case {
+  text-transform: none;
+}
+
+/* color: inherit for wrapped labels. The web-target <text> element (x-text) carries a
+   default black colour that - unlike font-family - does NOT inherit from its parent <view>,
+   so a label wrapped by the Button/StampButton/Stamp primitives (which set their colour on
+   the container) would render black. `.text-inherit` makes the wrapping <text> take the
+   container's colour. (Not emitted by the Lynx preset, so declared explicitly.) */
+.text-inherit {
+  color: inherit;
+}
+
 /* Paper grain: a baked, seamless, tiled PNG (replaces the old SVG-filter
    data-URI + pseudo-element trick - Lynx has no pseudo-element support:
    https://lynxjs.org/api/css/selectors.html). Rendered by the real
@@ -75,11 +111,21 @@ body {
   background-image: url("../assets/grain.png");
   background-repeat: repeat;
   background-size: 160px 160px;
-  opacity: calc(0.03 * var(--grain-strength, 1));
+  /* The grain PNG is near-white noise, so multiply darkens the surface only slightly while
+     the per-pixel variation reads as a fine speckle. Opacities mirror the DOM original
+     (.grain::after was 0.5 on cards, body::before 0.7 on the page); the old 0.03 was a
+     placeholder tuned against the earlier mid-gray bake and left the grain invisible. */
+  opacity: calc(0.5 * var(--grain-strength, 1));
   mix-blend-mode: multiply;
+}
+/* The whole-page grain wash (mounted on the app-root view in ThemeVars) reads a touch
+   stronger than the per-card grain, matching the original body::before. */
+.grain-tile.grain-page {
+  opacity: calc(0.7 * var(--grain-strength, 1));
 }
 .dark .grain-tile {
   mix-blend-mode: overlay;
+  opacity: calc(0.12 * var(--grain-strength, 1));
 }
 
 /* Postage-stamp perforated edge: notches punched along all four sides (unit 2.3's
