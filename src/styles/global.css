@@ -3,11 +3,9 @@
 @tailwind utilities;
 @import "./fonts.css";
 
-/* DOOEY design tokens — colour / font / radius / shadow only.
-   The paper-grain data-URI and the fancy utility classes (.grain, .inset-well,
-   .stamp-edge, .stamp-btn, ::selection, body::before) are deferred to units
-   2.2 (grain + backdrop) and 2.3 (primitives). This file ports ONLY the tokens
-   plus .shadow-soft and the base body rule. */
+/* DOOEY design tokens — colour / font / radius / shadow, plus the paper-grain
+   tile class (unit 2.2). The remaining fancy utility classes (.inset-well,
+   .stamp-edge, .stamp-btn, ::selection) are deferred to unit 2.3 (primitives). */
 
 :root {
   /* Runtime style tokens — the Style studio (unit 3.4) overrides these; the
@@ -64,4 +62,21 @@ body {
 
 .shadow-soft {
   box-shadow: var(--soft-shadow);
+}
+
+/* Paper grain: a baked, seamless, tiled PNG (replaces the old SVG-filter
+   data-URI + pseudo-element trick - Lynx has no pseudo-element support:
+   https://lynxjs.org/api/css/selectors.html). Rendered by the real
+   <GrainOverlay> element (src/components/grain-overlay.tsx), one per grained
+   surface - Lynx's <bg-layer> does not support a viewport-locked keyword, so
+   each surface tiles from its own origin instead of a shared one. */
+.grain-tile {
+  background-image: url("../assets/grain.png");
+  background-repeat: repeat;
+  background-size: 160px 160px;
+  opacity: calc(0.03 * var(--grain-strength, 1));
+  mix-blend-mode: multiply;
+}
+.dark .grain-tile {
+  mix-blend-mode: overlay;
 }
