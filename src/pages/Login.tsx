@@ -1,16 +1,15 @@
-import { getRouteApi } from "@tanstack/react-router";
+import { getRouteApi, useRouter } from "@tanstack/react-router";
+import { SignInCard } from "@/features/auth";
 
-// The front door SHELL only (unit 3.1's half of the 3.1/3.2 split): wordmark + centred
-// layout + the `redirect` search wiring. The <SignInCard onSignedIn=...> and the
-// `router.history.push(redirect ?? "/")` round-trip land in 3.2 (see the story BROOM),
-// which also removes src-legacy/pages/Login.tsx.
+// The front door (unit 3.1 built the shell; unit 3.2 completes it): wordmark + centred layout
+// (3.1) plus the <SignInCard> mount and the redirect round-trip (3.2's half of the 3.1/3.2
+// split - see the story BROOM, which also removed src-legacy/pages/Login.tsx).
 const route = getRouteApi("/login");
 
 export function Login() {
-  // `redirect` is a full href (path + search) the guard stashed; 3.2's SignInCard pushes
-  // back to it after sign-in. 3.1 only proves the search param is wired and typed.
+  const router = useRouter();
+  // `redirect` is a full href (path + search) the guard (3.1) stashed on the search params.
   const { redirect } = route.useSearch();
-  void redirect;
 
   return (
     // <main> -> <view>; env(safe-area-inset-*) resolves on the web target (unit 2.3 note).
@@ -27,6 +26,10 @@ export function Login() {
         DOOEY
         <text className="font-display text-3xl font-black text-zest">.</text>
       </text>
+      {/* The round-trip: `redirect` is a full href, so it goes through `router.history` rather
+          than a typed `navigate({ to })` (matches the src-legacy comment). On memory history
+          this returns the user to the space the guard bounced them from. */}
+      <SignInCard onSignedIn={() => router.history.push(redirect ?? "/")} />
     </view>
   );
 }

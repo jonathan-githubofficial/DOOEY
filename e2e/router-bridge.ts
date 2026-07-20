@@ -51,3 +51,14 @@ export async function routerPathname(page: Page): Promise<string> {
     () => (globalThis as unknown as WithBridge).__dooeyRouter?.state.location.pathname ?? '',
   )
 }
+
+/** Drive the app's real signOut() through the unit-3.2 E2E auth bridge (src/index.tsx,
+ * PUBLIC_DOOEY_E2E-gated), which lives on the SAME web-core worker global as __dooeyRouter.
+ * signOut() clears pb.authStore -> onChange -> router.invalidate() re-runs the guard, so the
+ * redirect to /login happens automatically (no manual navigation). */
+export async function signOutVia(page: Page): Promise<void> {
+  const w = await routerWorker(page)
+  await w.evaluate(() => {
+    ;(globalThis as unknown as { __dooeyAuth?: { signOut(): void } }).__dooeyAuth?.signOut()
+  })
+}
