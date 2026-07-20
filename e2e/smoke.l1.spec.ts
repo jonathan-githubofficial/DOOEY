@@ -1,4 +1,5 @@
 import { test, expect } from './fixtures'
+import { navigateVia } from './router-bridge'
 
 // The @l1 smoke spec - the run's first live tag and its foundational success oracle.
 // It proves, end to end in headless Chromium against the disposable PocketBase, that:
@@ -57,8 +58,11 @@ test('app boots, programmatic sign-in, and a PB-API record raises the live count
   page,
   pb,
 }) => {
-  // a) BOOT - signed-out surface renders from the built web output.
+  // a) BOOT - signed-out surface renders from the built web output. Unit 3.1 moved
+  //    StatusSurface onto the PUBLIC /gallery route (the app root is now the router); memory
+  //    history has no address bar, so navigate there through the E2E router bridge.
   await page.goto('/', { waitUntil: 'domcontentloaded' })
+  await navigateVia(page, '/gallery')
   await expect.poll(() => deepText(page), { timeout: 20_000 }).toContain('DOOEY')
   await expect.poll(() => deepText(page), { timeout: 20_000 }).toContain('signed out')
 
@@ -70,6 +74,9 @@ test('app boots, programmatic sign-in, and a PB-API record raises the live count
   const seed = JSON.stringify({ token: pb.authStore.token, record: pb.authStore.record })
   await page.evaluate((val) => localStorage.setItem('pb_auth', val), seed)
   await page.reload({ waitUntil: 'domcontentloaded' })
+  // A reload re-inits memory history at "/" (the guarded index); re-navigate to /gallery to
+  // read the surface. Session hydrates asynchronously across the seam, so the assert polls.
+  await navigateVia(page, '/gallery')
   await expect.poll(() => deepText(page), { timeout: 20_000 }).toContain('signed in')
 
   // c) LIVE SSE PROOF - the surface shows the count; create a task via the PB API (as the
@@ -89,5 +96,6 @@ test('app boots, programmatic sign-in, and a PB-API record raises the live count
   // d) RELOAD PERSISTENCE (R11) - reload WITHOUT re-seeding. The session must survive because it
   //    lives in the host page's localStorage via the storage seam, so the app re-hydrates it.
   await page.reload({ waitUntil: 'domcontentloaded' })
+  await navigateVia(page, '/gallery')
   await expect.poll(() => deepText(page), { timeout: 20_000 }).toContain('signed in')
 })

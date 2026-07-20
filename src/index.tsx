@@ -1,3 +1,8 @@
+// URLSearchParams polyfill (crib "Routing"; SPEC 3): PrimJS lacks URLSearchParams, which
+// TanStack Router's search parsing needs. A single side-effect import at the entry, BEFORE
+// the router module is evaluated (App -> src/router.tsx runs createRouter on import).
+import 'url-search-params-polyfill'
+
 import '@lynx-js/preact-devtools'
 import '@lynx-js/react/debug'
 import { root } from '@lynx-js/react'

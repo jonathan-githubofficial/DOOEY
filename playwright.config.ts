@@ -31,7 +31,12 @@ export default defineConfig({
     url: APP_URL,
     reuseExistingServer: !process.env.CI,
     timeout: 240_000,
-    env: { PUBLIC_PB_URL: 'http://127.0.0.1:8091' },
+    // PUBLIC_PB_URL points the app's PB client at the disposable instance (compile-time).
+    // PUBLIC_DOOEY_E2E (unit 3.1) is the E2E-only flag that makes src/router.tsx expose the
+    // `__dooeyRouter` bridge on the worker global - memory history has no address bar, so specs
+    // navigate via the bridge. `rspeedy build` runs in production mode, so a `MODE` gate would
+    // be false here; this dedicated PUBLIC_ flag is set ONLY by this webServer (never dev/prod).
+    env: { PUBLIC_PB_URL: 'http://127.0.0.1:8091', PUBLIC_DOOEY_E2E: '1' },
     stdout: 'pipe',
     stderr: 'pipe',
   },

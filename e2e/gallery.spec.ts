@@ -1,11 +1,15 @@
 import { test, expect } from "@playwright/test";
 
-// The L2-design layer's E2E surface (unit 2.3). Gallery has no auth guard yet (no router
-// exists until unit 3.1), so this spec needs no PocketBase instance - it only exercises the
-// primitives, tokens, fonts, and grain overlay rendered by the temporary app root.
+import { navigateVia } from "./router-bridge";
+
+// The L2-design layer's E2E surface (unit 2.3). Unit 3.1 moved the gallery off the app root
+// onto the PUBLIC `/gallery` route, so this spec now navigates there via the E2E router bridge
+// (memory history has no address bar) before asserting. It still needs no signed-in session -
+// /gallery is public - it only exercises the primitives, tokens, fonts, and grain overlay.
 test.describe("Gallery @l2", () => {
   test("renders every primitive, token, font, and the grain overlay", async ({ page }) => {
-    await page.goto("/");
+    await page.goto("/", { waitUntil: "domcontentloaded" });
+    await navigateVia(page, "/gallery");
 
     await expect(page.getByTestId("gallery-title")).toBeVisible();
     await expect(page.getByTestId("gallery-tokens")).toBeVisible();
@@ -40,7 +44,8 @@ test.describe("Gallery @l2", () => {
   });
 
   test("renders the resolved icon set, folder shell, and squiggle", async ({ page }) => {
-    await page.goto("/");
+    await page.goto("/", { waitUntil: "domcontentloaded" });
+    await navigateVia(page, "/gallery");
     await expect(page.getByTestId("gallery-icons")).toBeVisible();
     // Lynx's <svg> host element renders on web as the custom element <x-svg> (its `content`
     // XML is loaded through an internal blob-URL <img> in that element's own shadow root,

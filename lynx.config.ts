@@ -1,4 +1,3 @@
-import { createRequire } from 'node:module'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 
@@ -9,7 +8,6 @@ import { pluginTypeCheck } from '@rsbuild/plugin-type-check'
 import { pluginTailwindCSS } from 'rsbuild-plugin-tailwindcss'
 import { pluginLynxConfig } from '@lynx-js/config-rsbuild-plugin'
 
-const require = createRequire(import.meta.url)
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 
 export default defineConfig({
@@ -39,9 +37,12 @@ export default defineConfig({
   },
   source: {
     alias: {
-      // React-18 compat: TanStack Query/Router and other React-18 libraries
-      // resolve to ReactLynx's compat layer (startTransition / useSyncExternalStore).
-      react$: require.resolve('@lynx-js/react/compat'),
+      // React-18/19 compat: TanStack Query/Router and other React-18 libraries resolve to
+      // ReactLynx's compat layer (startTransition / useSyncExternalStore). Unit 3.1 points this
+      // at a thin shim (src/lib/react-compat.ts) that re-exports compat AND adds React 19's
+      // optional `use` (as undefined) so Rspack's strict ESM linker resolves TanStack Router
+      // 1.170's `React["use"]` reference instead of failing the build. See that file's header.
+      react$: path.resolve(__dirname, './src/lib/react-compat.ts'),
       // Ported `@/...` imports resolve to the new src tree.
       '@': path.resolve(__dirname, './src'),
     },
