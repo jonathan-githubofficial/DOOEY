@@ -8,10 +8,18 @@ import {
 } from "@tanstack/react-router";
 import { pb } from "@/lib/pb";
 import { Backdrop } from "@/features/style/components/Backdrop";
+import { Dock } from "@/components/dock";
 import { Login } from "@/pages/Login";
 import { Gallery } from "@/pages/Gallery";
+import { Account } from "@/pages/Account";
 import { StatusSurface } from "@/components/status-surface";
-import { InterimIndex } from "@/pages/_interim";
+import {
+  InterimBoards,
+  InterimCalendar,
+  InterimIndex,
+  InterimProjects,
+  InterimStyle,
+} from "@/pages/_interim";
 
 // SPEC 1 (crib "Routing"; doc https://lynxjs.org/react/routing/tanstack-router): Lynx has
 // no History API, so the router runs on an explicit MEMORY history. `createMemoryHistory` is
@@ -73,9 +81,13 @@ const appRoute = createRoute({
       throw redirect({ to: "/login", search: { redirect: location.href } });
     }
   },
+  // Unit 3.3 adds the persistent <Dock/> to the authed shell (3.1 left it out on purpose). The
+  // shell's bottom padding already reserves room for the fixed dock; the dock renders only inside
+  // the guard, so it never shows on /login.
   component: () => (
     <view className="mx-auto min-h-dvh max-w-3xl px-5 pb-[calc(8rem+env(safe-area-inset-bottom))] pt-[calc(2rem+env(safe-area-inset-top))] md:px-6 md:pt-[calc(3rem+env(safe-area-inset-top))]">
       <Outlet />
+      <Dock />
     </view>
   ),
 });
@@ -90,11 +102,48 @@ const todayRoute = createRoute({
   component: InterimIndex,
 });
 
+// Unit 3.3 routes. `accountRoute` is the real Account page; the others are INTERIM screens
+// registered so the dock's four typed navigations + Account's "Style studio" link compile and
+// land. The owning layers replace each interim: /calendar -> 5.1, /boards -> 7.1, /projects ->
+// 6.1, /style -> 3.4. IDs follow the /app/<path> convention (auto from the parent + path).
+const accountRoute = createRoute({
+  getParentRoute: () => appRoute,
+  path: "/account",
+  component: Account,
+});
+const calendarRoute = createRoute({
+  getParentRoute: () => appRoute,
+  path: "/calendar",
+  component: InterimCalendar,
+});
+const boardsRoute = createRoute({
+  getParentRoute: () => appRoute,
+  path: "/boards",
+  component: InterimBoards,
+});
+const projectsRoute = createRoute({
+  getParentRoute: () => appRoute,
+  path: "/projects",
+  component: InterimProjects,
+});
+const styleRoute = createRoute({
+  getParentRoute: () => appRoute,
+  path: "/style",
+  component: InterimStyle,
+});
+
 export const router = createRouter({
   routeTree: rootRoute.addChildren([
     loginRoute,
     galleryRoute,
-    appRoute.addChildren([todayRoute]),
+    appRoute.addChildren([
+      todayRoute,
+      accountRoute,
+      calendarRoute,
+      boardsRoute,
+      projectsRoute,
+      styleRoute,
+    ]),
   ]),
   history: memoryHistory,
   defaultPreload: "intent",
