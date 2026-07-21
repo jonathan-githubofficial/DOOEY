@@ -66,6 +66,13 @@ export function useDayTasks(date: string) {
   });
 }
 
+/** Keep yesterday's and tomorrow's lists warm — the page flip mounts the
+ * incoming sheet mid-animation, and a cold fetch there reads as jank. */
+export function usePrefetchAdjacentDays(date: string) {
+  useDayTasks(addDays(date, 1));
+  useDayTasks(addDays(date, -1));
+}
+
 /** Open-task counts per day for one month ("YYYY-MM") — the month grid's dots. */
 export function useMonthOpenCounts(month: string) {
   const isAuthenticated = useAuthStore((s) => s.isAuthenticated);

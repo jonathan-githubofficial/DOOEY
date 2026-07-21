@@ -67,14 +67,16 @@ export function PlannerBook({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [flip]);
 
-  // The rotating page: forward → the old page peels 0→140°; back → the new
-  // page flaps 140→0°. It darkens-out only at the very end of a peel.
+  // The rotating page: forward → the old page peels 0→140° UP over the rings
+  // (positive rotateX, origin top — the web's exact motion); back → the new
+  // page flaps down from over the top, 140→0°. It fades only at the very end
+  // of a peel.
   const topStyle = useAnimatedStyle(() => {
     const p = progress.value;
     const deg = dirSv.value > 0 ? 140 * p : 140 * (1 - p);
     return {
       opacity: dirSv.value > 0 && p > 0.85 ? 1 - (p - 0.85) / 0.15 : 1,
-      transform: [{ perspective: 1400 }, { rotateX: `${-deg}deg` }],
+      transform: [{ perspective: 1400 }, { rotateX: `${deg}deg` }],
     };
   });
   // The page underneath: sits in the pad's shadow until uncovered (forward),
@@ -96,7 +98,14 @@ export function PlannerBook({
         {renderPage(underPage)}
       </Animated.View>
       {flip && topPage && (
-        <Animated.View pointerEvents="none" style={[styles.topPage, topStyle]}>
+        <Animated.View
+          pointerEvents="none"
+          // Rasterized while it rotates: the 3D flip animates a cached
+          // texture instead of re-compositing the grained sheet every frame.
+          renderToHardwareTextureAndroid
+          shouldRasterizeIOS
+          style={[styles.topPage, topStyle]}
+        >
           {renderPage(topPage)}
         </Animated.View>
       )}

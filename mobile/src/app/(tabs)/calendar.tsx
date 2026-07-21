@@ -7,6 +7,7 @@ import { Grain } from "@/components/grain";
 import { Masthead } from "@/components/Masthead";
 import { PressableScale } from "@/components/pressable-scale";
 import { Panel } from "@/components/surface";
+import { usePrefetchAdjacentDays } from "@/features/tasks/api";
 import { useShadow } from "@/features/style/store";
 import { PageDoodle } from "@/features/style/components/PageDoodle";
 import { MonthView } from "@/features/tasks/components/MonthView";
@@ -37,6 +38,7 @@ export default function Calendar() {
   const [slot, setSlot] = useState<{ date: string; start: number } | null>(null);
   // Vertical time zoom (day + week grids), in px per minute.
   const [px, setPx] = useState(PX_DEFAULT);
+  usePrefetchAdjacentDays(selected);
 
   const week = weekOf(selected);
   const today = localDate();

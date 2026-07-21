@@ -3,6 +3,7 @@ import { ScrollView, StyleSheet, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Grain } from "@/components/grain";
 import { Panel } from "@/components/surface";
+import { usePrefetchAdjacentDays } from "@/features/tasks/api";
 import { AgendaSheet } from "@/features/tasks/components/AgendaSheet";
 import { PlannerBook } from "@/features/tasks/components/PlannerBook";
 import { TaskComposer } from "@/features/tasks/components/TaskComposer";
@@ -18,6 +19,7 @@ export default function Planner() {
   const insets = useSafeAreaInsets();
   const [selected, setSelected] = useState(localDate);
   const [direction, setDirection] = useState(1);
+  usePrefetchAdjacentDays(selected);
 
   const select = (date: string) => {
     if (date === selected) return;

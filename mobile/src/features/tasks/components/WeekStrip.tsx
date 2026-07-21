@@ -81,6 +81,8 @@ export function WeekStrip({
                 >
                   {noon.toLocaleDateString("en", { weekday: "narrow" })}
                 </Text>
+                {/* Today reads bigger via a transform, so its cell keeps the
+                    same layout height as the others — no stretched row. */}
                 <Text
                   style={[
                     styles.chipDate,
@@ -88,7 +90,10 @@ export function WeekStrip({
                     { color: isSelected ? colors.ink : colors.inkMuted },
                     isToday && [
                       type.displayBlack,
-                      { fontSize: 22, color: isSelected ? colors.ink : colors.zest },
+                      {
+                        color: isSelected ? colors.ink : colors.zest,
+                        transform: [{ scale: 1.3 }],
+                      },
                     ],
                   ]}
                 >
@@ -163,11 +168,13 @@ const styles = StyleSheet.create({
   },
   chipDow: {
     fontSize: 9,
+    lineHeight: 10,
     letterSpacing: 1.3,
     textTransform: "uppercase",
   },
   chipDate: {
     fontSize: 18,
+    lineHeight: 19,
     letterSpacing: -0.3,
   },
   chipDot: {
