@@ -1,6 +1,7 @@
 import { Check, Eraser, Pencil, Undo2, X } from "lucide-react-native";
 import { useEffect, useRef, useState } from "react";
-import { StyleSheet, Text, View, type GestureResponderEvent } from "react-native";
+import { Platform, StyleSheet, Text, View, type ViewStyle } from "react-native";
+import { Gesture, GestureDetector } from "react-native-gesture-handler";
 import Animated, { ZoomIn } from "react-native-reanimated";
 import { DoodleSvg } from "@/components/DoodleSvg";
 import { Grain } from "@/components/grain";
@@ -75,11 +76,7 @@ export function DoodleEditor({
     });
   };
 
-  const touchAt = (e: GestureResponderEvent): [number, number] =>
-    touchPct(e.nativeEvent.locationX, e.nativeEvent.locationY, padSize);
-
-  const onGrant = (e: GestureResponderEvent) => {
-    const p = touchAt(e);
+  const onGrant = (p: [number, number]) => {
     if (tool === "pen") {
       setLive([p]);
     } else {
@@ -89,8 +86,7 @@ export function DoodleEditor({
     }
   };
 
-  const onMove = (e: GestureResponderEvent) => {
-    const p = touchAt(e);
+  const onMove = (p: [number, number]) => {
     if (tool === "pen") {
       setLive((l) => {
         if (!l) return l;
@@ -120,6 +116,19 @@ export function DoodleEditor({
     setEraserAt(null);
   };
 
+  // A zero-threshold pan: it claims the touch on the first moved pixel, before
+  // any enclosing ScrollView's pan can — drawing must never scroll the page.
+  const draw = Gesture.Pan()
+    .minDistance(0)
+    .runOnJS(true)
+    .onBegin((e) => {
+      if (padSize > 0) onGrant(touchPct(e.x, e.y, padSize));
+    })
+    .onUpdate((e) => {
+      if (padSize > 0) onMove(touchPct(e.x, e.y, padSize));
+    })
+    .onFinalize(onRelease);
+
   return (
     <Animated.View
       entering={ZoomIn.springify().stiffness(480).damping(32)}
@@ -131,35 +140,35 @@ export function DoodleEditor({
       <Grain radius={15} />
       <Eyebrow>{heading}</Eyebrow>
 
-      <View
-        style={[styles.pad, { backgroundColor: colors.paper, borderColor: alpha(colors.rule, 0.7) }]}
-        onLayout={(e) => setPadSize(e.nativeEvent.layout.width)}
-        onStartShouldSetResponder={() => padSize > 0}
-        onMoveShouldSetResponder={() => padSize > 0}
-        onResponderTerminationRequest={() => false}
-        onResponderGrant={onGrant}
-        onResponderMove={onMove}
-        onResponderRelease={onRelease}
-        onResponderTerminate={onRelease}
-      >
-        <DoodleSvg strokes={live && live.length > 1 ? [...strokes, { color: ink, points: live }] : strokes} />
-        {tool === "erase" && eraserAt && padSize > 0 && (
-          <View
-            pointerEvents="none"
-            style={[
-              styles.eraserDot,
-              {
-                left: `${eraserAt[0] - ERASE_RADIUS}%`,
-                top: `${eraserAt[1] - ERASE_RADIUS}%`,
-                width: `${ERASE_RADIUS * 2}%`,
-                height: `${ERASE_RADIUS * 2}%`,
-                borderColor: alpha(colors.ink, 0.5),
-                backgroundColor: alpha(colors.ink, 0.1),
-              },
-            ]}
-          />
-        )}
-      </View>
+      <GestureDetector gesture={draw}>
+        <View
+          style={[
+            styles.pad,
+            { backgroundColor: colors.paper, borderColor: alpha(colors.rule, 0.7) },
+            // Web: keep touch browsers from panning the page while sketching.
+            Platform.OS === "web" && ({ touchAction: "none" } as unknown as ViewStyle),
+          ]}
+          onLayout={(e) => setPadSize(e.nativeEvent.layout.width)}
+        >
+          <DoodleSvg strokes={live && live.length > 1 ? [...strokes, { color: ink, points: live }] : strokes} />
+          {tool === "erase" && eraserAt && padSize > 0 && (
+            <View
+              pointerEvents="none"
+              style={[
+                styles.eraserDot,
+                {
+                  left: `${eraserAt[0] - ERASE_RADIUS}%`,
+                  top: `${eraserAt[1] - ERASE_RADIUS}%`,
+                  width: `${ERASE_RADIUS * 2}%`,
+                  height: `${ERASE_RADIUS * 2}%`,
+                  borderColor: alpha(colors.ink, 0.5),
+                  backgroundColor: alpha(colors.ink, 0.1),
+                },
+              ]}
+            />
+          )}
+        </View>
+      </GestureDetector>
 
       <View style={styles.toolbar}>
         <View style={styles.inks}>

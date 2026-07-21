@@ -22,10 +22,11 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { DoodleSvg } from "@/components/DoodleSvg";
 import { Grain } from "@/components/grain";
 import { useShadow, useStyleStore } from "@/features/style/store";
+import { fontStyle } from "@/features/style/tokens";
 import type { Stroke } from "@/lib/doodle";
 import { alpha } from "@/lib/theme";
 import { useAuthStore } from "@/stores/auth";
-import { usePalette, useThemeStore, useType } from "@/stores/theme";
+import { usePalette, useType } from "@/stores/theme";
 
 // A pure deceleration curve — the pill glides and stops dead, no overshoot.
 const GLIDE = { duration: 260, easing: Easing.bezier(0.2, 0, 0, 1) };
@@ -145,7 +146,8 @@ export function Dock({ state, navigation }: TabBarProps) {
 }
 
 /** Your doodled self and the wordmark, one piece: tap anywhere on it to open
- * Account. Only the zest full-stop does something else — it flips the theme. */
+ * Account. The zest full-stop is pure punctuation — theme switching lives on
+ * the Account page. */
 function AccountCluster({
   active,
   onLayout,
@@ -156,8 +158,6 @@ function AccountCluster({
   onPress: () => void;
 }) {
   const colors = usePalette();
-  const type = useType();
-  const toggle = useThemeStore((s) => s.toggle);
   const user = useAuthStore((s) => s.user);
   const strokes = (user?.avatar_doodle as Stroke[] | null) ?? [];
 
@@ -180,16 +180,11 @@ function AccountCluster({
           />
         )}
       </View>
-      <Text style={[styles.wordmark, type.displayBlack, { color: colors.ink }]}>
+      {/* The logo is the logo: it keeps the brand face (Fraunces) no matter
+          which display font the Style studio picks. */}
+      <Text style={[styles.wordmark, fontStyle("fraunces", "900"), { color: colors.ink }]}>
         DOOEY
-        <Text
-          suppressHighlighting
-          accessibilityLabel="Toggle light / dark mode"
-          onPress={toggle}
-          style={{ color: colors.zest }}
-        >
-          .
-        </Text>
+        <Text style={{ color: colors.zest }}>.</Text>
       </Text>
     </Pressable>
   );

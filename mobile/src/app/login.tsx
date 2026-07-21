@@ -14,6 +14,7 @@ import { Grain } from "@/components/grain";
 import { PressableScale } from "@/components/pressable-scale";
 import { Eyebrow, Panel } from "@/components/surface";
 import { signIn, signUp } from "@/features/auth/api";
+import { fontStyle } from "@/features/style/tokens";
 import { alpha, type Palette } from "@/lib/theme";
 import { useAuthStore } from "@/stores/auth";
 import { usePalette, useType } from "@/stores/theme";
@@ -59,7 +60,7 @@ export default function Login() {
       ]}
     >
       <Grain />
-      <Text style={[styles.wordmark, type.displayBlack, { color: colors.ink }]}>
+      <Text style={[styles.wordmark, fontStyle("fraunces", "900"), { color: colors.ink }]}>
         DOOEY
         <Text style={{ color: colors.zest }}>.</Text>
       </Text>

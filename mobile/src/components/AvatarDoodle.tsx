@@ -2,6 +2,7 @@ import { Pencil } from "lucide-react-native";
 import type { RecordModel } from "pocketbase";
 import { useState } from "react";
 import { Modal, Pressable, StyleSheet } from "react-native";
+import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { DoodleEditor } from "@/components/DoodleEditor";
 import { PressableScale } from "@/components/pressable-scale";
 import { DoodleSvg } from "@/components/DoodleSvg";
@@ -39,23 +40,27 @@ export function AvatarDoodle() {
       </PressableScale>
 
       <Modal visible={open} transparent animationType="fade" onRequestClose={() => setOpen(false)}>
-        <Pressable style={styles.backdrop} onPress={() => setOpen(false)}>
-          {/* Swallow taps on the card itself so only the backdrop closes. */}
-          <Pressable onPress={() => {}}>
-            <DoodleEditor
-              heading="doodle yourself"
-              initial={strokes}
-              onClose={() => setOpen(false)}
-              onSave={async (next) => {
-                const record = await pb
-                  .collection("users")
-                  .update(user.id, { avatar_doodle: next }, { requestKey: null });
-                useAuthStore.getState().setUser(record as RecordModel, pb.authStore.token);
-                setOpen(false);
-              }}
-            />
+        {/* A native Modal is its own gesture root — without this the drawing
+            pan inside never receives touches. */}
+        <GestureHandlerRootView style={styles.root}>
+          <Pressable style={styles.backdrop} onPress={() => setOpen(false)}>
+            {/* Swallow taps on the card itself so only the backdrop closes. */}
+            <Pressable onPress={() => {}}>
+              <DoodleEditor
+                heading="doodle yourself"
+                initial={strokes}
+                onClose={() => setOpen(false)}
+                onSave={async (next) => {
+                  const record = await pb
+                    .collection("users")
+                    .update(user.id, { avatar_doodle: next }, { requestKey: null });
+                  useAuthStore.getState().setUser(record as RecordModel, pb.authStore.token);
+                  setOpen(false);
+                }}
+              />
+            </Pressable>
           </Pressable>
-        </Pressable>
+        </GestureHandlerRootView>
       </Modal>
     </>
   );
@@ -67,6 +72,9 @@ const styles = StyleSheet.create({
     width: 64,
     alignItems: "center",
     justifyContent: "center",
+  },
+  root: {
+    flex: 1,
   },
   backdrop: {
     flex: 1,

@@ -1,13 +1,14 @@
 import { useRouter } from "expo-router";
 import { Trash2 } from "lucide-react-native";
-import { useEffect, useMemo } from "react";
-import { Alert, Pressable, StyleSheet, Text, View } from "react-native";
+import { useEffect, useMemo, useState } from "react";
+import { Platform, Pressable, StyleSheet, Text, View } from "react-native";
 import { Gesture, GestureDetector } from "react-native-gesture-handler";
 import Animated, {
   FadeIn,
   FadeOut,
   LinearTransition,
   runOnJS,
+  useAnimatedReaction,
   useAnimatedStyle,
   useSharedValue,
   withRepeat,
@@ -26,8 +27,15 @@ import { BINDING_INSET, RING_COUNT } from "./PlannerBook";
 
 const settle = LinearTransition.springify().stiffness(420).damping(32);
 const ROW_H = 56;
+const CHECK_LINE_H = 26; // one checklist line tucked under the title
+const REVEAL_W = 72; // how far a row swipes right to bare its delete
 const DAY_MS = 86_400_000;
 const LIFT = { stiffness: 420, damping: 34 };
+
+/** A row grows with its checklist — heights come from data, so the drag math
+ * and the layout can never disagree. */
+const rowHeight = (t: Task) =>
+  ROW_H + (t.checklist.length ? t.checklist.length * CHECK_LINE_H + 8 : 0);
 
 /** One planner page: the day's open tasks in a hold-to-drag reorderable list,
  * and the day's done pile. Rows open the task's page. */
@@ -40,9 +48,49 @@ export function AgendaSheet({ date }: { date: string }) {
   const done = (tasks ?? []).filter((t) => t.done_at);
 
   return (
-    <Panel style={styles.sheet}>
-      {/* Punched holes — same slot geometry as the binder rings, so the wire
-          lands dead-center in each hole. */}
+    <View>
+      <Panel style={styles.sheet}>
+        <SheetHeading date={date} count={open.length} />
+
+        {error && (
+          <View
+            style={[
+              styles.errorBox,
+              { borderColor: alpha(colors.clay, 0.4), backgroundColor: alpha(colors.clay, 0.1) },
+            ]}
+          >
+            <Text style={[styles.errorText, type.sans, { color: colors.ink }]}>
+              Couldn't load this day. {error.message}
+            </Text>
+          </View>
+        )}
+        {isPending && !error && <GhostLines />}
+
+        {tasks && (
+          <>
+            <ReorderableRows rows={open} date={date} />
+
+            {open.length === 0 && done.length === 0 && (
+              <Text style={[styles.empty, type.sans, { color: colors.inkMuted }]}>
+                Nothing planned — the day is yours.
+              </Text>
+            )}
+
+            {done.length > 0 && (
+              <Animated.View layout={settle} style={styles.donePile}>
+                <Eyebrow>done</Eyebrow>
+                {done.map((t) => (
+                  <DoneTaskRow key={t.id} task={t} />
+                ))}
+              </Animated.View>
+            )}
+          </>
+        )}
+      </Panel>
+
+      {/* Punched holes — drawn on an unbordered wrapper (not inside the Panel,
+          whose 1px border would nudge the percentage box inward) so they use
+          the exact same width as the binder rings and line up dead-center. */}
       <View pointerEvents="none" style={styles.holesRow}>
         {Array.from({ length: RING_COUNT }).map((_, i) => (
           <View key={i} style={styles.holeSlot}>
@@ -50,44 +98,7 @@ export function AgendaSheet({ date }: { date: string }) {
           </View>
         ))}
       </View>
-
-      <SheetHeading date={date} count={open.length} />
-
-      {error && (
-        <View
-          style={[
-            styles.errorBox,
-            { borderColor: alpha(colors.clay, 0.4), backgroundColor: alpha(colors.clay, 0.1) },
-          ]}
-        >
-          <Text style={[styles.errorText, type.sans, { color: colors.ink }]}>
-            Couldn't load this day. {error.message}
-          </Text>
-        </View>
-      )}
-      {isPending && !error && <GhostLines />}
-
-      {tasks && (
-        <>
-          <ReorderableRows rows={open} date={date} />
-
-          {open.length === 0 && done.length === 0 && (
-            <Text style={[styles.empty, type.sans, { color: colors.inkMuted }]}>
-              Nothing planned — the day is yours.
-            </Text>
-          )}
-
-          {done.length > 0 && (
-            <Animated.View layout={settle} style={styles.donePile}>
-              <Eyebrow>done</Eyebrow>
-              {done.map((t) => (
-                <DoneTaskRow key={t.id} task={t} />
-              ))}
-            </Animated.View>
-          )}
-        </>
-      )}
-    </Panel>
+    </View>
   );
 }
 
@@ -121,13 +132,19 @@ export function SheetHeading({ date, count }: { date: string; count: number }) {
 
 /** Hold a row a beat to lift it, then drag — the others part on springs. On
  * drop the new slot persists as a midpoint sort (dense reindex on collision),
- * exactly like the web planner. */
+ * exactly like the web planner. Rows are as tall as their checklists. */
 function ReorderableRows({ rows, date }: { rows: Task[]; date: string }) {
-  const colors = usePalette();
   const update = useUpdateTask();
   const positions = useSharedValue<Record<string, number>>(
     Object.fromEntries(rows.map((r, i) => [r.id, i])),
   );
+  const heightsObj = useMemo(
+    () => Object.fromEntries(rows.map((r) => [r.id, rowHeight(r)])),
+    [rows],
+  );
+  const heights = useSharedValue<Record<string, number>>(heightsObj);
+  // Which row is baring its delete — swiping (or lifting) one closes the rest.
+  const revealed = useSharedValue<string | null>(null);
 
   // Re-sync slots whenever the server list changes (adds, deletes, check-offs).
   const signature = rows.map((r) => r.id).join("|");
@@ -135,6 +152,10 @@ function ReorderableRows({ rows, date }: { rows: Task[]; date: string }) {
     positions.value = Object.fromEntries(rows.map((r, i) => [r.id, i]));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [signature]);
+  useEffect(() => {
+    heights.value = heightsObj;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [heightsObj]);
 
   const commit = (id: string) => {
     const order = [...rows].sort(
@@ -154,21 +175,10 @@ function ReorderableRows({ rows, date }: { rows: Task[]; date: string }) {
     }
   };
 
+  const listHeight = rows.reduce((sum, r) => sum + rowHeight(r), 0);
+
   return (
-    <View style={[styles.list, { height: rows.length * ROW_H }]}>
-      {/* Hairlines live at the slot boundaries, not on the rows — they hold
-          still while rows glide between slots. */}
-      {rows.length > 1 &&
-        Array.from({ length: rows.length - 1 }).map((_, i) => (
-          <View
-            key={i}
-            pointerEvents="none"
-            style={[
-              styles.separator,
-              { top: (i + 1) * ROW_H, backgroundColor: alpha(colors.rule, 0.5) },
-            ]}
-          />
-        ))}
+    <View style={[styles.list, { height: listHeight }]}>
       {rows.map((t, i) => (
         <DraggableRow
           key={t.id}
@@ -177,6 +187,8 @@ function ReorderableRows({ rows, date }: { rows: Task[]; date: string }) {
           count={rows.length}
           date={date}
           positions={positions}
+          heights={heights}
+          revealed={revealed}
           onDrop={commit}
         />
       ))}
@@ -190,6 +202,8 @@ function DraggableRow({
   count,
   date,
   positions,
+  heights,
+  revealed,
   onDrop,
 }: {
   task: Task;
@@ -197,6 +211,8 @@ function DraggableRow({
   count: number;
   date: string;
   positions: SharedValue<Record<string, number>>;
+  heights: SharedValue<Record<string, number>>;
+  revealed: SharedValue<string | null>;
   onDrop: (id: string) => void;
 }) {
   const colors = usePalette();
@@ -205,26 +221,51 @@ function DraggableRow({
   const update = useUpdateTask();
   const del = useDeleteTask();
   const id = task.id;
+  const h = rowHeight(task);
+  const web = Platform.OS === "web";
+  const [hovered, setHovered] = useState(false);
 
   const dragging = useSharedValue(false);
-  const y = useSharedValue(index * ROW_H);
+  const y = useSharedValue(0);
   const startY = useSharedValue(0);
+  const reveal = useSharedValue(0);
+  const revealStart = useSharedValue(0);
 
-  const pan = Gesture.Pan()
+  const lift = Gesture.Pan()
     .activateAfterLongPress(220)
     .onStart(() => {
       dragging.value = true;
-      startY.value = (positions.value[id] ?? index) * ROW_H;
-      y.value = startY.value;
+      revealed.value = null;
+      let top = 0;
+      const idx = positions.value[id] ?? index;
+      for (const k in positions.value) {
+        if (k !== id && positions.value[k] < idx) top += heights.value[k] ?? ROW_H;
+      }
+      startY.value = top;
+      y.value = top;
     })
     .onUpdate((e) => {
       y.value = startY.value + e.translationY;
-      const newIdx = Math.max(0, Math.min(count - 1, Math.round(y.value / ROW_H)));
-      const curIdx = positions.value[id];
-      if (newIdx !== curIdx) {
-        const next = { ...positions.value };
-        for (const k in next) if (k !== id && next[k] === newIdx) next[k] = curIdx;
-        next[id] = newIdx;
+      // Which slot does the dragged row's centre fall into, heights and all?
+      const centerY = y.value + (heights.value[id] ?? ROW_H) / 2;
+      const others = Object.entries(positions.value)
+        .filter(([k]) => k !== id)
+        .sort((a, b) => a[1] - b[1]);
+      let acc = 0;
+      let newIdx = others.length;
+      for (let i = 0; i < others.length; i++) {
+        const hh = heights.value[others[i][0]] ?? ROW_H;
+        if (centerY < acc + hh / 2) {
+          newIdx = i;
+          break;
+        }
+        acc += hh;
+      }
+      if (newIdx !== positions.value[id]) {
+        const next: Record<string, number> = { [id]: newIdx };
+        others.forEach(([k], i) => {
+          next[k] = i >= newIdx ? i + 1 : i;
+        });
         positions.value = next;
       }
     })
@@ -233,11 +274,49 @@ function DraggableRow({
       runOnJS(onDrop)(id);
     });
 
+  // Swipe the row right to bare its delete (native only — the web shows the
+  // trash on hover instead). Horizontal-only: any vertical drift fails it so
+  // scrolling and the long-press lift keep working.
+  const swipe = Gesture.Pan()
+    .enabled(!web)
+    .activeOffsetX([-16, 16])
+    .failOffsetY([-12, 12])
+    .onStart(() => {
+      revealStart.value = reveal.value;
+      revealed.value = id;
+    })
+    .onUpdate((e) => {
+      reveal.value = Math.max(0, Math.min(REVEAL_W, revealStart.value + e.translationX));
+    })
+    .onEnd(() => {
+      const open = reveal.value > REVEAL_W / 2;
+      reveal.value = withSpring(open ? REVEAL_W : 0, LIFT);
+      if (!open) revealed.value = null;
+    });
+
+  // Another row swiping (or this one lifting) tucks this delete back in.
+  useAnimatedReaction(
+    () => revealed.value,
+    (open) => {
+      if (open !== id && reveal.value > 0) reveal.value = withSpring(0, LIFT);
+    },
+  );
+
+  const closeReveal = () => {
+    revealed.value = null;
+    reveal.value = withSpring(0, LIFT);
+  };
+
   // The row is bare paper until it's lifted — only a live drag earns the
   // card treatment (surface fill, shadow, slight grow), like the web.
   const surface = colors.surface;
+  const rule = alpha(colors.rule, 0.5);
   const rowStyle = useAnimatedStyle(() => {
     const idx = positions.value[id] ?? index;
+    let top = 0;
+    for (const k in positions.value) {
+      if (k !== id && positions.value[k] < idx) top += heights.value[k] ?? ROW_H;
+    }
     return dragging.value
       ? {
           top: y.value,
@@ -246,67 +325,144 @@ function DraggableRow({
           shadowOpacity: 0.18,
           elevation: 6,
           transform: [{ scale: 1.02 }],
+          borderTopColor: "transparent",
         }
       : {
-          top: withSpring(idx * ROW_H, LIFT),
+          top: withSpring(top, LIFT),
           zIndex: 0,
           backgroundColor: "transparent",
           shadowOpacity: 0,
           elevation: 0,
           transform: [{ scale: withSpring(1, LIFT) }],
+          // The hairline rides the row (web: border-t, first:border-t-0) so
+          // it parts with the rows instead of floating between slots.
+          borderTopColor: idx === 0 ? "transparent" : rule,
         };
   });
+  const cardStyle = useAnimatedStyle(() => ({
+    transform: [{ translateX: reveal.value }],
+  }));
+  const underStyle = useAnimatedStyle(() => ({
+    opacity: reveal.value / REVEAL_W,
+  }));
 
   const due = date === localDate() && task.due_date ? dueInfo(task.due_date) : null;
+  const toggleItem = (itemId: string) =>
+    update.mutate({
+      id,
+      patch: {
+        checklist: task.checklist.map((i) => (i.id === itemId ? { ...i, done: !i.done } : i)),
+      },
+    });
 
   return (
-    <GestureDetector gesture={pan}>
+    <GestureDetector gesture={Gesture.Race(swipe, lift)}>
       <Animated.View
         entering={FadeIn.duration(180)}
         exiting={FadeOut.duration(150)}
-        style={[styles.row, rowStyle, { shadowColor: "#282018" }]}
+        style={[styles.row, { height: h }, rowStyle, { shadowColor: "#282018" }]}
       >
-        {/* The WHOLE row opens the task's page; the check and the trash are
-            nested pressables, so they win their own taps. Holding anywhere
-            lifts the row for a drag. */}
-        <Pressable style={styles.rowPress} onPress={() => router.push(`/task/${id}`)}>
-          <Check
-            done={false}
-            gate={task.gate}
-            label={`Mark "${task.title}" done`}
-            size={22}
-            onToggle={() =>
-              update.mutate({ id, patch: { done_at: new Date().toISOString() } })
-            }
-          />
-          <View style={styles.rowBody}>
-            <View style={styles.rowTitleLine}>
-              {task.gate && <Text style={{ color: colors.zest }}>⛳</Text>}
-              <Text numberOfLines={1} style={[styles.rowTitle, type.sans, { color: colors.ink }]}>
-                {task.title}
-              </Text>
-              {due && due.tone !== "future" && <DueChip due={due} />}
-            </View>
-            {!!task.description && (
-              <Text numberOfLines={1} style={[styles.rowSub, type.sans, { color: colors.inkMuted }]}>
-                {task.description}
-              </Text>
-            )}
-          </View>
-          <Pressable
-            accessibilityLabel={`Delete "${task.title}"`}
-            hitSlop={10}
-            onPress={() =>
-              Alert.alert("Delete task", `Delete "${task.title}"?`, [
-                { text: "Cancel", style: "cancel" },
-                { text: "Delete", style: "destructive", onPress: () => del.mutate(id) },
-              ])
-            }
-            style={styles.rowTrash}
-          >
-            <Trash2 size={14} color={alpha(colors.inkMuted, 0.35)} />
-          </Pressable>
-        </Pressable>
+        <View style={styles.rowClip}>
+          {!web && (
+            <Animated.View style={[styles.deleteUnder, underStyle]}>
+              <Pressable
+                accessibilityLabel={`Delete "${task.title}"`}
+                onPress={() => del.mutate(id)}
+                style={[styles.deleteBtn, { backgroundColor: alpha(colors.clay, 0.14) }]}
+              >
+                <Trash2 size={16} color={colors.clay} />
+              </Pressable>
+            </Animated.View>
+          )}
+          <Animated.View style={[styles.rowCard, cardStyle]}>
+            {/* The WHOLE row opens the task's page; the check, the checklist
+                lines and the trash are nested pressables, so they win their
+                own taps. Holding anywhere lifts the row for a drag. */}
+            <Pressable
+              style={styles.rowPress}
+              onPress={() => {
+                if (!web && reveal.value > 0) closeReveal();
+                else router.push(`/task/${id}`);
+              }}
+              onHoverIn={web ? () => setHovered(true) : undefined}
+              onHoverOut={web ? () => setHovered(false) : undefined}
+            >
+              <View style={styles.rowCheck}>
+                <Check
+                  done={false}
+                  gate={task.gate}
+                  label={`Mark "${task.title}" done`}
+                  size={22}
+                  onToggle={() =>
+                    update.mutate({ id, patch: { done_at: new Date().toISOString() } })
+                  }
+                />
+              </View>
+              <View style={styles.rowBody}>
+                <View style={styles.rowMain}>
+                  <View style={styles.rowTitleLine}>
+                    {task.gate && <Text style={{ color: colors.zest }}>⛳</Text>}
+                    <Text
+                      numberOfLines={1}
+                      style={[styles.rowTitle, type.sans, { color: colors.ink }]}
+                    >
+                      {task.title}
+                    </Text>
+                    {due && due.tone !== "future" && <DueChip due={due} />}
+                  </View>
+                  {!!task.description && (
+                    <Text
+                      numberOfLines={1}
+                      style={[styles.rowSub, type.sans, { color: colors.inkMuted }]}
+                    >
+                      {task.description}
+                    </Text>
+                  )}
+                </View>
+                {task.checklist.length > 0 && (
+                  <View style={styles.rowChecklist}>
+                    {task.checklist.map((item) => (
+                      <Pressable
+                        key={item.id}
+                        accessibilityLabel={item.label}
+                        onPress={() => toggleItem(item.id)}
+                        style={styles.rowCheckLine}
+                      >
+                        <Check
+                          done={item.done}
+                          label={item.label}
+                          size={16}
+                          onToggle={() => toggleItem(item.id)}
+                        />
+                        <Text
+                          numberOfLines={1}
+                          style={[
+                            styles.rowCheckLabel,
+                            type.sans,
+                            { color: item.done ? colors.inkMuted : colors.ink },
+                            item.done && { textDecorationLine: "line-through" },
+                          ]}
+                        >
+                          {item.label}
+                        </Text>
+                      </Pressable>
+                    ))}
+                  </View>
+                )}
+              </View>
+              {web && (
+                <Pressable
+                  accessibilityLabel={`Delete "${task.title}"`}
+                  hitSlop={10}
+                  onPress={() => del.mutate(id)}
+                  style={[styles.rowTrash, { opacity: hovered ? 1 : 0 }]}
+                >
+                  <Trash2 size={14} color={alpha(colors.inkMuted, 0.5)} />
+                </Pressable>
+              )}
+            </Pressable>
+          </Animated.View>
+        </View>
       </Animated.View>
     </GestureDetector>
   );
@@ -384,7 +540,7 @@ const styles = StyleSheet.create({
     position: "absolute",
     left: BINDING_INSET,
     right: BINDING_INSET,
-    top: 9,
+    top: 10,
     flexDirection: "row",
     justifyContent: "space-between",
   },
@@ -427,28 +583,51 @@ const styles = StyleSheet.create({
   list: {
     marginTop: 4,
   },
-  separator: {
-    position: "absolute",
-    left: -8,
-    right: -8,
-    height: StyleSheet.hairlineWidth,
-  },
   row: {
     position: "absolute",
     left: -8,
     right: -8,
-    height: ROW_H,
     borderRadius: 14,
+    borderTopWidth: StyleSheet.hairlineWidth,
     shadowRadius: 12,
     shadowOffset: { width: 0, height: 6 },
+  },
+  rowClip: {
+    ...StyleSheet.absoluteFillObject,
+    borderRadius: 14,
+    overflow: "hidden",
+  },
+  rowCard: {
+    flex: 1,
+    borderRadius: 14,
+  },
+  deleteUnder: {
+    position: "absolute",
+    left: 0,
+    top: 0,
+    bottom: 0,
+    width: REVEAL_W,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  deleteBtn: {
+    height: 36,
+    width: 36,
+    alignItems: "center",
+    justifyContent: "center",
+    borderRadius: 999,
   },
   rowPress: {
     flex: 1,
     flexDirection: "row",
-    alignItems: "center",
+    alignItems: "flex-start",
     gap: 10,
     paddingLeft: 12,
     paddingRight: 4,
+  },
+  rowCheck: {
+    height: ROW_H,
+    justifyContent: "center",
   },
   rowTrash: {
     height: ROW_H,
@@ -467,6 +646,10 @@ const styles = StyleSheet.create({
     flex: 1,
     minWidth: 0,
   },
+  rowMain: {
+    height: ROW_H,
+    justifyContent: "center",
+  },
   rowTitleLine: {
     flexDirection: "row",
     alignItems: "center",
@@ -483,6 +666,21 @@ const styles = StyleSheet.create({
   rowSub: {
     marginTop: 2,
     fontSize: 12,
+  },
+  rowChecklist: {
+    paddingBottom: 8,
+  },
+  rowCheckLine: {
+    height: CHECK_LINE_H,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    paddingRight: 8,
+  },
+  rowCheckLabel: {
+    flexShrink: 1,
+    minWidth: 0,
+    fontSize: 13,
   },
   dueChip: {
     borderWidth: 1,
