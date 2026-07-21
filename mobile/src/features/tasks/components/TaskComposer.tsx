@@ -1,7 +1,7 @@
 import DateTimePicker, { DateTimePickerAndroid } from "@react-native-community/datetimepicker";
 import { useRouter } from "expo-router";
 import { CalendarDays, Clock, Plus, StickyNote, X } from "lucide-react-native";
-import { createElement, useState } from "react";
+import { createElement, useEffect, useState } from "react";
 import {
   Keyboard,
   KeyboardAvoidingView,
@@ -23,11 +23,12 @@ import Animated, {
   SlideOutDown,
 } from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { DoodleSvg } from "@/components/DoodleSvg";
 import { Grain } from "@/components/grain";
 import { PressableScale } from "@/components/pressable-scale";
 import { StampEdge } from "@/components/stamp-edge";
 import { Eyebrow } from "@/components/surface";
-import { useShadow } from "@/features/style/store";
+import { useShadow, useStyleStore } from "@/features/style/store";
 import { addDays, localDate, pad2, toLocalNoon, toPbDate } from "@/lib/dates";
 import { hapticSuccess, hapticTap } from "@/lib/haptics";
 import { alpha } from "@/lib/theme";
@@ -44,9 +45,11 @@ const dateAtMin = (m: number) => {
 const hhmm = (m: number) => `${pad2(Math.floor(m / 60))}:${pad2(m % 60)}`;
 const ymd = (d: Date) => `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`;
 
-/** The new-task button: a postage stamp pinned above the tab bar — a fresh
- * slip waiting to be stuck onto the day. On native it opens the system form
- * sheet (/compose); the web build slides up its own drawer. */
+/** The new-task button: a postage stamp pinned above the tab bar — and the
+ * companion's home. Once he's drawn in the Style studio he lives IN the
+ * stamp (flipping through his poses), a small zest + pinned beside him. On
+ * native it opens the system form sheet (/compose); the web build slides up
+ * its own drawer. */
 export function TaskComposer({ date }: { date: string }) {
   const colors = usePalette();
   const shadow = useShadow();
@@ -59,6 +62,15 @@ export function TaskComposer({ date }: { date: string }) {
     month: "short",
     day: "numeric",
   });
+
+  const frames = useStyleStore((s) => s.companion);
+  const [frame, setFrame] = useState(0);
+  useEffect(() => {
+    if (frames.length < 2) return;
+    const t = setInterval(() => setFrame((f) => f + 1), 550);
+    return () => clearInterval(t);
+  }, [frames.length]);
+  const companion = frames.length > 0 ? frames[frame % frames.length] : null;
 
   return (
     <>
@@ -83,8 +95,19 @@ export function TaskComposer({ date }: { date: string }) {
             ({ filter: "drop-shadow(0 1.5px 1.5px rgb(40 32 24 / 0.25))" } as unknown as ViewStyle),
         ]}
       >
-        <StampEdge color={colors.zest} />
-        <Plus size={24} strokeWidth={2.6} color={colors.paper} />
+        <StampEdge color={companion ? colors.surface : colors.zest} />
+        {companion ? (
+          <>
+            <View style={styles.fabCompanion}>
+              <DoodleSvg strokes={companion} strokeWidth={3} />
+            </View>
+            <View style={[styles.fabPlus, { backgroundColor: colors.zest }]}>
+              <Plus size={12} strokeWidth={3} color={colors.paper} />
+            </View>
+          </>
+        ) : (
+          <Plus size={24} strokeWidth={2.6} color={colors.paper} />
+        )}
       </PressableScale>
 
       {open && <ComposerSheet date={date} onClose={() => setOpen(false)} />}
@@ -549,6 +572,20 @@ const styles = StyleSheet.create({
     shadowColor: "#282018",
     shadowRadius: 4,
     shadowOffset: { width: 0, height: 2 },
+  },
+  fabCompanion: {
+    height: 38,
+    width: 38,
+  },
+  fabPlus: {
+    position: "absolute",
+    top: 5,
+    right: 5,
+    height: 18,
+    width: 18,
+    alignItems: "center",
+    justifyContent: "center",
+    borderRadius: 999,
   },
   backdrop: {
     position: "absolute",

@@ -22,7 +22,6 @@ import Animated, {
   useAnimatedStyle,
   useSharedValue,
   withRepeat,
-  withSequence,
   withSpring,
   withTiming,
   type SharedValue,
@@ -33,7 +32,6 @@ import { DoodleEditor } from "@/components/DoodleEditor";
 import { DoodleSvg } from "@/components/DoodleSvg";
 import { PressableScale } from "@/components/pressable-scale";
 import { Eyebrow, Panel, Stamp } from "@/components/surface";
-import { useStyleStore } from "@/features/style/store";
 import { addDays, dayTitle, dueInfo, localDate, toLocalNoon, toPbDate } from "@/lib/dates";
 import { hapticLift, hapticSuccess, hapticTap, hapticWarn } from "@/lib/haptics";
 import { alpha } from "@/lib/theme";
@@ -112,12 +110,7 @@ export function AgendaSheet({ date, height }: { date: string; height?: number })
   );
 
   return (
-    <PageSheet
-      date={date}
-      count={open.length}
-      height={height}
-      overlay={<Companion celebrate={complete} />}
-    >
+    <PageSheet date={date} count={open.length} height={height}>
       {body}
     </PageSheet>
   );
@@ -192,47 +185,6 @@ function SignDay({ date }: { date: string }) {
   );
 }
 
-/** The margin companion: the creature animated pose-by-pose in the Style
- * studio, peeking over the page's bottom corner. One pose bobs; two or more
- * flip like a flipbook; a finished day makes him hop. */
-function Companion({ celebrate }: { celebrate: boolean }) {
-  const frames = useStyleStore((s) => s.companion);
-  const [frame, setFrame] = useState(0);
-  useEffect(() => {
-    if (frames.length < 2) return;
-    const t = setInterval(() => setFrame((f) => f + 1), 550);
-    return () => clearInterval(t);
-  }, [frames.length]);
-
-  const bob = useSharedValue(0);
-  const hop = useSharedValue(0);
-  useEffect(() => {
-    bob.value = withRepeat(
-      withTiming(1, { duration: 2400, easing: Easing.inOut(Easing.quad) }),
-      -1,
-      true,
-    );
-  }, [bob]);
-  useEffect(() => {
-    if (celebrate) {
-      hop.value = withSequence(
-        withTiming(-12, { duration: 150, easing: Easing.out(Easing.quad) }),
-        withSpring(0, { stiffness: 320, damping: 11 }),
-      );
-    }
-  }, [celebrate, hop]);
-  const style = useAnimatedStyle(() => ({
-    transform: [{ translateY: bob.value * 3 + hop.value }, { rotate: "5deg" }],
-  }));
-
-  if (frames.length === 0) return null;
-  const strokes = frames[frame % frames.length];
-  return (
-    <Animated.View pointerEvents="none" style={[styles.companion, style]}>
-      <DoodleSvg strokes={strokes} strokeWidth={2.8} />
-    </Animated.View>
-  );
-}
 
 /** The planner page itself, shared by every day view: the punched paper sheet
  * with its heading pinned at the top and the content scrolling INSIDE it. */
@@ -240,14 +192,11 @@ export function PageSheet({
   date,
   count,
   height,
-  overlay,
   children,
 }: {
   date: string;
   count: number;
   height?: number;
-  /** Pinned over the paper (doesn't scroll) — stamps, companions. */
-  overlay?: React.ReactNode;
   children: React.ReactNode;
 }) {
   const colors = usePalette();
@@ -287,8 +236,6 @@ export function PageSheet({
           </View>
         ))}
       </View>
-
-      {overlay}
     </View>
   );
 }
@@ -918,15 +865,6 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
     backgroundColor: "rgba(20, 16, 12, 0.35)",
-  },
-  // Peeking over the page's TOP edge, next to the binder.
-  companion: {
-    position: "absolute",
-    right: 18,
-    top: -14,
-    height: 46,
-    width: 46,
-    zIndex: 5,
   },
   deleteBtn: {
     height: 36,
