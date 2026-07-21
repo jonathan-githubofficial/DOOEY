@@ -1,24 +1,32 @@
 import { useState } from "react";
 import { StyleSheet, View } from "react-native";
-import Svg, { Circle, Mask, Rect } from "react-native-svg";
+import Svg, { Path } from "react-native-svg";
 
 const R = 3.5; // perforation radius — same numbers as the web's .stamp-edge
 const S = 12; // spacing between perforations
 
+/** A circle as a path subpath — punched out of the rect by the evenodd fill.
+ * (A single Path avoids SVG <Mask>, which react-native-svg renders wrong on
+ * the web.) */
+function hole(cx: number, cy: number): string {
+  return `M${cx + R} ${cy} A${R} ${R} 0 1 0 ${cx - R} ${cy} A${R} ${R} 0 1 0 ${cx + R} ${cy} Z`;
+}
+
 /** The postage-stamp fill: a colored rect with notches punched along all four
- * sides via an SVG mask — the real perforation the web does with CSS masks.
- * Absolutely fills its parent; render it first, content on top. */
+ * sides — the real perforation the web does with CSS masks. Absolutely fills
+ * its parent; render it first, content on top. */
 export function StampEdge({ color }: { color: string }) {
   const [size, setSize] = useState({ w: 0, h: 0 });
   const { w, h } = size;
 
-  const holes: { cx: number; cy: number }[] = [];
+  let d = "";
   if (w > 0 && h > 0) {
+    d = `M0 0 H${w} V${h} H0 Z`;
     for (let x = S / 2; x <= w; x += S) {
-      holes.push({ cx: x, cy: 0 }, { cx: x, cy: h });
+      d += hole(x, 0) + hole(x, h);
     }
     for (let y = S / 2; y <= h; y += S) {
-      holes.push({ cx: 0, cy: y }, { cx: w, cy: y });
+      d += hole(0, y) + hole(w, y);
     }
   }
 
@@ -30,15 +38,9 @@ export function StampEdge({ color }: { color: string }) {
         setSize({ w: e.nativeEvent.layout.width, h: e.nativeEvent.layout.height })
       }
     >
-      {w > 0 && h > 0 && (
+      {!!d && (
         <Svg width={w} height={h}>
-          <Mask id="stamp">
-            <Rect width={w} height={h} fill="#fff" />
-            {holes.map((c, i) => (
-              <Circle key={i} cx={c.cx} cy={c.cy} r={R} fill="#000" />
-            ))}
-          </Mask>
-          <Rect width={w} height={h} fill={color} mask="url(#stamp)" />
+          <Path d={d} fill={color} fillRule="evenodd" />
         </Svg>
       )}
     </View>
