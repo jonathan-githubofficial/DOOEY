@@ -26,6 +26,10 @@ import { usePalette, useType } from "@/stores/theme";
 const settle = LinearTransition.springify().stiffness(380).damping(34);
 
 // ── TUNING KNOBS ────────────────────────────────────────────────────────────
+// The gap (px) between the date shelf and the top of the notebook. SMALLER =
+// notebook sits HIGHER on the page. This is the one to nudge if the notebook
+// feels too low.
+const PAGE_TOP_GAP = 24;
 // How far the notebook's bottom edge sits ABOVE the tab bar / dock island
 // (safe-area inset is added on top of this). Bigger = higher notebook, more
 // room for the companion peeking over the page edge.
@@ -142,7 +146,10 @@ export default function Planner() {
           collapsable={false}
           style={[
             styles.body,
-            { paddingBottom: Math.max(16, insets.bottom) + PAGE_BOTTOM_CLEARANCE },
+            {
+              paddingTop: PAGE_TOP_GAP,
+              paddingBottom: Math.max(16, insets.bottom) + PAGE_BOTTOM_CLEARANCE,
+            },
           ]}
           onLayout={(e) => setVh(e.nativeEvent.layout.height)}
         >
@@ -297,7 +304,6 @@ const styles = StyleSheet.create({
   body: {
     flex: 1,
     paddingHorizontal: 16,
-    paddingTop: 24,
   },
   gridScroll: {
     paddingBottom: 8,

@@ -19,6 +19,20 @@ function hole(cx: number, cy: number): string {
   return `M${cx + R} ${cy} A${R} ${R} 0 1 0 ${cx - R} ${cy} A${R} ${R} 0 1 0 ${cx + R} ${cy} Z`;
 }
 
+/** Perforations CENTRED on an edge, spreading out from the middle in even S
+ * steps — so both corners keep the same margin (what the CSS `50%` repeat
+ * gives). The old "start at S/2" placement left a fat gap on one end and a
+ * sliver on the other; that's the collapse the stamp showed on small boxes. */
+function edgeHoles(length: number): number[] {
+  const c = length / 2;
+  const out = [c];
+  for (let k = 1; c - k * S > R; k++) {
+    out.unshift(c - k * S);
+    out.push(c + k * S);
+  }
+  return out;
+}
+
 /** react-native-web whitelists style properties and silently drops `mask`,
  * so the legacy perforation is written straight onto the DOM node. */
 function WebStampEdge({ color }: { color: string }) {
@@ -59,12 +73,8 @@ export function StampEdge({ color }: { color: string }) {
   let d = "";
   if (w > 0 && h > 0) {
     d = `M0 0 H${w} V${h} H0 Z`;
-    for (let x = S / 2; x <= w; x += S) {
-      d += hole(x, 0) + hole(x, h);
-    }
-    for (let y = S / 2; y <= h; y += S) {
-      d += hole(0, y) + hole(w, y);
-    }
+    for (const x of edgeHoles(w)) d += hole(x, 0) + hole(x, h);
+    for (const y of edgeHoles(h)) d += hole(0, y) + hole(w, y);
   }
 
   return (

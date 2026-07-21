@@ -65,7 +65,11 @@ export const useStyleStore = create<StyleStore>()(
       companion: [],
       pageDoodles: {},
       dockDoodles: true,
-      setCompanion: (frames) => set({ companion: frames.filter((f) => f.length > 0) }),
+      setCompanion: (frames) => {
+        const companion = frames.filter((f) => f.length > 0);
+        set({ companion });
+        saveCompanion(companion);
+      },
       setBackdrop: (key) => set({ backdrop: key }),
       setBackdropImage: (uri) => set({ backdropImage: uri }),
       setBackdropEffect: (patch) => set(patch),
@@ -162,15 +166,28 @@ function savePageDoodles(pageDoodles: Record<string, Stroke[]>) {
     .catch(() => {}); // a failed sync just leaves the local copy — retried on next edit
 }
 
-/** Pull the page doodles from a freshly-loaded user record into the store. */
-function syncPageDoodlesFromUser(user: RecordModel | null) {
+/** Persist the companion frames onto the signed-in user's record, so the
+ * little creature follows the account to every device (phone + web). */
+function saveCompanion(companion: Stroke[][]) {
+  const user = useAuthStore.getState().user;
   if (!user) return;
-  const server = (user.page_doodles as Record<string, Stroke[]> | null) ?? {};
-  if (Object.keys(server).length > 0) useStyleStore.setState({ pageDoodles: server });
+  pb.collection("users")
+    .update(user.id, { companion }, { requestKey: null })
+    .then((rec) => useAuthStore.getState().setUser(rec as RecordModel, pb.authStore.token))
+    .catch(() => {}); // a failed sync just leaves the local copy — retried on next edit
+}
+
+/** Pull the page doodles + companion from a freshly-loaded user record. */
+function syncFromUser(user: RecordModel | null) {
+  if (!user) return;
+  const doodles = (user.page_doodles as Record<string, Stroke[]> | null) ?? {};
+  if (Object.keys(doodles).length > 0) useStyleStore.setState({ pageDoodles: doodles });
+  const companion = (user.companion as Stroke[][] | null) ?? [];
+  if (companion.length > 0) useStyleStore.setState({ companion });
 }
 
 // Hydrate on boot (if already signed in) and whenever the user changes.
-syncPageDoodlesFromUser(useAuthStore.getState().user);
+syncFromUser(useAuthStore.getState().user);
 useAuthStore.subscribe((state, prev) => {
-  if (state.user !== prev.user) syncPageDoodlesFromUser(state.user);
+  if (state.user !== prev.user) syncFromUser(state.user);
 });

@@ -20,6 +20,7 @@ import { StatusBar } from "expo-status-bar";
 import { useEffect, useState } from "react";
 import { Appearance, Platform, StyleSheet, View } from "react-native";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
+import { BootIntro } from "@/components/BootIntro";
 import { Grain } from "@/components/grain";
 import { initSession } from "@/features/auth/api";
 import { usePalette, useThemeStore } from "@/stores/theme";
@@ -104,6 +105,8 @@ export default function RootLayout() {
           </Stack>
         </View>
         <StatusBar style={theme === "dark" ? "light" : "dark"} />
+        {/* The front-door flourish, over everything, once per launch. */}
+        <BootIntro onDone={() => {}} />
       </QueryClientProvider>
     </GestureHandlerRootView>
   );

@@ -1,6 +1,6 @@
 import DateTimePicker, { DateTimePickerAndroid } from "@react-native-community/datetimepicker";
 import { useRouter } from "expo-router";
-import { CalendarDays, Clock, Plus, StickyNote, X } from "lucide-react-native";
+import { CalendarClock, Check, ChevronRight, Plus, Repeat, StickyNote } from "lucide-react-native";
 import { createElement, useEffect, useState } from "react";
 import {
   Keyboard,
@@ -29,7 +29,7 @@ import { PressableScale } from "@/components/pressable-scale";
 import { StampEdge } from "@/components/stamp-edge";
 import { Eyebrow } from "@/components/surface";
 import { useShadow, useStyleStore } from "@/features/style/store";
-import { addDays, localDate, pad2, toLocalNoon, toPbDate } from "@/lib/dates";
+import { addDays, dayTitle, localDate, pad2, toLocalNoon, toPbDate } from "@/lib/dates";
 import { hapticSuccess, hapticTap } from "@/lib/haptics";
 import { alpha } from "@/lib/theme";
 import { usePalette, useType } from "@/stores/theme";
@@ -44,6 +44,42 @@ const dateAtMin = (m: number) => {
 };
 const hhmm = (m: number) => `${pad2(Math.floor(m / 60))}:${pad2(m % 60)}`;
 const ymd = (d: Date) => `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`;
+const isWeekend = (date: string) => {
+  const dow = toLocalNoon(date).getDay();
+  return dow === 0 || dow === 6;
+};
+
+/** How a task recurs. Repeats are expanded into concrete task copies on save
+ * (the model has no recurrence field), so each rule caps its horizon. */
+type RepeatRule = "none" | "daily" | "weekdays" | "weekly";
+const REPEATS: { key: RepeatRule; label: string }[] = [
+  { key: "none", label: "Once" },
+  { key: "daily", label: "Daily" },
+  { key: "weekdays", label: "Weekdays" },
+  { key: "weekly", label: "Weekly" },
+];
+const REPEAT_HORIZON: Record<RepeatRule, number> = { none: 0, daily: 14, weekdays: 14, weekly: 8 };
+
+/** Expand a repeat rule from a base day into the concrete days to create. */
+function expandRepeat(base: string, rule: RepeatRule): string[] {
+  if (rule === "none") return [base];
+  const out: string[] = [];
+  for (let i = 0; out.length < REPEAT_HORIZON[rule] && i < 60; i++) {
+    const day = addDays(base, i);
+    if (rule === "weekdays" && isWeekend(day)) continue;
+    if (rule === "weekly" && i % 7 !== 0) continue;
+    out.push(day);
+  }
+  return out;
+}
+
+/** The one-line summary shown on the composer's "when" pill. */
+function whenSummary(date: string, start: number | null, repeat: RepeatRule): string {
+  const day = dayTitle(date);
+  const time = start != null ? `, ${fmtMin(start)}` : "";
+  const rep = repeat !== "none" ? ` · ${REPEATS.find((r) => r.key === repeat)!.label.toLowerCase()}` : "";
+  return `${day}${time}${rep}`;
+}
 
 /** The new-task button: a postage stamp pinned above the tab bar — and the
  * companion's home. Once he's drawn in the Style studio he lives IN the
@@ -95,18 +131,26 @@ export function TaskComposer({ date }: { date: string }) {
             ({ filter: "drop-shadow(0 1.5px 1.5px rgb(40 32 24 / 0.25))" } as unknown as ViewStyle),
         ]}
       >
-        <StampEdge color={companion ? colors.surface : colors.zest} />
+        {/* The stamp is always the accent (orange), grained like real paper. */}
+        <StampEdge color={colors.zest} />
+        <View style={styles.fabGrain} pointerEvents="none">
+          <Grain radius={13} />
+        </View>
         {companion ? (
           <>
             <View style={styles.fabCompanion}>
               <DoodleSvg strokes={companion} strokeWidth={3} />
             </View>
-            <View style={[styles.fabPlus, { backgroundColor: colors.zest }]}>
-              <Plus size={12} strokeWidth={3} color={colors.paper} />
+            {/* + rides in its own paper disc in the corner. */}
+            <View style={[styles.fabPlusBadge, { backgroundColor: colors.paper }]}>
+              <Plus size={12} strokeWidth={3} color={colors.zest} />
             </View>
           </>
         ) : (
-          <Plus size={24} strokeWidth={2.6} color={colors.paper} />
+          // No companion: the + sits centred in a contrasting paper disc.
+          <View style={[styles.fabPlusDisc, { backgroundColor: colors.paper }]}>
+            <Plus size={20} strokeWidth={2.8} color={colors.zest} />
+          </View>
         )}
       </PressableScale>
 
@@ -191,99 +235,60 @@ export function ComposerForm({
   const [showNotes, setShowNotes] = useState(false);
   const [start, setStart] = useState<number | null>(initialStart ?? null);
   const [end, setEnd] = useState<number | null>(initialStart != null ? initialStart + 60 : null);
-  // Where the task lands: null = the viewed day's default; the chips and the
-  // native picker override it.
+  // Where the task lands: null = the viewed day's default. Editing "when"
+  // pins a concrete date, a time box, and how it repeats.
   const [due, setDue] = useState<string | null>(null);
-  const [showDate, setShowDate] = useState(false);
+  const [repeat, setRepeat] = useState<RepeatRule>("none");
+  const [whenOpen, setWhenOpen] = useState(false);
 
-  const today = localDate();
   const effDate = due ?? date;
-  const dayLabel = toLocalNoon(effDate).toLocaleDateString("en", {
-    weekday: "short",
-    month: "short",
-    day: "numeric",
-  });
-
-  // Start moves the whole box; end just restretches it (never before start).
-  const pickStart = (m: number) => {
-    setStart(m);
-    setEnd((e) => (e == null || e <= m ? Math.min(m + 60, 24 * 60) : e));
-  };
-  const pickEnd = (m: number) => {
-    if (start != null) setEnd(Math.max(start + 15, m));
-  };
-
-  const pickDay = (d: string) => {
-    hapticTap();
-    setDue((cur) => (cur === d ? null : d));
-  };
-  // The keyboard must clear the stage before a system control appears, or
-  // the control lands where the keyboard was and then jumps.
-  const dismissThen = (fn: () => void) => {
-    if (Keyboard.isVisible()) {
-      Keyboard.dismiss();
-      setTimeout(fn, 300);
-    } else {
-      fn();
-    }
-  };
-  // The calendar chip: just the day.
-  const openDate = () => {
-    hapticTap();
-    dismissThen(() => {
-      if (Platform.OS === "android") {
-        DateTimePickerAndroid.open({
-          value: toLocalNoon(effDate),
-          mode: "date",
-          onChange: (e, d) => {
-            if (e.type === "set" && d) setDue(ymd(d));
-          },
-        });
-      } else {
-        setShowDate((s) => !s);
-      }
-    });
-  };
-  // The clock chip: just the times — toggles the from–to row on a sensible
-  // default (the next round hour), off again to unschedule.
-  const toggleTimes = () => {
-    hapticTap();
-    dismissThen(() => {
-      if (start != null) {
-        setStart(null);
-        setEnd(null);
-      } else {
-        pickStart(Math.min((new Date().getHours() + 1) * 60, 23 * 60));
-      }
-    });
-  };
 
   const submit = () => {
     if (!title.trim()) return;
     hapticSuccess();
-    create.mutate({
+    const base = {
       title: title.trim(),
       description: description.trim() || undefined,
       notes: notes.trim() || undefined,
-      // A timed task must belong to a day; otherwise the viewed day is the
-      // default due date and plain "today" needs none.
-      due_date:
-        due != null
-          ? toPbDate(due)
-          : start != null
-            ? toPbDate(date)
-            : isToday
-              ? undefined
-              : toPbDate(date),
       start_min: start ?? 0,
       dur_min: start != null && end != null ? Math.max(15, end - start) : 60,
-    });
+    };
+    if (repeat !== "none") {
+      // Recurrence has no model field — lay down one task per occurrence.
+      for (const day of expandRepeat(effDate, repeat)) {
+        create.mutate({ ...base, due_date: toPbDate(day) });
+      }
+    } else {
+      create.mutate({
+        ...base,
+        // A timed task must belong to a day; otherwise the viewed day is the
+        // default due date and a plain undated "today" needs none.
+        due_date:
+          due != null
+            ? toPbDate(due)
+            : start != null
+              ? toPbDate(date)
+              : isToday
+                ? undefined
+                : toPbDate(date),
+      });
+    }
     onDone();
+  };
+
+  const openWhen = () => {
+    hapticTap();
+    if (Keyboard.isVisible()) {
+      Keyboard.dismiss();
+      setTimeout(() => setWhenOpen(true), 250);
+    } else {
+      setWhenOpen(true);
+    }
   };
 
   return (
     <View style={fill && styles.fill}>
-      <Eyebrow>new task{due != null || start != null || !isToday ? ` · ${dayLabel}` : ""}</Eyebrow>
+      <Eyebrow>new task</Eyebrow>
       <TextInput
         autoFocus
         value={title}
@@ -303,72 +308,19 @@ export function ComposerForm({
         style={[styles.detailsInput, type.sans, { color: colors.ink }]}
       />
 
-      {start != null && end != null && (
-        <View
-          style={[
-            styles.timedRow,
-            { borderColor: alpha(colors.rule, 0.6), backgroundColor: alpha(colors.paper, 0.5) },
-          ]}
-        >
-          <Text style={[styles.timedFor, type.sans, { color: colors.inkMuted }]}>from</Text>
-          <TimeControl value={start} onChange={pickStart} />
-          <Text style={[styles.timedFor, type.sans, { color: colors.inkMuted }]}>to</Text>
-          <TimeControl value={end} onChange={pickEnd} />
-          <View style={styles.timedSpacer} />
-          <Pressable
-            accessibilityLabel="Remove time"
-            onPress={() => {
-              setStart(null);
-              setEnd(null);
-            }}
-            hitSlop={8}
-          >
-            <X size={14} color={alpha(colors.inkMuted, 0.6)} />
-          </Pressable>
-        </View>
-      )}
-
       <View style={styles.chips}>
-        {/* When it lands: today, tomorrow, or the native clock for anything else. */}
-        <WhenChip
-          label="today"
-          active={effDate === today}
-          tint={colors.zest}
-          onPress={() => pickDay(today)}
-        />
-        <WhenChip
-          label="tomorrow"
-          active={effDate === addDays(today, 1)}
-          tint={colors.zest}
-          onPress={() => pickDay(addDays(today, 1))}
-        />
+        {/* One "when" key: it reads the current plan and opens the drawer. */}
         <PressableScale
-          scaleTo={0.95}
-          accessibilityLabel="Pick a day"
-          accessibilityState={{ selected: showDate }}
-          onPress={openDate}
-          style={[
-            styles.chip,
-            showDate
-              ? { borderColor: alpha(colors.sky, 0.5), backgroundColor: alpha(colors.sky, 0.1) }
-              : { borderColor: colors.rule },
-          ]}
+          scaleTo={0.96}
+          accessibilityLabel="When"
+          onPress={openWhen}
+          style={[styles.whenPill, { borderColor: alpha(colors.sky, 0.4), backgroundColor: alpha(colors.sky, 0.08) }]}
         >
-          <CalendarDays size={14} color={showDate ? colors.ink : colors.inkMuted} />
-        </PressableScale>
-        <PressableScale
-          scaleTo={0.95}
-          accessibilityLabel="Give it a time"
-          accessibilityState={{ selected: start != null }}
-          onPress={toggleTimes}
-          style={[
-            styles.chip,
-            start != null
-              ? { borderColor: alpha(colors.sky, 0.5), backgroundColor: alpha(colors.sky, 0.1) }
-              : { borderColor: colors.rule },
-          ]}
-        >
-          <Clock size={14} color={start != null ? colors.ink : colors.inkMuted} />
+          <CalendarClock size={14} color={colors.sky} />
+          <Text style={[styles.whenText, type.sansMedium, { color: colors.ink }]}>
+            {whenSummary(effDate, start, repeat)}
+          </Text>
+          <ChevronRight size={13} color={alpha(colors.inkMuted, 0.6)} />
         </PressableScale>
         <PressableScale
           scaleTo={0.95}
@@ -388,29 +340,19 @@ export function ComposerForm({
         </PressableScale>
       </View>
 
-      {/* The system's own calendar — it knows its locale better than we do. */}
-      {showDate && Platform.OS === "ios" && (
-        <Animated.View entering={FadeIn.duration(180)} style={styles.pickerRow}>
-          <DateTimePicker
-            value={toLocalNoon(effDate)}
-            mode="date"
-            display="compact"
-            accentColor={colors.zest}
-            onChange={(_e, d) => d && setDue(ymd(d))}
-          />
-        </Animated.View>
-      )}
-      {showDate && Platform.OS === "web" && (
-        <Animated.View entering={FadeIn.duration(180)} style={styles.pickerRow}>
-          {createElement("input", {
-            type: "date",
-            value: effDate,
-            onChange: (e: { target: { value: string } }) => {
-              if (e.target.value) setDue(e.target.value);
-            },
-            style: domInputStyle(colors.ink, alpha(colors.rule, 0.9)),
-          })}
-        </Animated.View>
+      {whenOpen && (
+        <WhenSheet
+          date={date}
+          initial={{ due, start, end, repeat }}
+          onClose={() => setWhenOpen(false)}
+          onConfirm={(next) => {
+            setDue(next.due);
+            setStart(next.start);
+            setEnd(next.end);
+            setRepeat(next.repeat);
+            setWhenOpen(false);
+          }}
+        />
       )}
 
       {showNotes && (
@@ -522,36 +464,261 @@ const domInputStyle = (color: string, borderColor: string) => ({
   padding: "3px 8px",
 });
 
-/** A little scheduling key — zest-inked while it's the chosen day. */
-function WhenChip({
-  label,
-  active,
-  tint,
-  onPress,
+interface WhenValue {
+  due: string | null;
+  start: number | null;
+  end: number | null;
+  repeat: RepeatRule;
+}
+
+/** The scheduling drawer: quick days, a calendar, a from–to time box, and how
+ * it repeats — Cancel top-left, Confirm top-right. Slides up over the
+ * composer; edits a draft and only commits on Confirm. */
+function WhenSheet({
+  date,
+  initial,
+  onConfirm,
+  onClose,
 }: {
-  label: string;
-  active: boolean;
-  tint: string;
-  onPress: () => void;
+  date: string;
+  initial: WhenValue;
+  onConfirm: (v: WhenValue) => void;
+  onClose: () => void;
 }) {
   const colors = usePalette();
   const type = useType();
+  const insets = useSafeAreaInsets();
+
+  const [day, setDay] = useState(initial.due ?? date);
+  const [start, setStart] = useState<number | null>(initial.start);
+  const [end, setEnd] = useState<number | null>(initial.end);
+  const [repeat, setRepeat] = useState<RepeatRule>(initial.repeat);
+  const [showCal, setShowCal] = useState(false);
+
+  const today = localDate();
+  const comingSaturday = (() => {
+    const dow = toLocalNoon(today).getDay();
+    return addDays(today, (6 - dow + 7) % 7 || 7);
+  })();
+  const quick = [
+    { label: "Today", date: today },
+    { label: "Tomorrow", date: addDays(today, 1) },
+    { label: "This weekend", date: comingSaturday },
+    { label: "Next week", date: addDays(today, 7) },
+  ];
+
+  const pickStart = (m: number) => {
+    setStart(m);
+    setEnd((e) => (e == null || e <= m ? Math.min(m + 60, 24 * 60) : e));
+  };
+  const pickEnd = (m: number) => setEnd(Math.max((start ?? 0) + 15, m));
+  const toggleTimed = () => {
+    hapticTap();
+    if (start != null) {
+      setStart(null);
+      setEnd(null);
+    } else {
+      pickStart(Math.min((new Date().getHours() + 1) * 60, 23 * 60));
+    }
+  };
+
+  const confirm = () => {
+    hapticTap();
+    // Leave the day unpinned when it still matches the planner's day, so plain
+    // "today" tasks keep their undated semantics.
+    onConfirm({ due: day === date ? null : day, start, end, repeat });
+  };
+
   return (
-    <PressableScale
-      scaleTo={0.95}
-      accessibilityState={{ selected: active }}
-      onPress={onPress}
-      style={[
-        styles.chip,
-        active
-          ? { borderColor: alpha(tint, 0.5), backgroundColor: alpha(tint, 0.1) }
-          : { borderColor: colors.rule },
-      ]}
-    >
-      <Text style={[styles.chipText, type.sansMedium, { color: active ? tint : colors.inkMuted }]}>
-        {label}
-      </Text>
-    </PressableScale>
+    <Modal visible transparent animationType="none" onRequestClose={onClose}>
+      <Animated.View entering={FadeIn.duration(160)} exiting={FadeOut.duration(140)} style={styles.backdrop}>
+        <Pressable accessibilityLabel="Cancel" style={StyleSheet.absoluteFill} onPress={onClose} />
+      </Animated.View>
+      <View style={styles.sheetHost} pointerEvents="box-none">
+        <Animated.View
+          entering={SlideInDown.duration(300).easing(Easing.out(Easing.cubic))}
+          exiting={SlideOutDown.duration(220)}
+          style={[
+            styles.whenSheet,
+            {
+              backgroundColor: colors.surface,
+              borderColor: alpha(colors.rule, 0.7),
+              paddingBottom: Math.max(24, insets.bottom + 8),
+            },
+          ]}
+        >
+          <Grain radius={23} />
+          <View style={styles.whenHead}>
+            <Pressable onPress={onClose} hitSlop={8}>
+              <Text style={[styles.whenCancel, type.sansMedium, { color: colors.inkMuted }]}>
+                Cancel
+              </Text>
+            </Pressable>
+            <Text style={[styles.whenTitle, type.display, { color: colors.ink }]}>When</Text>
+            <PressableScale
+              scaleTo={0.9}
+              accessibilityLabel="Confirm"
+              onPress={confirm}
+              style={[styles.whenDone, { backgroundColor: colors.zest }]}
+            >
+              <Check size={16} strokeWidth={3} color={colors.paper} />
+            </PressableScale>
+          </View>
+
+          <Eyebrow style={styles.whenEyebrow}>day</Eyebrow>
+          <View style={styles.whenQuick}>
+            {quick.map((q) => {
+              const active = day === q.date;
+              return (
+                <PressableScale
+                  key={q.label}
+                  scaleTo={0.95}
+                  accessibilityState={{ selected: active }}
+                  onPress={() => {
+                    hapticTap();
+                    setDay(q.date);
+                    setShowCal(false);
+                  }}
+                  style={[
+                    styles.chip,
+                    active
+                      ? { borderColor: alpha(colors.zest, 0.5), backgroundColor: alpha(colors.zest, 0.12) }
+                      : { borderColor: colors.rule },
+                  ]}
+                >
+                  <Text
+                    style={[
+                      styles.chipText,
+                      type.sansMedium,
+                      { color: active ? colors.zest : colors.inkMuted },
+                    ]}
+                  >
+                    {q.label}
+                  </Text>
+                </PressableScale>
+              );
+            })}
+            <PressableScale
+              scaleTo={0.95}
+              accessibilityLabel="Pick a specific day"
+              accessibilityState={{ selected: showCal || !quick.some((q) => q.date === day) }}
+              onPress={() => {
+                hapticTap();
+                if (Platform.OS === "android") {
+                  DateTimePickerAndroid.open({
+                    value: toLocalNoon(day),
+                    mode: "date",
+                    onChange: (e, d) => {
+                      if (e.type === "set" && d) setDay(ymd(d));
+                    },
+                  });
+                } else {
+                  setShowCal((s) => !s);
+                }
+              }}
+              style={[
+                styles.chip,
+                !quick.some((q) => q.date === day)
+                  ? { borderColor: alpha(colors.zest, 0.5), backgroundColor: alpha(colors.zest, 0.12) }
+                  : { borderColor: colors.rule },
+              ]}
+            >
+              <CalendarClock size={14} color={colors.inkMuted} />
+              <Text style={[styles.chipText, type.sansMedium, { color: colors.inkMuted }]}>
+                {quick.some((q) => q.date === day)
+                  ? "Pick a day"
+                  : toLocalNoon(day).toLocaleDateString("en", { month: "short", day: "numeric" })}
+              </Text>
+            </PressableScale>
+          </View>
+          {showCal && Platform.OS === "ios" && (
+            <Animated.View entering={FadeIn.duration(160)} style={styles.pickerRow}>
+              <DateTimePicker
+                value={toLocalNoon(day)}
+                mode="date"
+                display="inline"
+                accentColor={colors.zest}
+                onChange={(_e, d) => d && setDay(ymd(d))}
+              />
+            </Animated.View>
+          )}
+          {showCal && Platform.OS === "web" && (
+            <View style={styles.pickerRow}>
+              {createElement("input", {
+                type: "date",
+                value: day,
+                onChange: (e: { target: { value: string } }) => {
+                  if (e.target.value) setDay(e.target.value);
+                },
+                style: domInputStyle(colors.ink, alpha(colors.rule, 0.9)),
+              })}
+            </View>
+          )}
+
+          <View style={styles.whenSectionHead}>
+            <Eyebrow>time</Eyebrow>
+            <Pressable onPress={toggleTimed} hitSlop={6}>
+              <Text style={[styles.whenToggle, type.sansMedium, { color: colors.sky }]}>
+                {start != null ? "all day" : "add a time"}
+              </Text>
+            </Pressable>
+          </View>
+          {start != null && end != null && (
+            <Animated.View
+              entering={FadeIn.duration(160)}
+              style={[
+                styles.timedRow,
+                { borderColor: alpha(colors.rule, 0.6), backgroundColor: alpha(colors.paper, 0.5) },
+              ]}
+            >
+              <Text style={[styles.timedFor, type.sans, { color: colors.inkMuted }]}>from</Text>
+              <TimeControl value={start} onChange={pickStart} />
+              <Text style={[styles.timedFor, type.sans, { color: colors.inkMuted }]}>to</Text>
+              <TimeControl value={end} onChange={pickEnd} />
+            </Animated.View>
+          )}
+
+          <Eyebrow style={styles.whenEyebrow}>repeat</Eyebrow>
+          <View style={[styles.repeatWell, { backgroundColor: alpha(colors.ink, 0.05) }]}>
+            {REPEATS.map((r) => {
+              const active = repeat === r.key;
+              return (
+                <PressableScale
+                  key={r.key}
+                  scaleTo={0.94}
+                  accessibilityState={{ selected: active }}
+                  onPress={() => {
+                    hapticTap();
+                    setRepeat(r.key);
+                  }}
+                  style={[
+                    styles.repeatKey,
+                    active && {
+                      backgroundColor: colors.surface,
+                      borderColor: alpha(colors.rule, 0.7),
+                      borderWidth: 1,
+                    },
+                  ]}
+                >
+                  {r.key !== "none" && (
+                    <Repeat size={12} color={active ? colors.ink : colors.inkMuted} />
+                  )}
+                  <Text
+                    style={[
+                      styles.repeatText,
+                      type.sansMedium,
+                      { color: active ? colors.ink : colors.inkMuted },
+                    ]}
+                  >
+                    {r.label}
+                  </Text>
+                </PressableScale>
+              );
+            })}
+          </View>
+        </Animated.View>
+      </View>
+    </Modal>
   );
 }
 
@@ -573,19 +740,42 @@ const styles = StyleSheet.create({
     shadowRadius: 4,
     shadowOffset: { width: 0, height: 2 },
   },
+  // The grain is inset a hair so it never bleeds into the perforations.
+  fabGrain: {
+    ...StyleSheet.absoluteFillObject,
+    margin: 4,
+    borderRadius: 13,
+    overflow: "hidden",
+    opacity: 0.7,
+  },
   fabCompanion: {
     height: 38,
     width: 38,
   },
-  fabPlus: {
+  fabPlusDisc: {
+    height: 30,
+    width: 30,
+    alignItems: "center",
+    justifyContent: "center",
+    borderRadius: 999,
+    shadowColor: "#282018",
+    shadowOpacity: 0.15,
+    shadowRadius: 2,
+    shadowOffset: { width: 0, height: 1 },
+  },
+  fabPlusBadge: {
     position: "absolute",
-    top: 5,
-    right: 5,
+    top: 4,
+    right: 4,
     height: 18,
     width: 18,
     alignItems: "center",
     justifyContent: "center",
     borderRadius: 999,
+    shadowColor: "#282018",
+    shadowOpacity: 0.15,
+    shadowRadius: 2,
+    shadowOffset: { width: 0, height: 1 },
   },
   backdrop: {
     position: "absolute",
@@ -645,9 +835,6 @@ const styles = StyleSheet.create({
   timedFor: {
     fontSize: 12,
   },
-  timedSpacer: {
-    flex: 1,
-  },
   timePill: {
     borderWidth: 1,
     borderRadius: 8,
@@ -655,10 +842,92 @@ const styles = StyleSheet.create({
     paddingVertical: 4,
   },
   chips: {
-    marginTop: 8,
+    marginTop: 10,
+    flexDirection: "row",
+    alignItems: "center",
+    flexWrap: "wrap",
+    gap: 8,
+  },
+  whenPill: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    borderWidth: 1,
+    borderRadius: 999,
+    paddingLeft: 12,
+    paddingRight: 8,
+    paddingVertical: 7,
+  },
+  whenText: {
+    fontSize: 13,
+  },
+  whenSheet: {
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+    borderWidth: 1,
+    borderBottomWidth: 0,
+    paddingHorizontal: 20,
+    paddingTop: 14,
+  },
+  whenHead: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    marginBottom: 6,
+  },
+  whenCancel: {
+    fontSize: 13,
+    width: 60,
+  },
+  whenTitle: {
+    fontSize: 18,
+    letterSpacing: -0.3,
+  },
+  whenDone: {
+    height: 34,
+    width: 34,
+    alignItems: "center",
+    justifyContent: "center",
+    borderRadius: 999,
+  },
+  whenEyebrow: {
+    marginTop: 16,
+  },
+  whenQuick: {
+    marginTop: 10,
     flexDirection: "row",
     flexWrap: "wrap",
     gap: 8,
+  },
+  whenSectionHead: {
+    marginTop: 18,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+  },
+  whenToggle: {
+    fontSize: 11,
+    letterSpacing: 1.2,
+    textTransform: "uppercase",
+  },
+  repeatWell: {
+    marginTop: 10,
+    flexDirection: "row",
+    borderRadius: 999,
+    padding: 3,
+    gap: 2,
+  },
+  repeatKey: {
+    flex: 1,
+    height: 32,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 4,
+    borderRadius: 999,
+  },
+  repeatText: {
+    fontSize: 12,
   },
   pickerRow: {
     marginTop: 10,
