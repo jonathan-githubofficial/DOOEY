@@ -32,7 +32,7 @@ const settle = LinearTransition.springify().stiffness(380).damping(34);
 const PAGE_BOTTOM_CLEARANCE = Platform.OS === "web" ? 116 : 108;
 // How much of the remaining planner area the notebook page fills (1 = all of
 // it). Shrink it and the page gets shorter, leaving air beneath.
-const PAGE_HEIGHT_SCALE = 0.94;
+const PAGE_HEIGHT_SCALE = 0.90;
 
 /** How the day's work is laid out: the agenda list, the timeboxed day grid,
  * or the whole week in time. The month is not a mode — it unfolds out of the

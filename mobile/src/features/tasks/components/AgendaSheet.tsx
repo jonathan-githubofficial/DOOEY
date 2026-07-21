@@ -18,11 +18,9 @@ import Animated, {
   FadeOut,
   LinearTransition,
   runOnJS,
-  useAnimatedProps,
   useAnimatedReaction,
   useAnimatedStyle,
   useSharedValue,
-  withDelay,
   withRepeat,
   withSequence,
   withSpring,
@@ -30,7 +28,6 @@ import Animated, {
   type SharedValue,
 } from "react-native-reanimated";
 import { LinearGradient } from "expo-linear-gradient";
-import Svg, { Path } from "react-native-svg";
 import { Check } from "@/components/Check";
 import { DoodleEditor } from "@/components/DoodleEditor";
 import { DoodleSvg } from "@/components/DoodleSvg";
@@ -99,7 +96,7 @@ export function AgendaSheet({ date, height }: { date: string; height?: number })
             </Text>
           )}
 
-          {complete && <DayFlourish date={date} />}
+          {complete && <SignDay date={date} />}
 
           {done.length > 0 && (
             <Animated.View layout={settle} style={styles.donePile}>
@@ -109,8 +106,6 @@ export function AgendaSheet({ date, height }: { date: string; height?: number })
               ))}
             </Animated.View>
           )}
-
-          {complete && <SignDay date={date} />}
         </>
       )}
     </>
@@ -128,63 +123,11 @@ export function AgendaSheet({ date, height }: { date: string; height?: number })
   );
 }
 
-// Days already celebrated this session — the flourish only sounds once a day.
+// Days already celebrated this session — the thunk only lands once a day.
 const celebrated = new Set<string>();
 
-const AnimatedPath = Animated.createAnimatedComponent(Path);
-// A hand-drawn swash with a loop and a lift at the end — generous dash length
-// so the whole line hides before it inks on.
-const FLOURISH = "M12 44 C 44 16, 72 60, 104 38 C 124 24, 136 26, 154 34 C 168 40, 186 36, 206 26";
-const FLOURISH_DASH = 360;
-
-/** The reward: a leaf-inked flourish draws itself across the finished day,
- * pen-stroke by pen-stroke, and signs off with a quiet "day, done." */
-function DayFlourish({ date }: { date: string }) {
-  const colors = usePalette();
-  const type = useType();
-  const progress = useSharedValue(0);
-  const caption = useSharedValue(0);
-  useEffect(() => {
-    progress.value = withTiming(1, { duration: 800, easing: Easing.out(Easing.cubic) });
-    caption.value = withDelay(550, withTiming(1, { duration: 300 }));
-    if (!celebrated.has(date)) {
-      celebrated.add(date);
-      hapticSuccess();
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-  const inkProps = useAnimatedProps(() => ({
-    strokeDashoffset: FLOURISH_DASH * (1 - progress.value),
-  }));
-  const captionStyle = useAnimatedStyle(() => ({
-    opacity: caption.value,
-    transform: [{ translateY: 4 * (1 - caption.value) }],
-  }));
-  return (
-    <View pointerEvents="none" style={styles.flourish}>
-      <Svg width={200} height={64} viewBox="0 0 220 70">
-        <AnimatedPath
-          d={FLOURISH}
-          animatedProps={inkProps}
-          stroke={colors.leaf}
-          strokeWidth={5}
-          strokeLinecap="round"
-          strokeLinejoin="round"
-          strokeDasharray={FLOURISH_DASH}
-          fill="none"
-          opacity={0.85}
-        />
-      </Svg>
-      <Animated.Text
-        style={[styles.flourishCaption, type.sansMedium, { color: colors.leaf }, captionStyle]}
-      >
-        day, done.
-      </Animated.Text>
-    </View>
-  );
-}
-
-/** Sign the finished day with a little drawing — it joins the garden on the
+/** The finished day's sign-off, in the flourish's old place of honour: your
+ * own drawing, or the invitation to make one. It joins the garden on the
  * Account page. Tap an existing signature to redraw it. */
 function SignDay({ date }: { date: string }) {
   const colors = usePalette();
@@ -192,6 +135,13 @@ function SignDay({ date }: { date: string }) {
   const strokes = useGardenStore((s) => s.signatures[date]);
   const sign = useGardenStore((s) => s.sign);
   const [open, setOpen] = useState(false);
+  useEffect(() => {
+    if (!celebrated.has(date)) {
+      celebrated.add(date);
+      hapticSuccess();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   return (
     <View style={styles.signRow}>
@@ -936,20 +886,8 @@ const styles = StyleSheet.create({
     letterSpacing: 1.2,
     textTransform: "uppercase",
   },
-  flourish: {
-    alignSelf: "center",
-    alignItems: "center",
-    marginTop: 12,
-    transform: [{ rotate: "-2deg" }],
-  },
-  flourishCaption: {
-    marginTop: -6,
-    fontSize: 11,
-    letterSpacing: 2,
-    textTransform: "uppercase",
-  },
   signRow: {
-    marginTop: 18,
+    marginTop: 16,
     alignItems: "center",
   },
   signature: {
@@ -981,10 +919,11 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     backgroundColor: "rgba(20, 16, 12, 0.35)",
   },
+  // Peeking over the page's TOP edge, next to the binder.
   companion: {
     position: "absolute",
-    right: 16,
-    bottom: -10,
+    right: 18,
+    top: -14,
     height: 46,
     width: 46,
     zIndex: 5,
