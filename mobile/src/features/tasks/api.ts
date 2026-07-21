@@ -1,4 +1,4 @@
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient, type QueryClient } from "@tanstack/react-query";
 import type { RecordModel } from "pocketbase";
 import { addDays, localDate, nextMonth } from "@/lib/dates";
 import { pb } from "@/lib/pb";
@@ -7,7 +7,9 @@ import type { Task, TaskPatch } from "./types";
 
 export const taskKeys = {
   all: ["tasks"] as const,
+  days: ["tasks", "day"] as const,
   day: (date: string) => ["tasks", "day", date] as const,
+  detail: (id: string) => ["tasks", "detail", id] as const,
 };
 
 function toTask(r: RecordModel): Task {
@@ -17,6 +19,10 @@ function toTask(r: RecordModel): Task {
     description: r.description ?? "",
     due_date: r.due_date ?? "",
     done_at: r.done_at ?? "",
+    notes: r.notes ?? "",
+    checklist: r.checklist ?? [],
+    resources: r.resources ?? [],
+    attachments: r.attachments ?? [],
     sort_order: r.sort_order ?? 0,
     start_min: r.start_min ?? 0,
     dur_min: r.dur_min || 60,
@@ -24,6 +30,10 @@ function toTask(r: RecordModel): Task {
     gate: r.gate ?? false,
     created: r.created,
   };
+}
+
+export function attachmentUrl(taskId: string, filename: string): string {
+  return `${pb.baseURL}/api/files/tasks/${taskId}/${encodeURIComponent(filename)}`;
 }
 
 /** One agenda day. Today additionally carries undated + overdue open tasks;
@@ -80,6 +90,51 @@ export function useMonthOpenCounts(month: string) {
   });
 }
 
+/** Every task belonging to one project (program), across all dates. */
+export function useProjectTasks(projectId: string | undefined) {
+  const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
+  return useQuery({
+    queryKey: ["tasks", "project", projectId ?? ""] as const,
+    enabled: isAuthenticated && !!projectId,
+    queryFn: async () => {
+      const records = await pb.collection("tasks").getFullList({
+        filter: pb.filter("project = {:id}", { id: projectId }),
+        sort: "due_date,sort_order,created",
+      });
+      return records.map(toTask);
+    },
+  });
+}
+
+export function useTask(id: string) {
+  const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
+  return useQuery({
+    queryKey: taskKeys.detail(id),
+    enabled: isAuthenticated,
+    queryFn: async () => toTask(await pb.collection("tasks").getOne(id)),
+  });
+}
+
+// ── optimistic-cache plumbing ──────────────────────────────────────────────
+// Only the day lists get mapped over — the detail and count caches hold
+// non-array shapes and are patched (or just invalidated) separately.
+type DaySnapshots = [readonly unknown[], Task[] | undefined][];
+
+function patchDayCaches(qc: QueryClient, map: (t: Task) => Task | null): DaySnapshots {
+  const snaps = qc.getQueriesData<Task[]>({ queryKey: taskKeys.days });
+  qc.setQueriesData<Task[]>({ queryKey: taskKeys.days }, (ts) =>
+    ts?.flatMap((t) => {
+      const next = map(t);
+      return next ? [next] : [];
+    }),
+  );
+  return snaps;
+}
+
+function restoreDayCaches(qc: QueryClient, snaps: DaySnapshots | undefined) {
+  snaps?.forEach(([key, data]) => qc.setQueryData(key, data));
+}
+
 // requestKey: null on all mutations — the SDK auto-cancels same-key requests,
 // and two quick writes to one record must both land, not race.
 
@@ -123,17 +178,18 @@ export function useUpdateTask() {
   return useMutation({
     mutationFn: ({ id, patch }: { id: string; patch: TaskPatch }) =>
       pb.collection("tasks").update(id, patch, { requestKey: null }),
-    // Optimistic: checking a task off must feel instant.
+    // Optimistic: agenda edits (check-off, reorder, page edits) must feel instant.
     onMutate: async ({ id, patch }) => {
       await qc.cancelQueries({ queryKey: taskKeys.all });
-      const snaps = qc.getQueriesData<Task[]>({ queryKey: taskKeys.all });
-      qc.setQueriesData<Task[]>({ queryKey: taskKeys.all }, (ts) =>
-        ts?.map((t) => (t.id === id ? { ...t, ...patch } : t)),
-      );
-      return { snaps };
+      const snaps = patchDayCaches(qc, (t) => (t.id === id ? { ...t, ...patch } : t));
+      const prevDetail = qc.getQueryData<Task>(taskKeys.detail(id));
+      qc.setQueryData<Task>(taskKeys.detail(id), (t) => (t ? { ...t, ...patch } : t));
+      return { snaps, prevDetail, id };
     },
-    onError: (_e, _v, ctx) =>
-      ctx?.snaps.forEach(([key, data]) => qc.setQueryData(key, data)),
+    onError: (_e, _v, ctx) => {
+      restoreDayCaches(qc, ctx?.snaps);
+      if (ctx) qc.setQueryData(taskKeys.detail(ctx.id), ctx.prevDetail);
+    },
     onSettled: () => qc.invalidateQueries({ queryKey: taskKeys.all }),
   });
 }
@@ -144,14 +200,9 @@ export function useDeleteTask() {
     mutationFn: (id: string) => pb.collection("tasks").delete(id, { requestKey: null }),
     onMutate: async (id) => {
       await qc.cancelQueries({ queryKey: taskKeys.all });
-      const snaps = qc.getQueriesData<Task[]>({ queryKey: taskKeys.all });
-      qc.setQueriesData<Task[]>({ queryKey: taskKeys.all }, (ts) =>
-        ts?.filter((t) => t.id !== id),
-      );
-      return { snaps };
+      return { snaps: patchDayCaches(qc, (t) => (t.id === id ? null : t)) };
     },
-    onError: (_e, _v, ctx) =>
-      ctx?.snaps.forEach(([key, data]) => qc.setQueryData(key, data)),
+    onError: (_e, _v, ctx) => restoreDayCaches(qc, ctx?.snaps),
     onSettled: () => qc.invalidateQueries({ queryKey: taskKeys.all }),
   });
 }

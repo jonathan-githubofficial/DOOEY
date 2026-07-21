@@ -1,12 +1,19 @@
-import { useEffect } from "react";
+import { useRouter } from "expo-router";
+import { Trash2 } from "lucide-react-native";
+import { useEffect, useMemo } from "react";
 import { Alert, Pressable, StyleSheet, Text, View } from "react-native";
+import { Gesture, GestureDetector } from "react-native-gesture-handler";
 import Animated, {
+  FadeIn,
   FadeOut,
   LinearTransition,
+  runOnJS,
   useAnimatedStyle,
   useSharedValue,
   withRepeat,
+  withSpring,
   withTiming,
+  type SharedValue,
 } from "react-native-reanimated";
 import { Check } from "@/components/Check";
 import { Eyebrow, Panel, Stamp } from "@/components/surface";
@@ -18,15 +25,18 @@ import type { Task } from "../types";
 import { BINDING_INSET, RING_COUNT } from "./PlannerBook";
 
 const settle = LinearTransition.springify().stiffness(420).damping(32);
+const ROW_H = 56;
+const DAY_MS = 86_400_000;
+const LIFT = { stiffness: 420, damping: 30 };
 
-/** One planner page: the day's open tasks, quick facts, and the day's done
- * pile. Long-press a row to delete it (the mobile stand-in for the web's
- * hover-revealed trash). */
+/** One planner page: the day's open tasks in a hold-to-drag reorderable list,
+ * and the day's done pile. Rows open the task's page. */
 export function AgendaSheet({ date }: { date: string }) {
   const colors = usePalette();
+  const type = useType();
   const { data: tasks, isPending, error } = useDayTasks(date);
 
-  const open = (tasks ?? []).filter((t) => !t.done_at);
+  const open = useMemo(() => (tasks ?? []).filter((t) => !t.done_at), [tasks]);
   const done = (tasks ?? []).filter((t) => t.done_at);
 
   return (
@@ -44,8 +54,13 @@ export function AgendaSheet({ date }: { date: string }) {
       <SheetHeading date={date} count={open.length} />
 
       {error && (
-        <View style={[styles.errorBox, { borderColor: alpha(colors.clay, 0.4), backgroundColor: alpha(colors.clay, 0.1) }]}>
-          <Text style={[styles.errorText, { color: colors.ink }]}>
+        <View
+          style={[
+            styles.errorBox,
+            { borderColor: alpha(colors.clay, 0.4), backgroundColor: alpha(colors.clay, 0.1) },
+          ]}
+        >
+          <Text style={[styles.errorText, type.sans, { color: colors.ink }]}>
             Couldn't load this day. {error.message}
           </Text>
         </View>
@@ -54,14 +69,10 @@ export function AgendaSheet({ date }: { date: string }) {
 
       {tasks && (
         <>
-          <View style={styles.list}>
-            {open.map((t, i) => (
-              <TaskRow key={t.id} task={t} date={date} first={i === 0} />
-            ))}
-          </View>
+          <ReorderableRows rows={open} date={date} />
 
           {open.length === 0 && done.length === 0 && (
-            <Text style={[styles.empty, { color: colors.inkMuted }]}>
+            <Text style={[styles.empty, type.sans, { color: colors.inkMuted }]}>
               Nothing planned — the day is yours.
             </Text>
           )}
@@ -69,8 +80,8 @@ export function AgendaSheet({ date }: { date: string }) {
           {done.length > 0 && (
             <Animated.View layout={settle} style={styles.donePile}>
               <Eyebrow>done</Eyebrow>
-              {done.map((t, i) => (
-                <DoneTaskRow key={t.id} task={t} first={i === 0} />
+              {done.map((t) => (
+                <DoneTaskRow key={t.id} task={t} />
               ))}
             </Animated.View>
           )}
@@ -108,38 +119,140 @@ export function SheetHeading({ date, count }: { date: string; count: number }) {
   );
 }
 
-function TaskRow({ task, date, first }: { task: Task; date: string; first: boolean }) {
+/** Hold a row a beat to lift it, then drag — the others part on springs. On
+ * drop the new slot persists as a midpoint sort (dense reindex on collision),
+ * exactly like the web planner. */
+function ReorderableRows({ rows, date }: { rows: Task[]; date: string }) {
+  const update = useUpdateTask();
+  const positions = useSharedValue<Record<string, number>>(
+    Object.fromEntries(rows.map((r, i) => [r.id, i])),
+  );
+
+  // Re-sync slots whenever the server list changes (adds, deletes, check-offs).
+  const signature = rows.map((r) => r.id).join("|");
+  useEffect(() => {
+    positions.value = Object.fromEntries(rows.map((r, i) => [r.id, i]));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [signature]);
+
+  const commit = (id: string) => {
+    const order = [...rows].sort(
+      (a, b) => (positions.value[a.id] ?? 0) - (positions.value[b.id] ?? 0),
+    );
+    const idx = order.findIndex((r) => r.id === id);
+    const prev = order[idx - 1]?.sort_order;
+    const next = order[idx + 1]?.sort_order;
+    if (prev == null && next == null) return;
+    const target = prev == null ? next! - DAY_MS : next == null ? prev + DAY_MS : (prev + next) / 2;
+    const collided =
+      !Number.isFinite(target) || (prev != null && target <= prev) || (next != null && target >= next);
+    if (collided) {
+      order.forEach((r, i) => update.mutate({ id: r.id, patch: { sort_order: (i + 1) * DAY_MS } }));
+    } else {
+      update.mutate({ id, patch: { sort_order: target } });
+    }
+  };
+
+  return (
+    <View style={[styles.list, { height: rows.length * ROW_H }]}>
+      {rows.map((t, i) => (
+        <DraggableRow
+          key={t.id}
+          task={t}
+          index={i}
+          count={rows.length}
+          date={date}
+          positions={positions}
+          onDrop={commit}
+        />
+      ))}
+    </View>
+  );
+}
+
+function DraggableRow({
+  task,
+  index,
+  count,
+  date,
+  positions,
+  onDrop,
+}: {
+  task: Task;
+  index: number;
+  count: number;
+  date: string;
+  positions: SharedValue<Record<string, number>>;
+  onDrop: (id: string) => void;
+}) {
   const colors = usePalette();
   const type = useType();
+  const router = useRouter();
   const update = useUpdateTask();
   const del = useDeleteTask();
+  const id = task.id;
+
+  const dragging = useSharedValue(false);
+  const y = useSharedValue(index * ROW_H);
+  const startY = useSharedValue(0);
+
+  const pan = Gesture.Pan()
+    .activateAfterLongPress(220)
+    .onStart(() => {
+      dragging.value = true;
+      startY.value = (positions.value[id] ?? index) * ROW_H;
+      y.value = startY.value;
+    })
+    .onUpdate((e) => {
+      y.value = startY.value + e.translationY;
+      const newIdx = Math.max(0, Math.min(count - 1, Math.round(y.value / ROW_H)));
+      const curIdx = positions.value[id];
+      if (newIdx !== curIdx) {
+        const next = { ...positions.value };
+        for (const k in next) if (k !== id && next[k] === newIdx) next[k] = curIdx;
+        next[id] = newIdx;
+        positions.value = next;
+      }
+    })
+    .onFinalize(() => {
+      dragging.value = false;
+      runOnJS(onDrop)(id);
+    });
+
+  const rowStyle = useAnimatedStyle(() => {
+    const idx = positions.value[id] ?? index;
+    return dragging.value
+      ? { top: y.value, zIndex: 20, shadowOpacity: 0.18, elevation: 6, transform: [{ scale: 1.02 }] }
+      : {
+          top: withSpring(idx * ROW_H, LIFT),
+          zIndex: 0,
+          shadowOpacity: 0,
+          elevation: 0,
+          transform: [{ scale: withSpring(1, LIFT) }],
+        };
+  });
+
   const due = date === localDate() && task.due_date ? dueInfo(task.due_date) : null;
 
   return (
-    <Animated.View
-      layout={settle}
-      exiting={FadeOut.duration(150)}
-      style={[!first && { borderTopWidth: 1, borderTopColor: alpha(colors.rule, 0.5) }]}
-    >
-      <Pressable
-        onLongPress={() =>
-          Alert.alert("Delete task", `Delete "${task.title}"?`, [
-            { text: "Cancel", style: "cancel" },
-            { text: "Delete", style: "destructive", onPress: () => del.mutate(task.id) },
-          ])
-        }
-        style={styles.row}
+    <GestureDetector gesture={pan}>
+      <Animated.View
+        entering={FadeIn.duration(180)}
+        exiting={FadeOut.duration(150)}
+        style={[styles.row, rowStyle, { backgroundColor: colors.surface, shadowColor: "#282018" }]}
       >
         <Check
           done={false}
+          gate={task.gate}
           label={`Mark "${task.title}" done`}
           size={22}
           onToggle={() =>
-            update.mutate({ id: task.id, patch: { done_at: new Date().toISOString() } })
+            update.mutate({ id, patch: { done_at: new Date().toISOString() } })
           }
         />
-        <View style={styles.rowBody}>
+        <Pressable style={styles.rowBody} onPress={() => router.push(`/task/${id}`)}>
           <View style={styles.rowTitleLine}>
+            {task.gate && <Text style={{ color: colors.zest }}>⛳</Text>}
             <Text numberOfLines={1} style={[styles.rowTitle, type.sans, { color: colors.ink }]}>
               {task.title}
             </Text>
@@ -150,21 +263,35 @@ function TaskRow({ task, date, first }: { task: Task; date: string; first: boole
               {task.description}
             </Text>
           )}
-        </View>
-      </Pressable>
-    </Animated.View>
+        </Pressable>
+        <Pressable
+          accessibilityLabel={`Delete "${task.title}"`}
+          hitSlop={8}
+          onPress={() =>
+            Alert.alert("Delete task", `Delete "${task.title}"?`, [
+              { text: "Cancel", style: "cancel" },
+              { text: "Delete", style: "destructive", onPress: () => del.mutate(id) },
+            ])
+          }
+        >
+          <Trash2 size={14} color={alpha(colors.inkMuted, 0.5)} />
+        </Pressable>
+      </Animated.View>
+    </GestureDetector>
   );
 }
 
-function DoneTaskRow({ task, first }: { task: Task; first: boolean }) {
+function DoneTaskRow({ task }: { task: Task }) {
   const colors = usePalette();
   const type = useType();
+  const router = useRouter();
   const update = useUpdateTask();
   return (
     <Animated.View
       layout={settle}
+      entering={FadeIn.duration(180)}
       exiting={FadeOut.duration(150)}
-      style={[styles.row, !first && { borderTopWidth: 1, borderTopColor: alpha(colors.rule, 0.5) }]}
+      style={styles.doneRow}
     >
       <Check
         done
@@ -172,12 +299,14 @@ function DoneTaskRow({ task, first }: { task: Task; first: boolean }) {
         size={22}
         onToggle={() => update.mutate({ id: task.id, patch: { done_at: "" } })}
       />
-      <Text
-        numberOfLines={1}
-        style={[styles.rowTitle, styles.rowDone, type.sans, { color: colors.inkMuted }]}
-      >
-        {task.title}
-      </Text>
+      <Pressable style={styles.rowBody} onPress={() => router.push(`/task/${task.id}`)}>
+        <Text
+          numberOfLines={1}
+          style={[styles.rowTitle, styles.rowDone, type.sans, { color: colors.inkMuted }]}
+        >
+          {task.title}
+        </Text>
+      </Pressable>
     </Animated.View>
   );
 }
@@ -189,10 +318,7 @@ function DueChip({ due }: { due: { text: string; tone: string } }) {
   const tint = overdue ? colors.clay : colors.zest;
   return (
     <View
-      style={[
-        styles.dueChip,
-        { borderColor: alpha(tint, 0.4), backgroundColor: alpha(tint, 0.1) },
-      ]}
+      style={[styles.dueChip, { borderColor: alpha(tint, 0.4), backgroundColor: alpha(tint, 0.1) }]}
     >
       <Text style={[styles.dueChipText, type.sansMedium, { color: tint }]}>{due.text}</Text>
     </View>
@@ -269,9 +395,22 @@ const styles = StyleSheet.create({
     fontVariant: ["tabular-nums"],
   },
   list: {
-    marginTop: 4,
+    marginTop: 8,
   },
   row: {
+    position: "absolute",
+    left: -8,
+    right: -8,
+    height: ROW_H,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+    paddingHorizontal: 12,
+    borderRadius: 14,
+    shadowRadius: 12,
+    shadowOffset: { width: 0, height: 6 },
+  },
+  doneRow: {
     flexDirection: "row",
     alignItems: "center",
     gap: 10,
@@ -285,10 +424,10 @@ const styles = StyleSheet.create({
   rowTitleLine: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 10,
+    gap: 8,
   },
   rowTitle: {
-    flex: 1,
+    flexShrink: 1,
     minWidth: 0,
     fontSize: 15,
   },

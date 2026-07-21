@@ -1,4 +1,5 @@
-import { useEffect, useMemo, useState } from "react";
+import { useRouter } from "expo-router";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Alert, Pressable, StyleSheet, Text, View, type GestureResponderEvent } from "react-native";
 import Animated, { FadeIn, FadeOut, LinearTransition } from "react-native-reanimated";
 import { Check } from "@/components/Check";
@@ -33,6 +34,7 @@ export function TimeboxSheet({
   const update = useUpdateTask();
   const del = useDeleteTask();
   const [placing, setPlacing] = useState<string | null>(null);
+  const gridRef = useRef<View>(null);
 
   const open = useMemo(() => (tasks ?? []).filter((t) => !t.done_at), [tasks]);
   const scheduled = open.filter((t) => t.start_min > 0);
@@ -47,17 +49,20 @@ export function TimeboxSheet({
     if (placing && !shelf.some((t) => t.id === placing)) setPlacing(null);
   }, [placing, shelf]);
 
-  const minuteFromY = (e: GestureResponderEvent) =>
-    clamp(snap(DAY_START + e.nativeEvent.locationY / pxPerMin), DAY_START, DAY_END - SNAP);
-
+  // locationY is unreliable on react-native-web, so the tap is resolved
+  // against the grid's window position instead.
   const tapGrid = (e: GestureResponderEvent) => {
-    const min = minuteFromY(e);
-    if (placing) {
-      update.mutate({ id: placing, patch: { start_min: min } });
-      setPlacing(null);
-    } else {
-      onAddSlot(date, min);
-    }
+    const pageY = e.nativeEvent.pageY;
+    gridRef.current?.measureInWindow((_x, gridY) => {
+      const min = clamp(snap(DAY_START + (pageY - gridY) / pxPerMin), DAY_START, DAY_END - SNAP);
+      if (Number.isNaN(min)) return;
+      if (placing) {
+        update.mutate({ id: placing, patch: { start_min: min } });
+        setPlacing(null);
+      } else {
+        onAddSlot(date, min);
+      }
+    });
   };
 
   return (
@@ -111,7 +116,7 @@ export function TimeboxSheet({
             </View>
           )}
 
-          <View style={[styles.grid, { height: (DAY_END - DAY_START) * pxPerMin }]}>
+          <View ref={gridRef} style={[styles.grid, { height: (DAY_END - DAY_START) * pxPerMin }]}>
             <HourGrid pxPerMin={pxPerMin} today={date === localDate()} />
             <Pressable
               accessibilityLabel="Add a task at this time"
@@ -238,6 +243,7 @@ function TimeBlock({
 }) {
   const colors = usePalette();
   const type = useType();
+  const router = useRouter();
   const height = task.dur_min * pxPerMin;
   const compact = height < 46;
 
@@ -260,6 +266,7 @@ function TimeBlock({
     >
       <View style={[styles.blockAccent, { backgroundColor: alpha(colors.zest, 0.7) }]} />
       <Pressable
+        onPress={() => router.push(`/task/${task.id}`)}
         onLongPress={() =>
           Alert.alert(task.title, undefined, [
             { text: "Back to the shelf", onPress: onUnschedule },

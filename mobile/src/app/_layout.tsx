@@ -18,6 +18,7 @@ import { Stack } from "expo-router";
 import * as SplashScreen from "expo-splash-screen";
 import { StatusBar } from "expo-status-bar";
 import { useEffect, useState } from "react";
+import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { initSession } from "@/features/auth/api";
 import { usePalette, useThemeStore } from "@/stores/theme";
 
@@ -56,14 +57,16 @@ export default function RootLayout() {
   if (!ready) return null;
 
   return (
-    <QueryClientProvider client={queryClient}>
-      <Stack
-        screenOptions={{
-          headerShown: false,
-          contentStyle: { backgroundColor: colors.paper },
-        }}
-      />
-      <StatusBar style={theme === "dark" ? "light" : "dark"} />
-    </QueryClientProvider>
+    <GestureHandlerRootView style={{ flex: 1 }}>
+      <QueryClientProvider client={queryClient}>
+        <Stack
+          screenOptions={{
+            headerShown: false,
+            contentStyle: { backgroundColor: colors.paper },
+          }}
+        />
+        <StatusBar style={theme === "dark" ? "light" : "dark"} />
+      </QueryClientProvider>
+    </GestureHandlerRootView>
   );
 }

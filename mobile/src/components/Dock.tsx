@@ -1,5 +1,12 @@
 import { Tabs } from "expo-router";
-import { CalendarDays, NotebookPen, UserRound, type LucideIcon } from "lucide-react-native";
+import {
+  CalendarDays,
+  FolderOpen,
+  NotebookPen,
+  Shapes,
+  UserRound,
+  type LucideIcon,
+} from "lucide-react-native";
 import { useEffect, useRef } from "react";
 import { Pressable, StyleSheet, Text, View, type LayoutChangeEvent } from "react-native";
 import Animated, {
@@ -24,6 +31,14 @@ const settle = LinearTransition.springify().stiffness(380).damping(32);
 
 type TabBarProps = Parameters<NonNullable<React.ComponentProps<typeof Tabs>["tabBar"]>>[0];
 
+/** The spaces, in dock order — routes, glyphs and their doodle keys. */
+const SPACES = [
+  { key: "planner", route: "index", label: "Planner", icon: NotebookPen, doodle: "planner" },
+  { key: "calendar", route: "calendar", label: "Calendar", icon: CalendarDays, doodle: "calendar" },
+  { key: "boards", route: "boards", label: "Boards", icon: Shapes, doodle: "boards" },
+  { key: "projects", route: "projects", label: "Projects", icon: FolderOpen, doodle: "learning" },
+] as const;
+
 /** The dock: a floating island. The wordmark anchors the left end (its zest
  * full-stop toggles light/dark), your doodled self beside it is the door to
  * Account, and the space tabs follow. The highlight glides between stops on a
@@ -34,9 +49,18 @@ export function Dock({ state, navigation }: TabBarProps) {
   const insets = useSafeAreaInsets();
 
   const routeName = state.routes[state.index].name;
-  // The style studio is a drill-in of account — the parent stop stays lit there.
+  // Task pages are drill-ins of the planner; a board of Boards; a project of
+  // Projects; the style studio of Account — the parent stop stays lit there.
   const active =
-    routeName === "index" ? "planner" : routeName === "calendar" ? "calendar" : "account";
+    routeName === "index" || routeName.startsWith("task")
+      ? "planner"
+      : routeName === "calendar"
+        ? "calendar"
+        : routeName === "boards" || routeName.startsWith("board")
+          ? "boards"
+          : routeName === "projects" || routeName.startsWith("project/")
+            ? "projects"
+            : "account";
 
   const stops = useRef<Record<string, { x: number; width: number }>>({});
   const pillX = useSharedValue(0);
@@ -102,22 +126,17 @@ export function Dock({ state, navigation }: TabBarProps) {
           onPress={() => navigation.navigate("account")}
         />
         <View style={[styles.divider, { backgroundColor: alpha(colors.rule, 0.8) }]} />
-        <DockTab
-          label="Planner"
-          icon={NotebookPen}
-          doodleKey="planner"
-          active={active === "planner"}
-          onLayout={measure("planner")}
-          onPress={() => navigation.navigate("index")}
-        />
-        <DockTab
-          label="Calendar"
-          icon={CalendarDays}
-          doodleKey="calendar"
-          active={active === "calendar"}
-          onLayout={measure("calendar")}
-          onPress={() => navigation.navigate("calendar")}
-        />
+        {SPACES.map((space) => (
+          <DockTab
+            key={space.key}
+            label={space.label}
+            icon={space.icon}
+            doodleKey={space.doodle}
+            active={active === space.key}
+            onLayout={measure(space.key)}
+            onPress={() => navigation.navigate(space.route)}
+          />
+        ))}
       </View>
     </View>
   );

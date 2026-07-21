@@ -1,7 +1,7 @@
 import { LinearGradient } from "expo-linear-gradient";
 import type { PropsWithChildren } from "react";
-import { StyleSheet, View } from "react-native";
-import Animated, { Keyframe, LinearTransition } from "react-native-reanimated";
+import { Platform, StyleSheet, View } from "react-native";
+import Animated, { FadeIn, FadeOut, Keyframe, LinearTransition } from "react-native-reanimated";
 import { useCardRadius } from "@/features/style/store";
 import { alpha } from "@/lib/theme";
 import { usePalette, useThemeStore } from "@/stores/theme";
@@ -13,28 +13,40 @@ export const BINDING_INSET = "16%";
 
 // Forward: the top page peels up and over the rings, revealing the next page
 // beneath it. Back: the previous page flaps down from over the top and lands
-// with a small paper settle.
-const flipAwayExit = new Keyframe({
-  0: { opacity: 1, transform: [{ perspective: 1400 }, { rotateX: "0deg" }] },
-  85: { opacity: 1, transform: [{ perspective: 1400 }, { rotateX: "120deg" }] },
-  100: { opacity: 0, transform: [{ perspective: 1400 }, { rotateX: "140deg" }] },
-}).duration(420);
-const revealEnter = new Keyframe({
-  0: { opacity: 0.85, transform: [{ scale: 0.988 }] },
-  100: { opacity: 1, transform: [{ scale: 1 }] },
-}).duration(420);
-const flapDownEnter = new Keyframe({
-  0: { opacity: 1, transform: [{ perspective: 1400 }, { rotateX: "140deg" }] },
-  70: { opacity: 1, transform: [{ perspective: 1400 }, { rotateX: "-4deg" }] },
-  100: { opacity: 1, transform: [{ perspective: 1400 }, { rotateX: "0deg" }] },
-}).duration(380);
-const coverExit = new Keyframe({
-  0: { opacity: 1, transform: [{ scale: 1 }] },
-  100: { opacity: 0, transform: [{ scale: 0.988 }] },
-}).duration(340);
+// with a small paper settle. Keyframes don't run on the web build — there the
+// pages crossfade instead.
+const web = Platform.OS === "web";
+const flipAwayExit = web
+  ? FadeOut.duration(180)
+  : new Keyframe({
+      0: { opacity: 1, transform: [{ perspective: 1400 }, { rotateX: "0deg" }] },
+      85: { opacity: 1, transform: [{ perspective: 1400 }, { rotateX: "120deg" }] },
+      100: { opacity: 0, transform: [{ perspective: 1400 }, { rotateX: "140deg" }] },
+    }).duration(420);
+const revealEnter = web
+  ? FadeIn.duration(220)
+  : new Keyframe({
+      0: { opacity: 0.85, transform: [{ scale: 0.988 }] },
+      100: { opacity: 1, transform: [{ scale: 1 }] },
+    }).duration(420);
+const flapDownEnter = web
+  ? FadeIn.duration(220)
+  : new Keyframe({
+      0: { opacity: 1, transform: [{ perspective: 1400 }, { rotateX: "140deg" }] },
+      70: { opacity: 1, transform: [{ perspective: 1400 }, { rotateX: "-4deg" }] },
+      100: { opacity: 1, transform: [{ perspective: 1400 }, { rotateX: "0deg" }] },
+    }).duration(380);
+const coverExit = web
+  ? FadeOut.duration(180)
+  : new Keyframe({
+      0: { opacity: 1, transform: [{ scale: 1 }] },
+      100: { opacity: 0, transform: [{ scale: 0.988 }] },
+    }).duration(340);
 
 /** The top-bound planner pad: static wire rings, pages that flip up over the
- * binding (desk-calendar style), and the rest of the pad peeking out below. */
+ * binding (desk-calendar style), and the rest of the pad peeking out below.
+ * The under-pad edges live in normal flow (negative margins) so they always
+ * hug the page bottom, whatever the container's height does. */
 export function PlannerBook({
   page,
   direction,
@@ -43,26 +55,24 @@ export function PlannerBook({
   const colors = usePalette();
   const radius = useCardRadius();
   return (
-    <Animated.View layout={LinearTransition.springify().stiffness(380).damping(34)} style={styles.book}>
+    <View style={styles.book}>
       <Rings />
       <Animated.View
         key={page}
         entering={direction > 0 ? revealEnter : flapDownEnter}
         exiting={direction > 0 ? flipAwayExit : coverExit}
+        layout={LinearTransition.springify().stiffness(380).damping(34)}
         style={styles.page}
       >
         {children}
       </Animated.View>
-      {/* The rest of the pad, peeking out under the top page. Static on
-          purpose: it's the part of the pad you're NOT flipping. */}
       <View
         pointerEvents="none"
         style={[
           styles.padEdge,
           {
-            left: 8,
-            right: 8,
-            bottom: -5,
+            marginTop: -11,
+            marginHorizontal: 8,
             zIndex: -1,
             borderBottomLeftRadius: radius,
             borderBottomRightRadius: radius,
@@ -76,9 +86,8 @@ export function PlannerBook({
         style={[
           styles.padEdge,
           {
-            left: 20,
-            right: 20,
-            bottom: -10,
+            marginTop: -11,
+            marginHorizontal: 20,
             zIndex: -2,
             borderBottomLeftRadius: radius,
             borderBottomRightRadius: radius,
@@ -87,7 +96,7 @@ export function PlannerBook({
           },
         ]}
       />
-    </Animated.View>
+    </View>
   );
 }
 
@@ -122,10 +131,10 @@ const styles = StyleSheet.create({
     marginTop: 20, // room for the rings arcing over the top edge
   },
   page: {
+    zIndex: 1,
     transformOrigin: "top",
   },
   padEdge: {
-    position: "absolute",
     height: 16,
     borderWidth: 1,
   },
