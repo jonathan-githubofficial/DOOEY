@@ -1,5 +1,5 @@
 import { useLocalSearchParams, useRouter } from "expo-router";
-import { ChevronLeft, Plus, Trash2, X } from "lucide-react-native";
+import { Check as CheckIcon, ChevronLeft, Play, Plus, Square, Trash2, X } from "lucide-react-native";
 import { useEffect, useRef, useState } from "react";
 import {
   Alert,
@@ -13,7 +13,6 @@ import {
 } from "react-native";
 import Animated, { FadeIn, LinearTransition, SlideInDown, SlideOutDown } from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { Check } from "@/components/Check";
 import { Grain } from "@/components/grain";
 import { Plate } from "@/components/plate";
 import { PressableScale } from "@/components/pressable-scale";
@@ -22,6 +21,7 @@ import { fontStyle } from "@/features/style/tokens";
 import {
   emptySet,
   previousLookup,
+  restLookup,
   useDeleteWorkout,
   useUpdateWorkout,
   useWorkout,
@@ -29,8 +29,9 @@ import {
 } from "@/features/workouts/api";
 import { useNow } from "@/features/workouts/clock";
 import { ExercisePicker, type PickedExercise } from "@/features/workouts/components/ExercisePicker";
+import { KeyPad } from "@/features/workouts/components/KeyPad";
 import { exerciseGif, libraryExercise } from "@/features/workouts/library";
-import { useWorkoutPrefs } from "@/features/workouts/store";
+import { formatRest, useWorkoutPrefs } from "@/features/workouts/store";
 import {
   formatElapsed,
   workoutSetsDone,
@@ -46,9 +47,22 @@ import { usePalette, useType } from "@/stores/theme";
 
 const settle = LinearTransition.springify().stiffness(400).damping(32);
 
-/** The session sheet: exercises as set grids — previous ghosts, weight, reps,
- * a tick per set — under a running clock, with a rest countdown between sets
- * and a finish plate at the bottom. Finished sessions open read-only. */
+type Focus = { ei: number; si: number; field: "weight" | "reps" };
+
+function parseNum(s: string): number {
+  const v = parseFloat(s.replace(",", "."));
+  return Number.isFinite(v) && v > 0 ? v : 0;
+}
+function sanitize(s: string): string {
+  const cleaned = s.replace(/[^0-9.]/g, "");
+  const [head, ...rest] = cleaned.split(".");
+  const joined = rest.length ? `${head}.${rest.join("")}` : head;
+  return joined.slice(0, 6);
+}
+
+/** The session: exercises as set grids, logged through a docked keypad and a
+ * Start → Stop per set that fires the exercise's rest timer. Weights and rest
+ * are remembered from last time. Finished sessions open read-only. */
 export default function WorkoutPage() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const colors = usePalette();
@@ -56,7 +70,9 @@ export default function WorkoutPage() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const unit = useWorkoutPrefs((s) => s.unit);
-  const restSeconds = useWorkoutPrefs((s) => s.restSeconds);
+  const defaultRest = useWorkoutPrefs((s) => s.restSeconds);
+  const autoStartRest = useWorkoutPrefs((s) => s.autoStartRest);
+  const restDoneBuzz = useWorkoutPrefs((s) => s.restDoneBuzz);
   const { data: workout } = useWorkout(id);
   const { data: workouts } = useWorkouts();
   const update = useUpdateWorkout(id);
@@ -65,58 +81,110 @@ export default function WorkoutPage() {
   const [entries, setEntries] = useState<WorkoutEntry[] | null>(null);
   const [title, setTitle] = useState<string | null>(null);
   const [picking, setPicking] = useState(false);
-  // The rest countdown: an end timestamp, not a counter — background-safe.
-  const [rest, setRest] = useState<{ until: number; total: number } | null>(null);
+  const [focus, setFocus] = useState<Focus | null>(null);
+  const [editStr, setEditStr] = useState("");
+  const [running, setRunning] = useState<string | null>(null); // "ei:si"
+  // Rest countdown: an end timestamp + which exercise it belongs to (so ±15s
+  // updates that exercise's remembered rest). Background-safe.
+  const [rest, setRest] = useState<{ until: number; total: number; ei: number } | null>(null);
 
   const live = !!workout && !workout.ended_at;
   const effEntries = entries ?? workout?.entries ?? [];
   const effTitle = title ?? workout?.title ?? "";
-  const prev = previousLookup((workouts ?? []).filter((w) => w.id !== id));
+  const others = (workouts ?? []).filter((w) => w.id !== id);
+  const prev = previousLookup(others);
+  const restMem = restLookup(others);
 
   const now = useNow(live ? 500 : 60_000);
-  // The bar's life is derived, never cleared by an effect — `rest` simply
-  // goes stale once expired; the next completed set replaces it.
   const resting = rest !== null && now < rest.until;
   const restRung = useRef(false);
   useEffect(() => {
     if (rest && !resting && !restRung.current) {
       restRung.current = true;
-      hapticSuccess();
+      if (restDoneBuzz) hapticSuccess();
     }
     if (resting) restRung.current = false;
-  }, [rest, resting]);
+  }, [rest, resting, restDoneBuzz]);
 
   if (!workout) return <View style={[styles.screen, { backgroundColor: colors.paper }]} />;
 
-  /** Local state leads, PocketBase follows — every action lands a mutation,
-   * so a crash mid-session loses one tap at most. */
+  /** Local state leads, PocketBase follows — a crash mid-session loses a tap. */
   const commit = (next: WorkoutEntry[]) => {
     setEntries(next);
     update.mutate({ entries: next });
   };
-
-  const patchSet = (ei: number, si: number, set: WorkoutSet) => {
-    const next = effEntries.map((e, i) =>
-      i === ei ? { ...e, sets: e.sets.map((s, j) => (j === si ? set : s)) } : e,
+  const patchSet = (ei: number, si: number, patch: Partial<WorkoutSet>) =>
+    commit(
+      effEntries.map((e, i) =>
+        i === ei ? { ...e, sets: e.sets.map((s, j) => (j === si ? { ...s, ...patch } : s)) } : e,
+      ),
     );
-    const startedRest = live && set.done && !effEntries[ei].sets[si].done;
-    commit(next);
-    // `now` (the ticking clock) instead of Date.now() — ±half a tick on a
-    // 90s rest is nothing, and the handler stays pure.
-    if (startedRest) setRest({ until: now + restSeconds * 1000, total: restSeconds });
+  const entryRest = (e: WorkoutEntry) => e.rest ?? defaultRest;
+
+  // --- keypad ---
+  const openCell = (ei: number, si: number, field: "weight" | "reps", current: number) => {
+    hapticTap();
+    setFocus({ ei, si, field });
+    setEditStr(current > 0 ? String(current) : "");
+  };
+  const typeDigit = (d: string) => {
+    if (!focus) return;
+    const nextStr = sanitize(editStr + d);
+    setEditStr(nextStr);
+    patchSet(focus.ei, focus.si, { [focus.field]: parseNum(nextStr) });
+  };
+  const backspace = () => {
+    if (!focus) return;
+    const nextStr = editStr.slice(0, -1);
+    setEditStr(nextStr);
+    patchSet(focus.ei, focus.si, { [focus.field]: parseNum(nextStr) });
+  };
+  const keypadNext = () => {
+    if (!focus) return;
+    const entry = effEntries[focus.ei];
+    if (focus.field === "weight" && entry.kind === "weight_reps") {
+      openCell(focus.ei, focus.si, "reps", entry.sets[focus.si].reps);
+    } else {
+      setFocus(null);
+    }
   };
 
-  const addSet = (ei: number) => {
+  // --- start / stop drives rest ---
+  const startSet = (ei: number, si: number) => {
     hapticTap();
-    commit(effEntries.map((e, i) => (i === ei ? { ...e, sets: [...e.sets, emptySet()] } : e)));
+    setFocus(null);
+    setRunning(`${ei}:${si}`);
   };
-  const removeSet = (ei: number, si: number) => {
+  const stopSet = (ei: number, si: number) => {
+    hapticSuccess();
+    const entry = effEntries[ei];
+    const set = entry.sets[si];
+    const ghost = prev.get(entry.name)?.[si];
+    // Empty fields adopt last time's numbers — Start/Stop with no typing works.
+    const filled: WorkoutSet = {
+      weight: set.weight || ghost?.weight || 0,
+      reps: set.reps || ghost?.reps || 0,
+      done: true,
+    };
+    commit(effEntries.map((e, i) => (i === ei ? { ...e, sets: e.sets.map((s, j) => (j === si ? filled : s)) } : e)));
+    setRunning(null);
+    if (autoStartRest) setRest({ until: now + entryRest(entry) * 1000, total: entryRest(entry), ei });
+  };
+  const undoSet = (ei: number, si: number) => {
+    patchSet(ei, si, { done: false });
+    setRunning((r) => (r === `${ei}:${si}` ? null : r));
+  };
+
+  const addSet = (ei: number) =>
+    commit(effEntries.map((e, i) => (i === ei ? { ...e, sets: [...e.sets, emptySet()] } : e)));
+  const removeSet = (ei: number, si: number) =>
     commit(
       effEntries
         .map((e, i) => (i === ei ? { ...e, sets: e.sets.filter((_, j) => j !== si) } : e))
         .filter((e) => e.sets.length > 0),
     );
-  };
+  const setNotes = (ei: number, notes: string) =>
+    commit(effEntries.map((e, i) => (i === ei ? { ...e, notes } : e)));
   const addExercises = (picked: PickedExercise[]) => {
     commit([
       ...effEntries,
@@ -124,6 +192,7 @@ export default function WorkoutPage() {
         name: p.name,
         kind: p.kind,
         libId: p.libId,
+        rest: restMem.get(p.name) ?? defaultRest,
         sets: Array.from({ length: prev.get(p.name)?.length ?? 3 }, emptySet),
       })),
     ]);
@@ -131,19 +200,21 @@ export default function WorkoutPage() {
   const removeExercise = (ei: number) =>
     Alert.alert("Remove exercise?", effEntries[ei].name, [
       { text: "Keep it", style: "cancel" },
-      {
-        text: "Remove",
-        style: "destructive",
-        onPress: () => commit(effEntries.filter((_, i) => i !== ei)),
-      },
+      { text: "Remove", style: "destructive", onPress: () => commit(effEntries.filter((_, i) => i !== ei)) },
     ]);
+  const bumpRest = (delta: number) => {
+    if (!rest) return;
+    const total = Math.max(15, rest.total + delta);
+    setRest({ ...rest, until: rest.until + delta * 1000, total });
+    // Remember the adjusted rest on the exercise it belongs to.
+    commit(effEntries.map((e, i) => (i === rest.ei ? { ...e, rest: total } : e)));
+  };
 
   const finish = () => {
     const done = workoutSetsDone(effEntries);
     const close = () => {
       hapticSuccess();
       playFlip();
-      // Drop never-touched sets from the record — the log keeps what happened.
       const kept = effEntries
         .map((e) => ({ ...e, sets: e.sets.filter((s) => s.done) }))
         .filter((e) => e.sets.length > 0);
@@ -153,11 +224,7 @@ export default function WorkoutPage() {
     if (done === 0) {
       Alert.alert("Nothing logged", "Finish anyway? This session will be discarded.", [
         { text: "Keep going", style: "cancel" },
-        {
-          text: "Discard",
-          style: "destructive",
-          onPress: () => del.mutate(id, { onSuccess: () => router.back() }),
-        },
+        { text: "Discard", style: "destructive", onPress: () => del.mutate(id, { onSuccess: () => router.back() }) },
       ]);
     } else {
       close();
@@ -167,15 +234,17 @@ export default function WorkoutPage() {
   const started = new Date(workout.started_at).getTime();
   const duration = live ? now - started : new Date(workout.ended_at).getTime() - started;
   const volume = workoutVolume(effEntries);
+  const focusEntry = focus ? effEntries[focus.ei] : null;
 
   return (
     <View style={[styles.screen, { backgroundColor: colors.paper, paddingTop: insets.top + 12 }]}>
       <Grain />
       <ScrollView
         showsVerticalScrollIndicator={false}
+        keyboardShouldPersistTaps="handled"
         contentContainerStyle={[
           styles.scrollContent,
-          { paddingBottom: Math.max(16, insets.bottom) + 140 },
+          { paddingBottom: Math.max(16, insets.bottom) + (focus ? 360 : 150) },
         ]}
       >
         <View style={styles.headRow}>
@@ -203,14 +272,8 @@ export default function WorkoutPage() {
           )}
         </View>
 
-        {/* The session at a glance — duration ticking, volume and sets
-            growing as the work happens. */}
         <View style={[styles.stats, { borderBottomColor: alpha(colors.rule, 0.5) }]}>
-          <Stat
-            label="duration"
-            value={formatElapsed(duration)}
-            tone={live ? colors.zest : colors.ink}
-          />
+          <Stat label="duration" value={formatElapsed(duration)} tone={live ? colors.zest : colors.ink} />
           <Stat
             label="volume"
             value={volume > 0 ? `${Math.round(volume).toLocaleString()} ${unit}` : "—"}
@@ -225,9 +288,14 @@ export default function WorkoutPage() {
               <Panel style={styles.entryCard}>
                 <View style={styles.entryHead}>
                   <EntryThumb libId={entry.libId} />
-                  <Text numberOfLines={1} style={[styles.entryName, type.sansSemiBold, { color: colors.zest }]}>
-                    {entry.name}
-                  </Text>
+                  <View style={styles.entryTitleText}>
+                    <Text numberOfLines={1} style={[styles.entryName, type.sansSemiBold, { color: colors.zest }]}>
+                      {entry.name}
+                    </Text>
+                    <Text style={[styles.entryRest, type.sans, { color: colors.inkMuted }]}>
+                      rest {formatRest(entryRest(entry))}
+                    </Text>
+                  </View>
                   {live && (
                     <PressableScale
                       scaleTo={0.8}
@@ -240,22 +308,28 @@ export default function WorkoutPage() {
                   )}
                 </View>
 
+                {(live || !!entry.notes) && (
+                  <TextInput
+                    value={entry.notes ?? ""}
+                    onChangeText={(t) => setNotes(ei, t)}
+                    editable={live}
+                    placeholder="Add notes here…"
+                    placeholderTextColor={alpha(colors.inkMuted, 0.5)}
+                    style={[styles.notes, type.sans, { color: colors.inkMuted }]}
+                    multiline
+                  />
+                )}
+
                 <View style={styles.gridHead}>
-                  <Text style={[styles.colSet, styles.colLabel, type.sansMedium, { color: colors.inkMuted }]}>
-                    set
-                  </Text>
-                  <Text style={[styles.colPrev, styles.colLabel, type.sansMedium, { color: colors.inkMuted }]}>
-                    prev
-                  </Text>
+                  <Text style={[styles.colSet, styles.colLabel, type.sansMedium, { color: colors.inkMuted }]}>set</Text>
+                  <Text style={[styles.colPrev, styles.colLabel, type.sansMedium, { color: colors.inkMuted }]}>prev</Text>
                   {entry.kind === "weight_reps" && (
-                    <Text style={[styles.colInput, styles.colLabel, type.sansMedium, { color: colors.inkMuted }]}>
-                      {unit}
-                    </Text>
+                    <Text style={[styles.colInput, styles.colLabel, type.sansMedium, { color: colors.inkMuted }]}>{unit}</Text>
                   )}
                   <Text style={[styles.colInput, styles.colLabel, type.sansMedium, { color: colors.inkMuted }]}>
                     {entry.kind === "duration" ? "secs" : "reps"}
                   </Text>
-                  <View style={styles.colCheck} />
+                  <View style={styles.colAction} />
                 </View>
 
                 {entry.sets.map((set, si) => (
@@ -264,9 +338,16 @@ export default function WorkoutPage() {
                     index={si}
                     set={set}
                     kind={entry.kind}
+                    unit={unit}
                     prev={prev.get(entry.name)?.[si]}
                     live={live}
-                    onChange={(s) => patchSet(ei, si, s)}
+                    running={running === `${ei}:${si}`}
+                    focusField={focus && focus.ei === ei && focus.si === si ? focus.field : null}
+                    editStr={editStr}
+                    onOpenCell={(field, current) => openCell(ei, si, field, current)}
+                    onStart={() => startSet(ei, si)}
+                    onStop={() => stopSet(ei, si)}
+                    onUndo={() => undoSet(ei, si)}
                     onRemove={() => removeSet(ei, si)}
                   />
                 ))}
@@ -279,9 +360,7 @@ export default function WorkoutPage() {
                     style={[styles.addSet, { backgroundColor: alpha(colors.ink, 0.05) }]}
                   >
                     <Plus size={13} color={colors.inkMuted} />
-                    <Text style={[styles.addSetText, type.sansMedium, { color: colors.ink }]}>
-                      Add set
-                    </Text>
+                    <Text style={[styles.addSetText, type.sansMedium, { color: colors.ink }]}>Add set</Text>
                   </PressableScale>
                 )}
               </Panel>
@@ -296,9 +375,7 @@ export default function WorkoutPage() {
               style={[styles.addTile, { borderColor: alpha(colors.rule, 0.8) }]}
             >
               <Plus size={15} color={colors.inkMuted} />
-              <Text style={[styles.addText, type.sansMedium, { color: colors.inkMuted }]}>
-                Add exercise
-              </Text>
+              <Text style={[styles.addText, type.sansMedium, { color: colors.inkMuted }]}>Add exercise</Text>
             </PressableScale>
           )}
         </View>
@@ -313,41 +390,48 @@ export default function WorkoutPage() {
             onPress={() =>
               Alert.alert("Delete this session?", effTitle, [
                 { text: "Keep it", style: "cancel" },
-                {
-                  text: "Delete",
-                  style: "destructive",
-                  onPress: () => del.mutate(id, { onSuccess: () => router.back() }),
-                },
+                { text: "Delete", style: "destructive", onPress: () => del.mutate(id, { onSuccess: () => router.back() }) },
               ])
             }
             style={styles.deleteRow}
           >
             <Trash2 size={13} color={colors.inkMuted} />
-            <Text style={[styles.deleteText, type.sansMedium, { color: colors.inkMuted }]}>
-              Delete session
-            </Text>
+            <Text style={[styles.deleteText, type.sansMedium, { color: colors.inkMuted }]}>Delete session</Text>
           </Pressable>
         )}
       </ScrollView>
 
-      {resting && rest && live && (
-        <Animated.View
-          entering={SlideInDown.springify().stiffness(300).damping(28)}
-          exiting={SlideOutDown.duration(180)}
-          style={[styles.restBar, { bottom: insets.bottom + 14 }]}
-        >
-          <Panel style={[styles.restPanel, { borderColor: alpha(colors.zest, 0.5) }]}>
-            <Text style={[styles.restClock, fontStyle("fraunces", "700"), { color: colors.zest }]}>
-              {formatElapsed(Math.max(0, rest.until - now))}
-            </Text>
-            <Text style={[styles.restLabel, type.sansMedium, { color: colors.inkMuted }]}>rest</Text>
-            <View style={styles.restTools}>
-              <RestButton label="−15s" onPress={() => setRest((r) => r && { ...r, until: r.until - 15_000 })} />
-              <RestButton label="+15s" onPress={() => setRest((r) => r && { ...r, until: r.until + 15_000 })} />
-              <RestButton label="skip" onPress={() => setRest(null)} />
-            </View>
-          </Panel>
-        </Animated.View>
+      {/* The keypad wins the bottom while a cell is focused; else the rest bar. */}
+      {focus && focusEntry ? (
+        <KeyPad
+          caption={`${focusEntry.name} · ${focus.field === "weight" ? unit : focusEntry.kind === "duration" ? "seconds" : "reps"}`}
+          draft={editStr}
+          nextLabel={focus.field === "weight" && focusEntry.kind === "weight_reps" ? "Next — reps" : "Done"}
+          onDigit={typeDigit}
+          onBackspace={backspace}
+          onNext={keypadNext}
+          onClose={() => setFocus(null)}
+        />
+      ) : (
+        resting && rest && live && (
+          <Animated.View
+            entering={SlideInDown.springify().stiffness(300).damping(28)}
+            exiting={SlideOutDown.duration(180)}
+            style={[styles.restBar, { bottom: insets.bottom + 14 }]}
+          >
+            <Panel style={[styles.restPanel, { borderColor: alpha(colors.zest, 0.5) }]}>
+              <Text style={[styles.restClock, fontStyle("fraunces", "700"), { color: colors.zest }]}>
+                {formatElapsed(Math.max(0, rest.until - now))}
+              </Text>
+              <Text style={[styles.restLabel, type.sansMedium, { color: colors.inkMuted }]}>rest</Text>
+              <View style={styles.restTools}>
+                <RestButton label="−15s" onPress={() => bumpRest(-15)} />
+                <RestButton label="+15s" onPress={() => bumpRest(15)} />
+                <RestButton label="skip" onPress={() => setRest(null)} />
+              </View>
+            </Panel>
+          </Animated.View>
+        )
       )}
 
       <ExercisePicker visible={picking} onAdd={addExercises} onClose={() => setPicking(false)} />
@@ -355,7 +439,6 @@ export default function WorkoutPage() {
   );
 }
 
-/** One number of the session-stats strip. */
 function Stat({ label, value, tone }: { label: string; value: string; tone: string }) {
   const colors = usePalette();
   const type = useType();
@@ -367,7 +450,6 @@ function Stat({ label, value, tone }: { label: string; value: string; tone: stri
   );
 }
 
-/** The exercise's demo loop beside its name — the library made visible. */
 function EntryThumb({ libId }: { libId?: string }) {
   const colors = usePalette();
   const ex = libraryExercise(libId);
@@ -400,48 +482,52 @@ function RestButton({ label, onPress }: { label: string; onPress: () => void }) 
   );
 }
 
-/** One set: number · previous ghost · inputs · tick. Ticking an untouched row
- * adopts the ghost values — logging a repeat of last week is two taps. */
+/** One set: number · last-time ghost · weight/reps cells · a Start→Stop
+ * action. Cells open the docked keypad; the ghost shows what you did last. */
 function SetRow({
   index,
   set,
   kind,
+  unit,
   prev,
   live,
-  onChange,
+  running,
+  focusField,
+  editStr,
+  onOpenCell,
+  onStart,
+  onStop,
+  onUndo,
   onRemove,
 }: {
   index: number;
   set: WorkoutSet;
   kind: ExerciseKind;
+  unit: string;
   prev?: WorkoutSet;
   live: boolean;
-  onChange: (s: WorkoutSet) => void;
+  running: boolean;
+  focusField: "weight" | "reps" | null;
+  editStr: string;
+  onOpenCell: (field: "weight" | "reps", current: number) => void;
+  onStart: () => void;
+  onStop: () => void;
+  onUndo: () => void;
   onRemove: () => void;
 }) {
   const colors = usePalette();
   const type = useType();
-  const [wText, setWText] = useState<string | null>(null);
-  const [rText, setRText] = useState<string | null>(null);
-
-  const parse = (t: string | null) => {
-    const v = parseFloat((t ?? "").replace(",", "."));
-    return Number.isFinite(v) && v > 0 ? v : 0;
-  };
-  // What this row would log right now: typed > stored > ghost.
-  const resolved = (): WorkoutSet => ({
-    weight: parse(wText) || set.weight || prev?.weight || 0,
-    reps: parse(rText) || set.reps || prev?.reps || 0,
-    done: set.done,
-  });
-
   const ghost = prev ? (kind === "weight_reps" ? `${prev.weight}×${prev.reps}` : `${prev.reps}`) : "—";
 
   return (
     <Pressable
       accessibilityLabel={`Set ${index + 1}`}
       onLongPress={live ? onRemove : undefined}
-      style={[styles.setRow, set.done && { backgroundColor: alpha(colors.leaf, 0.16) }]}
+      style={[
+        styles.setRow,
+        set.done && { backgroundColor: alpha(colors.leaf, 0.16) },
+        running && !set.done && { backgroundColor: alpha(colors.zest, 0.12) },
+      ]}
     >
       <Text style={[styles.colSet, styles.setIndex, type.sansMedium, { color: colors.inkMuted }]}>
         {index + 1}
@@ -450,111 +536,105 @@ function SetRow({
         {ghost}
       </Text>
       {kind === "weight_reps" && (
-        <SetInput
-          value={wText ?? (set.weight > 0 ? String(set.weight) : "")}
-          placeholder={prev && prev.weight > 0 ? String(prev.weight) : "—"}
+        <Cell
+          value={set.weight}
+          ghost={prev?.weight}
+          focused={focusField === "weight"}
+          editStr={editStr}
           editable={live}
-          onText={setWText}
-          onCommit={() => {
-            if (wText !== null) onChange({ ...set, weight: parse(wText) });
-            setWText(null);
-          }}
+          onPress={() => onOpenCell("weight", set.weight)}
         />
       )}
-      <SetInput
-        value={rText ?? (set.reps > 0 ? String(set.reps) : "")}
-        placeholder={prev && prev.reps > 0 ? String(prev.reps) : "—"}
+      <Cell
+        value={set.reps}
+        ghost={prev?.reps}
+        focused={focusField === "reps"}
+        editStr={editStr}
         editable={live}
-        onText={setRText}
-        onCommit={() => {
-          if (rText !== null) onChange({ ...set, reps: parse(rText) });
-          setRText(null);
-        }}
+        onPress={() => onOpenCell("reps", set.reps)}
       />
-      <View style={styles.colCheck}>
-        {live ? (
-          <Check
-            done={set.done}
-            label={`Set ${index + 1} done`}
-            size={24}
-            onToggle={() => {
-              const r = resolved();
-              onChange({ ...r, done: !set.done });
-              setWText(null);
-              setRText(null);
-            }}
-          />
-        ) : (
+      <View style={styles.colAction}>
+        {!live ? (
           <Text style={[styles.setIndex, type.sansMedium, { color: set.done ? colors.leaf : colors.inkMuted }]}>
             {set.done ? "✓" : ""}
           </Text>
+        ) : set.done ? (
+          <PressableScale scaleTo={0.8} accessibilityLabel="Undo set" onPress={onUndo} style={[styles.actionBtn, { backgroundColor: colors.leaf }]}>
+            <CheckIcon size={15} color="#fff" />
+          </PressableScale>
+        ) : running ? (
+          <PressableScale scaleTo={0.85} accessibilityLabel="Stop set — start rest" onPress={onStop} style={[styles.actionBtn, { backgroundColor: colors.zest }]}>
+            <Square size={12} color="#fff" fill="#fff" />
+          </PressableScale>
+        ) : (
+          <PressableScale
+            scaleTo={0.85}
+            accessibilityLabel="Start set"
+            onPress={onStart}
+            style={[styles.actionBtn, styles.startBtn, { borderColor: colors.zest }]}
+          >
+            <Play size={13} color={colors.zest} fill={colors.zest} />
+          </PressableScale>
         )}
       </View>
     </Pressable>
   );
 }
 
-function SetInput({
+/** A tappable value cell: shows what you're typing when focused, the stored
+ * value once set, or last-time's number as a dim placeholder. */
+function Cell({
   value,
-  placeholder,
+  ghost,
+  focused,
+  editStr,
   editable,
-  onText,
-  onCommit,
+  onPress,
 }: {
-  value: string;
-  placeholder: string;
+  value: number;
+  ghost?: number;
+  focused: boolean;
+  editStr: string;
   editable: boolean;
-  onText: (t: string) => void;
-  onCommit: () => void;
+  onPress: () => void;
 }) {
   const colors = usePalette();
   const type = useType();
+  const shown = focused ? editStr : value > 0 ? String(value) : "";
+  const placeholder = ghost && ghost > 0 ? String(ghost) : "—";
   return (
-    <TextInput
-      value={value}
-      onChangeText={onText}
-      onEndEditing={onCommit}
-      placeholder={placeholder}
-      placeholderTextColor={alpha(colors.inkMuted, 0.45)}
-      editable={editable}
-      keyboardType="decimal-pad"
-      selectTextOnFocus
+    <Pressable
+      accessibilityLabel="Edit value"
+      disabled={!editable}
+      onPress={onPress}
       style={[
         styles.colInput,
-        styles.setInput,
-        type.sansSemiBold,
-        { color: colors.ink, backgroundColor: alpha(colors.ink, 0.05) },
+        styles.cell,
+        {
+          backgroundColor: focused ? alpha(colors.zest, 0.14) : alpha(colors.ink, 0.05),
+          borderColor: focused ? colors.zest : "transparent",
+        },
       ]}
-    />
+    >
+      <Text
+        style={[
+          styles.cellText,
+          type.sansSemiBold,
+          { color: shown ? colors.ink : alpha(colors.inkMuted, 0.45) },
+        ]}
+      >
+        {shown || placeholder}
+      </Text>
+    </Pressable>
   );
 }
 
 const styles = StyleSheet.create({
-  screen: {
-    flex: 1,
-  },
-  scrollContent: {
-    paddingHorizontal: 16,
-    paddingTop: 8,
-  },
-  headRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 2,
-  },
-  back: {
-    height: 40,
-    width: 36,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  titleInput: {
-    flex: 1,
-    minWidth: 0,
-    fontSize: 24,
-    letterSpacing: -0.5,
-    paddingVertical: 4,
-  },
+  screen: { flex: 1 },
+  scrollContent: { paddingHorizontal: 16, paddingTop: 8 },
+  headRow: { flexDirection: "row", alignItems: "center", gap: 2 },
+  back: { height: 40, width: 36, alignItems: "center", justifyContent: "center" },
+  titleInput: { flex: 1, minWidth: 0, fontSize: 24, letterSpacing: -0.5, paddingVertical: 4 },
   stats: {
     marginTop: 10,
     flexDirection: "row",
@@ -562,99 +642,48 @@ const styles = StyleSheet.create({
     paddingBottom: 12,
     borderBottomWidth: 1,
   },
-  stat: {
-    gap: 2,
+  stat: { gap: 2 },
+  statLabel: { fontSize: 9.5, letterSpacing: 1.6, textTransform: "uppercase" },
+  statValue: { fontSize: 17, fontVariant: ["tabular-nums"] },
+  entries: { marginTop: 16, gap: 12 },
+  entryCard: { gap: 6 },
+  entryHead: { flexDirection: "row", alignItems: "center", gap: 10 },
+  entryThumb: { height: 40, width: 50, borderRadius: 8, borderWidth: 1 },
+  entryTitleText: { flex: 1, minWidth: 0 },
+  entryName: { fontSize: 15.5, textTransform: "capitalize" },
+  entryRest: { marginTop: 1, fontSize: 11.5 },
+  entryRemove: { height: 28, width: 28, alignItems: "center", justifyContent: "center", borderRadius: 999 },
+  notes: {
+    marginTop: 2,
+    fontSize: 12.5,
+    lineHeight: 17,
+    paddingVertical: 2,
   },
-  statLabel: {
-    fontSize: 9.5,
-    letterSpacing: 1.6,
-    textTransform: "uppercase",
-  },
-  statValue: {
-    fontSize: 17,
-    fontVariant: ["tabular-nums"],
-  },
-  entries: {
-    marginTop: 16,
-    gap: 12,
-  },
-  entryCard: {
-    gap: 6,
-  },
-  entryHead: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    gap: 8,
-  },
-  entryName: {
-    flex: 1,
-    minWidth: 0,
-    fontSize: 15.5,
-    textTransform: "capitalize",
-  },
-  entryThumb: {
-    height: 34,
-    width: 44,
-    borderRadius: 7,
-    borderWidth: 1,
-  },
-  entryRemove: {
-    height: 28,
-    width: 28,
+  gridHead: { flexDirection: "row", alignItems: "center", gap: 8, paddingHorizontal: 4, marginTop: 4 },
+  colLabel: { fontSize: 9, letterSpacing: 1.4, textTransform: "uppercase" },
+  colSet: { width: 26 },
+  colPrev: { flex: 1, minWidth: 0 },
+  colInput: { width: 64, textAlign: "center" },
+  colAction: { width: 40, alignItems: "center" },
+  setRow: { flexDirection: "row", alignItems: "center", gap: 8, paddingVertical: 5, paddingHorizontal: 4, borderRadius: 10 },
+  setIndex: { fontSize: 12.5, fontVariant: ["tabular-nums"] },
+  prevText: { fontSize: 12, fontVariant: ["tabular-nums"] },
+  cell: {
+    height: 36,
+    borderRadius: 9,
+    borderWidth: 1.5,
     alignItems: "center",
     justifyContent: "center",
+  },
+  cellText: { fontSize: 14.5, fontVariant: ["tabular-nums"] },
+  actionBtn: {
+    height: 30,
+    width: 30,
     borderRadius: 999,
-  },
-  gridHead: {
-    flexDirection: "row",
     alignItems: "center",
-    gap: 8,
-    paddingHorizontal: 4,
+    justifyContent: "center",
   },
-  colLabel: {
-    fontSize: 9,
-    letterSpacing: 1.4,
-    textTransform: "uppercase",
-  },
-  colSet: {
-    width: 26,
-  },
-  colPrev: {
-    flex: 1,
-    minWidth: 0,
-  },
-  colInput: {
-    width: 62,
-    textAlign: "center",
-  },
-  colCheck: {
-    width: 34,
-    alignItems: "center",
-  },
-  setRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 8,
-    paddingVertical: 5,
-    paddingHorizontal: 4,
-    borderRadius: 10,
-  },
-  setIndex: {
-    fontSize: 12.5,
-    fontVariant: ["tabular-nums"],
-  },
-  prevText: {
-    fontSize: 12,
-    fontVariant: ["tabular-nums"],
-  },
-  setInput: {
-    height: 34,
-    borderRadius: 9,
-    fontSize: 14,
-    paddingVertical: 0,
-    paddingHorizontal: 6,
-  },
+  startBtn: { backgroundColor: "transparent", borderWidth: 1.5 },
   addSet: {
     marginTop: 6,
     flexDirection: "row",
@@ -664,9 +693,7 @@ const styles = StyleSheet.create({
     paddingVertical: 10,
     borderRadius: 10,
   },
-  addSetText: {
-    fontSize: 12.5,
-  },
+  addSetText: { fontSize: 12.5 },
   addTile: {
     borderWidth: 1,
     borderStyle: "dashed",
@@ -677,18 +704,9 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     gap: 8,
   },
-  addText: {
-    fontSize: 13,
-  },
-  finishRow: {
-    marginTop: 24,
-    alignItems: "center",
-  },
-  finishPlate: {
-    alignSelf: "stretch",
-    borderRadius: 14,
-    paddingVertical: 15,
-  },
+  addText: { fontSize: 13 },
+  finishRow: { marginTop: 24, alignItems: "center" },
+  finishPlate: { alignSelf: "stretch", borderRadius: 14, paddingVertical: 15 },
   deleteRow: {
     marginTop: 28,
     flexDirection: "row",
@@ -697,41 +715,12 @@ const styles = StyleSheet.create({
     gap: 6,
     paddingVertical: 8,
   },
-  deleteText: {
-    fontSize: 12,
-  },
-  restBar: {
-    position: "absolute",
-    left: 16,
-    right: 16,
-  },
-  restPanel: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 10,
-    borderWidth: 1.5,
-    paddingVertical: 10,
-  },
-  restClock: {
-    fontSize: 22,
-    fontVariant: ["tabular-nums"],
-  },
-  restLabel: {
-    fontSize: 10,
-    letterSpacing: 1.6,
-    textTransform: "uppercase",
-    flex: 1,
-  },
-  restTools: {
-    flexDirection: "row",
-    gap: 6,
-  },
-  restBtn: {
-    borderRadius: 999,
-    paddingVertical: 7,
-    paddingHorizontal: 12,
-  },
-  restBtnText: {
-    fontSize: 11.5,
-  },
+  deleteText: { fontSize: 12 },
+  restBar: { position: "absolute", left: 16, right: 16 },
+  restPanel: { flexDirection: "row", alignItems: "center", gap: 10, borderWidth: 1.5, paddingVertical: 10 },
+  restClock: { fontSize: 22, fontVariant: ["tabular-nums"] },
+  restLabel: { fontSize: 10, letterSpacing: 1.6, textTransform: "uppercase", flex: 1 },
+  restTools: { flexDirection: "row", gap: 6 },
+  restBtn: { borderRadius: 999, paddingVertical: 7, paddingHorizontal: 12 },
+  restBtnText: { fontSize: 11.5 },
 });
