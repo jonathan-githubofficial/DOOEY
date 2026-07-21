@@ -1,15 +1,18 @@
 import type { PropsWithChildren } from "react";
 import { StyleSheet, Text, View, type StyleProp, type TextStyle, type ViewStyle } from "react-native";
 import { Grain } from "@/components/grain";
-import { useCardRadius } from "@/features/style/store";
-import { alpha, fonts } from "@/lib/theme";
-import { usePalette } from "@/stores/theme";
+import { PressableScale } from "@/components/pressable-scale";
+import { useCardRadius, useShadow } from "@/features/style/store";
+import { alpha } from "@/lib/theme";
+import { usePalette, useThemeStore, useType } from "@/stores/theme";
 
-/** A soft paper card — the RN counterpart of the web app's Panel. Wears the
- * paper grain and the Style page's corner radius. */
+/** The skeuomorphic building block: a soft, rounded, grained, gently-shadowed
+ * card. A hairline top highlight sells the "sheet of paper" edge. */
 export function Panel({ style, children }: PropsWithChildren<{ style?: StyleProp<ViewStyle> }>) {
   const colors = usePalette();
+  const dark = useThemeStore((s) => s.theme) === "dark";
   const radius = useCardRadius();
+  const shadow = useShadow();
   return (
     <View
       style={[
@@ -18,6 +21,8 @@ export function Panel({ style, children }: PropsWithChildren<{ style?: StyleProp
           borderRadius: radius,
           backgroundColor: colors.surface,
           borderColor: alpha(colors.rule, 0.7),
+          shadowOpacity: 0.08 * shadow,
+          elevation: Math.round(2 * shadow),
         },
         style,
       ]}
@@ -25,16 +30,86 @@ export function Panel({ style, children }: PropsWithChildren<{ style?: StyleProp
       {/* The grain clips itself to the card's corners — an overflow:hidden on
           the panel would clip the iOS shadow instead. */}
       <Grain radius={radius - 1} />
+      <View
+        pointerEvents="none"
+        style={[
+          styles.hairline,
+          { backgroundColor: dark ? "rgba(255,255,255,0.1)" : "rgba(255,255,255,0.5)" },
+        ]}
+      />
       {children}
     </View>
   );
 }
 
-/** Tiny tracked-uppercase section label. */
+/** Uppercase, tracked micro-label used inside cards. */
 export function Eyebrow({ style, children }: PropsWithChildren<{ style?: StyleProp<TextStyle> }>) {
   const colors = usePalette();
+  const type = useType();
   return (
-    <Text style={[styles.eyebrow, { color: colors.inkMuted }, style]}>{children}</Text>
+    <Text style={[styles.eyebrow, type.sansMedium, { color: colors.inkMuted }, style]}>
+      {children}
+    </Text>
+  );
+}
+
+/** A rubber-stamp badge — rotated, tracked, semi-inked. Colour via `color`. */
+export function Stamp({
+  children,
+  color,
+  rotate = -3,
+  style,
+}: PropsWithChildren<{ color: string; rotate?: number; style?: StyleProp<ViewStyle> }>) {
+  const type = useType();
+  return (
+    <View
+      style={[
+        styles.stamp,
+        { borderColor: color, transform: [{ rotate: `${rotate}deg` }] },
+        style,
+      ]}
+    >
+      <Text style={[styles.stampText, type.sansSemiBold, { color }]}>{children}</Text>
+    </View>
+  );
+}
+
+/** A button in postage-stamp spirit — RN can't punch the perforated mask, so a
+ * dashed border reads as the perforation. Grained fill, spring press. */
+export function StampButton({
+  onPress,
+  accent,
+  disabled,
+  style,
+  children,
+}: PropsWithChildren<{
+  onPress: () => void;
+  accent?: boolean;
+  disabled?: boolean;
+  style?: StyleProp<ViewStyle>;
+}>) {
+  const colors = usePalette();
+  const shadow = useShadow();
+  return (
+    <PressableScale
+      scaleTo={0.95}
+      onPress={onPress}
+      disabled={disabled}
+      style={[
+        styles.stampBtn,
+        {
+          backgroundColor: accent ? colors.zest : colors.surface,
+          borderColor: accent ? alpha(colors.paper, 0.7) : alpha(colors.inkMuted, 0.5),
+          shadowOpacity: 0.2 * shadow,
+          elevation: Math.round(2 * shadow),
+        },
+        disabled && { opacity: 0.4 },
+        style,
+      ]}
+    >
+      <Grain radius={7} />
+      {children}
+    </PressableScale>
   );
 }
 
@@ -43,15 +118,45 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     // Soft two-layer web shadow approximated with one gentle native shadow.
     shadowColor: "#282018",
-    shadowOpacity: 0.08,
     shadowRadius: 8,
     shadowOffset: { width: 0, height: 3 },
-    elevation: 2,
+  },
+  hairline: {
+    position: "absolute",
+    left: 12,
+    right: 12,
+    top: 0,
+    height: 1,
+    borderRadius: 999,
   },
   eyebrow: {
-    fontFamily: fonts.sansMedium,
     fontSize: 10,
     letterSpacing: 1.8,
     textTransform: "uppercase",
+  },
+  stamp: {
+    borderWidth: 1.5,
+    borderRadius: 6,
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    opacity: 0.9,
+  },
+  stampText: {
+    fontSize: 9,
+    letterSpacing: 1.8,
+    textTransform: "uppercase",
+  },
+  stampBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    borderWidth: 1.5,
+    borderStyle: "dashed",
+    borderRadius: 8,
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    shadowColor: "#282018",
+    shadowRadius: 1.5,
+    shadowOffset: { width: 0, height: 1.5 },
   },
 });

@@ -1,5 +1,17 @@
-import { Fraunces_700Bold, Fraunces_900Black } from "@expo-google-fonts/fraunces";
-import { Outfit_400Regular, Outfit_500Medium, Outfit_600SemiBold } from "@expo-google-fonts/outfit";
+import {
+  Fraunces_400Regular,
+  Fraunces_500Medium,
+  Fraunces_600SemiBold,
+  Fraunces_700Bold,
+  Fraunces_900Black,
+} from "@expo-google-fonts/fraunces";
+import {
+  Outfit_400Regular,
+  Outfit_500Medium,
+  Outfit_600SemiBold,
+  Outfit_700Bold,
+  Outfit_900Black,
+} from "@expo-google-fonts/outfit";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { useFonts } from "expo-font";
 import { Stack } from "expo-router";
@@ -21,6 +33,11 @@ export default function RootLayout() {
     Outfit_400Regular,
     Outfit_500Medium,
     Outfit_600SemiBold,
+    Outfit_700Bold,
+    Outfit_900Black,
+    Fraunces_400Regular,
+    Fraunces_500Medium,
+    Fraunces_600SemiBold,
     Fraunces_700Bold,
     Fraunces_900Black,
   });

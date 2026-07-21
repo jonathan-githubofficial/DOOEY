@@ -1,21 +1,24 @@
 import { ChevronRight, LogOut, Moon, Palette, Sun } from "lucide-react-native";
 import { useRouter } from "expo-router";
 import { useEffect, useRef } from "react";
-import { Animated, Pressable, StyleSheet, Text, View } from "react-native";
+import { Animated, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { AvatarDoodle } from "@/components/AvatarDoodle";
 import { Grain } from "@/components/grain";
+import { Masthead } from "@/components/Masthead";
 import { PressableScale } from "@/components/pressable-scale";
-import { Eyebrow, Panel } from "@/components/surface";
+import { Eyebrow, Panel, StampButton } from "@/components/surface";
 import { signOut } from "@/features/auth/api";
-import { alpha, fonts } from "@/lib/theme";
+import { PageDoodle } from "@/features/style/components/PageDoodle";
+import { alpha } from "@/lib/theme";
 import { useAuthStore } from "@/stores/auth";
-import { usePalette, useThemeStore } from "@/stores/theme";
+import { usePalette, useThemeStore, useType } from "@/stores/theme";
 
 /** The account space: your doodled self, email, appearance, the door to the
  * Style studio, and sign-out. The tab guard guarantees a session. */
 export default function Account() {
   const colors = usePalette();
+  const type = useType();
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const user = useAuthStore((s) => s.user);
@@ -23,47 +26,62 @@ export default function Account() {
   return (
     <View style={[styles.screen, { backgroundColor: colors.paper, paddingTop: insets.top + 12 }]}>
       <Grain />
-      <Text style={[styles.title, { color: colors.ink }]}>Account</Text>
+      <ScrollView
+        contentContainerStyle={[
+          styles.scrollContent,
+          { paddingBottom: Math.max(16, insets.bottom) + 96 },
+        ]}
+      >
+        <Masthead avatar={<PageDoodle page="account" />} title="Account" />
 
-      <Panel style={styles.panel}>
-        <Eyebrow>account</Eyebrow>
-        <View style={styles.identity}>
-          <AvatarDoodle />
-          <View style={styles.identityText}>
-            <Text style={[styles.email, { color: colors.ink }]} numberOfLines={1}>
-              {user?.email}
-            </Text>
-            <Text style={[styles.hint, { color: colors.inkMuted }]}>
-              Tap the doodle to redraw yourself.
-            </Text>
+        <Panel style={styles.panel}>
+          <Eyebrow>account</Eyebrow>
+          <View style={styles.identity}>
+            <AvatarDoodle />
+            <View style={styles.identityText}>
+              <Text numberOfLines={1} style={[styles.email, type.display, { color: colors.ink }]}>
+                {user?.email}
+              </Text>
+              <Text style={[styles.hint, type.sans, { color: colors.inkMuted }]}>
+                Tap the doodle to redraw yourself.
+              </Text>
+            </View>
           </View>
-        </View>
 
-        <View style={[styles.appearance, { borderTopColor: alpha(colors.rule, 0.5) }]}>
-          <Text style={[styles.appearanceLabel, { color: colors.ink }]}>Appearance</Text>
-          <ThemeToggle />
-        </View>
-
-        <PressableScale onPress={signOut} style={styles.signOut}>
-          <LogOut size={16} color={colors.inkMuted} />
-          <Text style={[styles.signOutLabel, { color: colors.inkMuted }]}>Sign out</Text>
-        </PressableScale>
-      </Panel>
-
-      <PressableScale scaleTo={0.98} onPress={() => router.push("/style")}>
-        <Panel style={styles.styleCard}>
-          <View style={[styles.styleIcon, { backgroundColor: alpha(colors.zest, 0.15) }]}>
-            <Palette size={20} color={colors.zest} />
-          </View>
-          <View style={styles.styleText}>
-            <Text style={[styles.styleTitle, { color: colors.ink }]}>Style studio</Text>
-            <Text style={[styles.styleSub, { color: colors.inkMuted }]}>
-              Colours, corners & grain — make DOOEY yours.
+          <View style={[styles.appearance, { borderTopColor: alpha(colors.rule, 0.5) }]}>
+            <Text style={[styles.appearanceLabel, type.sansMedium, { color: colors.ink }]}>
+              Appearance
             </Text>
+            <ThemeToggle />
           </View>
-          <ChevronRight size={16} color={colors.inkMuted} />
+
+          <View style={styles.signOutRow}>
+            <StampButton onPress={signOut}>
+              <LogOut size={16} color={colors.inkMuted} />
+              <Text style={[styles.signOutLabel, type.sansMedium, { color: colors.inkMuted }]}>
+                Sign out
+              </Text>
+            </StampButton>
+          </View>
         </Panel>
-      </PressableScale>
+
+        <PressableScale scaleTo={0.98} onPress={() => router.push("/style")}>
+          <Panel style={styles.styleCard}>
+            <View style={[styles.styleIcon, { backgroundColor: alpha(colors.zest, 0.15) }]}>
+              <Palette size={20} color={colors.zest} />
+            </View>
+            <View style={styles.styleText}>
+              <Text style={[styles.styleTitle, type.display, { color: colors.ink }]}>
+                Style studio
+              </Text>
+              <Text style={[styles.styleSub, type.sans, { color: colors.inkMuted }]}>
+                Colours, fonts, corners & grain — make DOOEY yours.
+              </Text>
+            </View>
+            <ChevronRight size={16} color={colors.inkMuted} />
+          </Panel>
+        </PressableScale>
+      </ScrollView>
     </View>
   );
 }
@@ -117,16 +135,13 @@ function ThemeToggle() {
 const styles = StyleSheet.create({
   screen: {
     flex: 1,
-    paddingHorizontal: 16,
   },
-  title: {
-    fontFamily: fonts.displayBlack,
-    fontSize: 34,
-    letterSpacing: -0.8,
-    paddingHorizontal: 4,
+  scrollContent: {
+    paddingHorizontal: 16,
+    paddingTop: 8,
   },
   panel: {
-    marginTop: 20,
+    marginTop: 24,
     padding: 28,
   },
   identity: {
@@ -140,13 +155,11 @@ const styles = StyleSheet.create({
     minWidth: 0,
   },
   email: {
-    fontFamily: fonts.display,
     fontSize: 22,
     letterSpacing: -0.4,
   },
   hint: {
     marginTop: 2,
-    fontFamily: fonts.sans,
     fontSize: 13,
   },
   appearance: {
@@ -158,18 +171,13 @@ const styles = StyleSheet.create({
     paddingTop: 20,
   },
   appearanceLabel: {
-    fontFamily: fonts.sansMedium,
     fontSize: 14,
   },
-  signOut: {
+  signOutRow: {
     marginTop: 20,
     flexDirection: "row",
-    alignItems: "center",
-    gap: 8,
-    alignSelf: "flex-start",
   },
   signOutLabel: {
-    fontFamily: fonts.sansMedium,
     fontSize: 13,
   },
   styleCard: {
@@ -191,13 +199,11 @@ const styles = StyleSheet.create({
     minWidth: 0,
   },
   styleTitle: {
-    fontFamily: fonts.display,
     fontSize: 18,
     letterSpacing: -0.3,
   },
   styleSub: {
     marginTop: 1,
-    fontFamily: fonts.sans,
     fontSize: 13,
   },
   toggle: {

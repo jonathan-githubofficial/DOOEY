@@ -60,12 +60,24 @@ export function useDayTasks(date: string) {
 export function useCreateTask() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: ({ title, due_date }: { title: string; due_date: string }) =>
+    mutationFn: ({
+      title,
+      description,
+      notes,
+      due_date,
+    }: {
+      title: string;
+      description?: string;
+      notes?: string;
+      due_date?: string;
+    }) =>
       pb.collection("tasks").create(
         {
           owner: pb.authStore.record!.id,
           title,
-          due_date,
+          description: description ?? "",
+          notes: notes ?? "",
+          due_date: due_date ?? "",
           sort_order: Date.now(),
         },
         { requestKey: null },

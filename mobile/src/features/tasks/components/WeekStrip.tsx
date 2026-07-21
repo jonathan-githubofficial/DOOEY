@@ -3,8 +3,8 @@ import { useState } from "react";
 import { Pressable, StyleSheet, Text, View } from "react-native";
 import { PressableScale } from "@/components/pressable-scale";
 import { addDays, localDate, mondayOf, toLocalNoon, weekOf } from "@/lib/dates";
-import { alpha, fonts } from "@/lib/theme";
-import { usePalette } from "@/stores/theme";
+import { alpha } from "@/lib/theme";
+import { usePalette, useType } from "@/stores/theme";
 
 /** The week ribbon: seven day chips in a pressed tray, chevrons to page weeks.
  * Today wears a zest dot. */
@@ -16,6 +16,7 @@ export function WeekStrip({
   onSelect: (date: string) => void;
 }) {
   const colors = usePalette();
+  const type = useType();
   const [weekAnchor, setWeekAnchor] = useState(selected);
   const days = weekOf(weekAnchor);
   const today = localDate();
@@ -29,7 +30,7 @@ export function WeekStrip({
   return (
     <View>
       <View style={styles.head}>
-        <Text style={[styles.month, { color: colors.ink }]}>
+        <Text style={[styles.month, type.display, { color: colors.ink }]}>
           {monthName} <Text style={{ color: colors.inkMuted }}>{yearName}</Text>
         </Text>
         {!todayInView && (
@@ -39,7 +40,9 @@ export function WeekStrip({
               onSelect(today);
             }}
           >
-            <Text style={[styles.backToToday, { color: colors.zest }]}>back to today</Text>
+            <Text style={[styles.backToToday, type.sansMedium, { color: colors.zest }]}>
+              back to today
+            </Text>
           </Pressable>
         )}
       </View>
@@ -72,6 +75,7 @@ export function WeekStrip({
                 <Text
                   style={[
                     styles.chipDow,
+                    type.sansMedium,
                     { color: isSelected ? colors.ink : colors.inkMuted },
                   ]}
                 >
@@ -80,12 +84,12 @@ export function WeekStrip({
                 <Text
                   style={[
                     styles.chipDate,
+                    type.display,
                     { color: isSelected ? colors.ink : colors.inkMuted },
-                    isToday && {
-                      fontFamily: fonts.displayBlack,
-                      fontSize: 22,
-                      color: isSelected ? colors.ink : colors.zest,
-                    },
+                    isToday && [
+                      type.displayBlack,
+                      { fontSize: 22, color: isSelected ? colors.ink : colors.zest },
+                    ],
                   ]}
                 >
                   {noon.getDate()}
@@ -129,12 +133,10 @@ const styles = StyleSheet.create({
     paddingHorizontal: 4,
   },
   month: {
-    fontFamily: fonts.display,
     fontSize: 14,
     letterSpacing: -0.2,
   },
   backToToday: {
-    fontFamily: fonts.sansMedium,
     fontSize: 10,
     letterSpacing: 1.8,
     textTransform: "uppercase",
@@ -160,13 +162,11 @@ const styles = StyleSheet.create({
     paddingVertical: 6,
   },
   chipDow: {
-    fontFamily: fonts.sansMedium,
     fontSize: 9,
     letterSpacing: 1.3,
     textTransform: "uppercase",
   },
   chipDate: {
-    fontFamily: fonts.display,
     fontSize: 18,
     letterSpacing: -0.3,
   },

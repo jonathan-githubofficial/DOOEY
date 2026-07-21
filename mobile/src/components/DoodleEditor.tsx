@@ -7,8 +7,8 @@ import { Grain } from "@/components/grain";
 import { PressableScale } from "@/components/pressable-scale";
 import { Eyebrow } from "@/components/surface";
 import { INK_COLORS, touchPct, type InkColor, type Stroke } from "@/lib/doodle";
-import { alpha, fonts, type Palette } from "@/lib/theme";
-import { usePalette } from "@/stores/theme";
+import { alpha, type Palette } from "@/lib/theme";
+import { usePalette, useType } from "@/stores/theme";
 
 /** How close (in % of the pad) the eraser has to pass to a point to remove it. */
 const ERASE_RADIUS = 5;
@@ -48,6 +48,7 @@ export function DoodleEditor({
   onClose: () => void;
 }) {
   const colors = usePalette();
+  const type = useType();
   const [strokes, setStrokes] = useState<Stroke[]>(initial);
   const [live, setLive] = useState<[number, number][] | null>(null);
   const [ink, setInk] = useState<InkColor>("ink");
@@ -177,7 +178,9 @@ export function DoodleEditor({
               />
             ))
           ) : (
-            <Text style={[styles.erasingLabel, { color: colors.inkMuted }]}>erasing</Text>
+            <Text style={[styles.erasingLabel, type.sansMedium, { color: colors.inkMuted }]}>
+              erasing
+            </Text>
           )}
         </View>
         <View style={styles.tools}>
@@ -293,7 +296,6 @@ const styles = StyleSheet.create({
     borderRadius: 999,
   },
   erasingLabel: {
-    fontFamily: fonts.sansMedium,
     fontSize: 10,
     letterSpacing: 1.4,
     textTransform: "uppercase",

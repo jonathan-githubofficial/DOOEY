@@ -14,13 +14,14 @@ import { Grain } from "@/components/grain";
 import { PressableScale } from "@/components/pressable-scale";
 import { Eyebrow, Panel } from "@/components/surface";
 import { signIn, signUp } from "@/features/auth/api";
-import { alpha, fonts } from "@/lib/theme";
+import { alpha, type Palette } from "@/lib/theme";
 import { useAuthStore } from "@/stores/auth";
-import { usePalette } from "@/stores/theme";
+import { usePalette, useType } from "@/stores/theme";
 
 /** The front door: just the wordmark and the sign-in card, centred on paper. */
 export default function Login() {
   const colors = usePalette();
+  const type = useType();
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
@@ -58,7 +59,7 @@ export default function Login() {
       ]}
     >
       <Grain />
-      <Text style={[styles.wordmark, { color: colors.ink }]}>
+      <Text style={[styles.wordmark, type.displayBlack, { color: colors.ink }]}>
         DOOEY
         <Text style={{ color: colors.zest }}>.</Text>
       </Text>
@@ -67,12 +68,12 @@ export default function Login() {
         <View style={styles.cardHead}>
           <Eyebrow>{mode === "in" ? "sign in" : "create account"}</Eyebrow>
           <Pressable onPress={() => setMode((m) => (m === "in" ? "up" : "in"))}>
-            <Text style={[styles.modeSwitch, { color: colors.zest }]}>
+            <Text style={[styles.modeSwitch, type.sansMedium, { color: colors.zest }]}>
               {mode === "in" ? "new here?" : "have an account?"}
             </Text>
           </Pressable>
         </View>
-        <Text style={[styles.heading, { color: colors.ink }]}>
+        <Text style={[styles.heading, type.display, { color: colors.ink }]}>
           {mode === "in" ? "Welcome back." : "Make it yours."}
         </Text>
 
@@ -85,7 +86,7 @@ export default function Login() {
             autoCapitalize="none"
             autoComplete="email"
             keyboardType="email-address"
-            style={[styles.input, inputColors(colors)]}
+            style={[styles.input, type.sans, inputColors(colors)]}
           />
           <TextInput
             value={password}
@@ -95,11 +96,11 @@ export default function Login() {
             placeholderTextColor={colors.inkMuted}
             secureTextEntry
             autoComplete={mode === "in" ? "current-password" : "new-password"}
-            style={[styles.input, inputColors(colors)]}
+            style={[styles.input, type.sans, inputColors(colors)]}
           />
         </View>
 
-        {error && <Text style={[styles.error, { color: colors.clay }]}>{error}</Text>}
+        {error && <Text style={[styles.error, type.sans, { color: colors.clay }]}>{error}</Text>}
 
         <PressableScale
           scaleTo={0.96}
@@ -111,7 +112,7 @@ export default function Login() {
             !canSubmit && { opacity: 0.4 },
           ]}
         >
-          <Text style={[styles.submitLabel, { color: colors.paper }]}>
+          <Text style={[styles.submitLabel, type.sansSemiBold, { color: colors.paper }]}>
             {busy ? "…" : mode === "in" ? "sign in" : "sign up"}
           </Text>
         </PressableScale>
@@ -120,7 +121,7 @@ export default function Login() {
   );
 }
 
-function inputColors(colors: ReturnType<typeof usePalette>) {
+function inputColors(colors: Palette) {
   return {
     color: colors.ink,
     backgroundColor: colors.paper,
@@ -135,7 +136,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
   },
   wordmark: {
-    fontFamily: fonts.displayBlack,
     fontSize: 30,
     letterSpacing: -0.6,
     textAlign: "center",
@@ -150,14 +150,12 @@ const styles = StyleSheet.create({
     justifyContent: "space-between",
   },
   modeSwitch: {
-    fontFamily: fonts.sansMedium,
     fontSize: 10,
     letterSpacing: 2.2,
     textTransform: "uppercase",
   },
   heading: {
     marginTop: 8,
-    fontFamily: fonts.display,
     fontSize: 30,
     letterSpacing: -0.6,
   },
@@ -170,12 +168,10 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     borderWidth: 1,
     paddingHorizontal: 12,
-    fontFamily: fonts.sans,
     fontSize: 15,
   },
   error: {
     marginTop: 12,
-    fontFamily: fonts.sans,
     fontSize: 12,
   },
   submit: {
@@ -186,7 +182,6 @@ const styles = StyleSheet.create({
     paddingVertical: 10,
   },
   submitLabel: {
-    fontFamily: fonts.sansSemiBold,
     fontSize: 13,
     letterSpacing: 0.4,
   },
