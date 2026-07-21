@@ -2,6 +2,7 @@ import type { PropsWithChildren } from "react";
 import { StyleSheet, Text, View, type StyleProp, type TextStyle, type ViewStyle } from "react-native";
 import { Grain } from "@/components/grain";
 import { PressableScale } from "@/components/pressable-scale";
+import { StampEdge } from "@/components/stamp-edge";
 import { useCardRadius, useShadow } from "@/features/style/store";
 import { alpha } from "@/lib/theme";
 import { usePalette, useThemeStore, useType } from "@/stores/theme";
@@ -74,8 +75,8 @@ export function Stamp({
   );
 }
 
-/** A button in postage-stamp spirit — RN can't punch the perforated mask, so a
- * dashed border reads as the perforation. Grained fill, spring press. */
+/** A button shaped like a postage stamp — perforated edges punched with an
+ * SVG mask, exactly like the web's CSS-mask stamp. Spring press. */
 export function StampButton({
   onPress,
   accent,
@@ -97,17 +98,14 @@ export function StampButton({
       disabled={disabled}
       style={[
         styles.stampBtn,
-        {
-          backgroundColor: accent ? colors.zest : colors.surface,
-          borderColor: accent ? alpha(colors.paper, 0.7) : alpha(colors.inkMuted, 0.5),
-          shadowOpacity: 0.2 * shadow,
-          elevation: Math.round(2 * shadow),
-        },
+        // iOS shadows trace the layer's alpha, so the soft shadow follows the
+        // perforated silhouette; Android's elevation stays rectangular.
+        { shadowOpacity: 0.2 * shadow, elevation: Math.round(2 * shadow) },
         disabled && { opacity: 0.4 },
         style,
       ]}
     >
-      <Grain radius={7} />
+      <StampEdge color={accent ? colors.zest : colors.surface} />
       {children}
     </PressableScale>
   );
@@ -150,11 +148,8 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     gap: 8,
-    borderWidth: 1.5,
-    borderStyle: "dashed",
-    borderRadius: 8,
     paddingHorizontal: 16,
-    paddingVertical: 8,
+    paddingVertical: 9,
     shadowColor: "#282018",
     shadowRadius: 1.5,
     shadowOffset: { width: 0, height: 1.5 },

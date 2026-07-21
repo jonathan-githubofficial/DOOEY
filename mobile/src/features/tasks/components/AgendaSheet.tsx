@@ -266,40 +266,46 @@ function DraggableRow({
         exiting={FadeOut.duration(150)}
         style={[styles.row, rowStyle, { shadowColor: "#282018" }]}
       >
-        <Check
-          done={false}
-          gate={task.gate}
-          label={`Mark "${task.title}" done`}
-          size={22}
-          onToggle={() =>
-            update.mutate({ id, patch: { done_at: new Date().toISOString() } })
-          }
-        />
-        <Pressable style={styles.rowBody} onPress={() => router.push(`/task/${id}`)}>
-          <View style={styles.rowTitleLine}>
-            {task.gate && <Text style={{ color: colors.zest }}>⛳</Text>}
-            <Text numberOfLines={1} style={[styles.rowTitle, type.sans, { color: colors.ink }]}>
-              {task.title}
-            </Text>
-            {due && due.tone !== "future" && <DueChip due={due} />}
+        {/* The WHOLE row opens the task's page; the check and the trash are
+            nested pressables, so they win their own taps. Holding anywhere
+            lifts the row for a drag. */}
+        <Pressable style={styles.rowPress} onPress={() => router.push(`/task/${id}`)}>
+          <Check
+            done={false}
+            gate={task.gate}
+            label={`Mark "${task.title}" done`}
+            size={22}
+            onToggle={() =>
+              update.mutate({ id, patch: { done_at: new Date().toISOString() } })
+            }
+          />
+          <View style={styles.rowBody}>
+            <View style={styles.rowTitleLine}>
+              {task.gate && <Text style={{ color: colors.zest }}>⛳</Text>}
+              <Text numberOfLines={1} style={[styles.rowTitle, type.sans, { color: colors.ink }]}>
+                {task.title}
+              </Text>
+              {due && due.tone !== "future" && <DueChip due={due} />}
+            </View>
+            {!!task.description && (
+              <Text numberOfLines={1} style={[styles.rowSub, type.sans, { color: colors.inkMuted }]}>
+                {task.description}
+              </Text>
+            )}
           </View>
-          {!!task.description && (
-            <Text numberOfLines={1} style={[styles.rowSub, type.sans, { color: colors.inkMuted }]}>
-              {task.description}
-            </Text>
-          )}
-        </Pressable>
-        <Pressable
-          accessibilityLabel={`Delete "${task.title}"`}
-          hitSlop={8}
-          onPress={() =>
-            Alert.alert("Delete task", `Delete "${task.title}"?`, [
-              { text: "Cancel", style: "cancel" },
-              { text: "Delete", style: "destructive", onPress: () => del.mutate(id) },
-            ])
-          }
-        >
-          <Trash2 size={14} color={alpha(colors.inkMuted, 0.35)} />
+          <Pressable
+            accessibilityLabel={`Delete "${task.title}"`}
+            hitSlop={10}
+            onPress={() =>
+              Alert.alert("Delete task", `Delete "${task.title}"?`, [
+                { text: "Cancel", style: "cancel" },
+                { text: "Delete", style: "destructive", onPress: () => del.mutate(id) },
+              ])
+            }
+            style={styles.rowTrash}
+          >
+            <Trash2 size={14} color={alpha(colors.inkMuted, 0.35)} />
+          </Pressable>
         </Pressable>
       </Animated.View>
     </GestureDetector>
@@ -316,15 +322,14 @@ function DoneTaskRow({ task }: { task: Task }) {
       layout={settle}
       entering={FadeIn.duration(180)}
       exiting={FadeOut.duration(150)}
-      style={styles.doneRow}
     >
-      <Check
-        done
-        label={`Mark "${task.title}" not done`}
-        size={22}
-        onToggle={() => update.mutate({ id: task.id, patch: { done_at: "" } })}
-      />
-      <Pressable style={styles.rowBody} onPress={() => router.push(`/task/${task.id}`)}>
+      <Pressable style={styles.doneRow} onPress={() => router.push(`/task/${task.id}`)}>
+        <Check
+          done
+          label={`Mark "${task.title}" not done`}
+          size={22}
+          onToggle={() => update.mutate({ id: task.id, patch: { done_at: "" } })}
+        />
         <Text
           numberOfLines={1}
           style={[styles.rowTitle, styles.rowDone, type.sans, { color: colors.inkMuted }]}
@@ -433,14 +438,23 @@ const styles = StyleSheet.create({
     left: -8,
     right: -8,
     height: ROW_H,
+    borderRadius: 14,
+    shadowRadius: 12,
+    shadowOffset: { width: 0, height: 6 },
+  },
+  rowPress: {
+    flex: 1,
     flexDirection: "row",
     alignItems: "center",
     gap: 10,
     paddingLeft: 12,
-    paddingRight: 10,
-    borderRadius: 14,
-    shadowRadius: 12,
-    shadowOffset: { width: 0, height: 6 },
+    paddingRight: 4,
+  },
+  rowTrash: {
+    height: ROW_H,
+    width: 36,
+    alignItems: "center",
+    justifyContent: "center",
   },
   doneRow: {
     flexDirection: "row",

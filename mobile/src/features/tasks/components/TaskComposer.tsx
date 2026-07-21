@@ -21,6 +21,7 @@ import Animated, {
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Grain } from "@/components/grain";
 import { PressableScale } from "@/components/pressable-scale";
+import { StampEdge } from "@/components/stamp-edge";
 import { Eyebrow } from "@/components/surface";
 import { useShadow } from "@/features/style/store";
 import { localDate, toLocalNoon, toPbDate } from "@/lib/dates";
@@ -64,14 +65,12 @@ export function TaskComposer({ date }: { date: string }) {
           styles.stampFab,
           {
             bottom: Math.max(16, insets.bottom) + 64,
-            backgroundColor: colors.zest,
-            borderColor: alpha(colors.paper, 0.7),
             shadowOpacity: 0.25 * shadow,
             elevation: Math.round(4 * shadow),
           },
         ]}
       >
-        <Grain radius={9} />
+        <StampEdge color={colors.zest} />
         <Plus size={24} strokeWidth={2.6} color={colors.paper} />
       </PressableScale>
 
@@ -285,9 +284,6 @@ const styles = StyleSheet.create({
     width: 56,
     alignItems: "center",
     justifyContent: "center",
-    borderWidth: 1.5,
-    borderStyle: "dashed",
-    borderRadius: 10,
     transform: [{ rotate: "-4deg" }],
     shadowColor: "#282018",
     shadowRadius: 4,

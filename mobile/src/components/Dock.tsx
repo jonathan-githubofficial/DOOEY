@@ -10,12 +10,13 @@ import {
 import { useEffect, useRef } from "react";
 import { Pressable, StyleSheet, Text, View, type LayoutChangeEvent } from "react-native";
 import Animated, {
+  Easing,
   FadeIn,
   FadeOut,
   LinearTransition,
   useAnimatedStyle,
   useSharedValue,
-  withSpring,
+  withTiming,
 } from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { DoodleSvg } from "@/components/DoodleSvg";
@@ -26,8 +27,9 @@ import { alpha } from "@/lib/theme";
 import { useAuthStore } from "@/stores/auth";
 import { usePalette, useThemeStore, useType } from "@/stores/theme";
 
-const GLIDE = { stiffness: 480, damping: 34 };
-const settle = LinearTransition.springify().stiffness(380).damping(32);
+// A pure deceleration curve — the pill glides and stops dead, no overshoot.
+const GLIDE = { duration: 260, easing: Easing.bezier(0.2, 0, 0, 1) };
+const settle = LinearTransition.duration(200).easing(Easing.bezier(0.2, 0, 0, 1));
 
 type TabBarProps = Parameters<NonNullable<React.ComponentProps<typeof Tabs>["tabBar"]>>[0];
 
@@ -71,8 +73,8 @@ export function Dock({ state, navigation }: TabBarProps) {
     const s = stops.current[key];
     if (!s) return;
     if (animate && placed.current) {
-      pillX.value = withSpring(s.x, GLIDE);
-      pillW.value = withSpring(s.width, GLIDE);
+      pillX.value = withTiming(s.x, GLIDE);
+      pillW.value = withTiming(s.width, GLIDE);
     } else {
       pillX.value = s.x;
       pillW.value = s.width;
