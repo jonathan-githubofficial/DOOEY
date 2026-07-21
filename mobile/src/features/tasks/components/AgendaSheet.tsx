@@ -1,7 +1,15 @@
 import { useRouter } from "expo-router";
 import { Trash2 } from "lucide-react-native";
-import { useEffect, useMemo, useState } from "react";
-import { Platform, Pressable, StyleSheet, Text, View, type ViewStyle } from "react-native";
+import { useEffect, useMemo, useRef, useState } from "react";
+import {
+  Platform,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Text,
+  View,
+  type ViewStyle,
+} from "react-native";
 import { Gesture, GestureDetector } from "react-native-gesture-handler";
 import Animated, {
   FadeIn,
@@ -41,7 +49,7 @@ const rowHeight = (t: Task) =>
 
 /** One planner page: the day's open tasks in a hold-to-drag reorderable list,
  * and the day's done pile. Rows open the task's page. */
-export function AgendaSheet({ date }: { date: string }) {
+export function AgendaSheet({ date, height }: { date: string; height?: number }) {
   const colors = usePalette();
   const type = useType();
   const { data: tasks, isPending, error } = useDayTasks(date);
@@ -49,44 +57,63 @@ export function AgendaSheet({ date }: { date: string }) {
   const open = useMemo(() => (tasks ?? []).filter((t) => !t.done_at), [tasks]);
   const done = (tasks ?? []).filter((t) => t.done_at);
 
+  const body = (
+    <>
+      {error && (
+        <View
+          style={[
+            styles.errorBox,
+            { borderColor: alpha(colors.clay, 0.4), backgroundColor: alpha(colors.clay, 0.1) },
+          ]}
+        >
+          <Text style={[styles.errorText, type.sans, { color: colors.ink }]}>
+            Couldn't load this day. {error.message}
+          </Text>
+        </View>
+      )}
+      {isPending && !error && <GhostLines />}
+
+      {tasks && (
+        <>
+          <ReorderableRows rows={open} date={date} />
+
+          {open.length === 0 && done.length === 0 && (
+            <Text style={[styles.empty, type.sans, { color: colors.inkMuted }]}>
+              Nothing planned — the day is yours.
+            </Text>
+          )}
+
+          {done.length > 0 && (
+            <Animated.View layout={settle} style={styles.donePile}>
+              <Eyebrow>done</Eyebrow>
+              {done.map((t) => (
+                <DoneTaskRow key={t.id} task={t} />
+              ))}
+            </Animated.View>
+          )}
+        </>
+      )}
+    </>
+  );
+
   return (
     <View>
-      <Panel style={styles.sheet}>
+      <Panel style={[styles.sheet, height != null && { height }]}>
         <SheetHeading date={date} count={open.length} />
-
-        {error && (
-          <View
-            style={[
-              styles.errorBox,
-              { borderColor: alpha(colors.clay, 0.4), backgroundColor: alpha(colors.clay, 0.1) },
-            ]}
+        {height != null ? (
+          // Pinned page: the heading stays inked at the top, the day's list
+          // scrolls inside the paper. The scroller spans the panel's full
+          // width so rows bleeding past the padding aren't clipped.
+          <ScrollView
+            nestedScrollEnabled
+            style={styles.sheetScroll}
+            contentContainerStyle={styles.sheetScrollContent}
+            keyboardShouldPersistTaps="handled"
           >
-            <Text style={[styles.errorText, type.sans, { color: colors.ink }]}>
-              Couldn't load this day. {error.message}
-            </Text>
-          </View>
-        )}
-        {isPending && !error && <GhostLines />}
-
-        {tasks && (
-          <>
-            <ReorderableRows rows={open} date={date} />
-
-            {open.length === 0 && done.length === 0 && (
-              <Text style={[styles.empty, type.sans, { color: colors.inkMuted }]}>
-                Nothing planned — the day is yours.
-              </Text>
-            )}
-
-            {done.length > 0 && (
-              <Animated.View layout={settle} style={styles.donePile}>
-                <Eyebrow>done</Eyebrow>
-                {done.map((t) => (
-                  <DoneTaskRow key={t.id} task={t} />
-                ))}
-              </Animated.View>
-            )}
-          </>
+            {body}
+          </ScrollView>
+        ) : (
+          body
         )}
       </Panel>
 
@@ -236,6 +263,16 @@ function DraggableRow({
   const startY = useSharedValue(0);
   const reveal = useSharedValue(0);
   const revealStart = useSharedValue(0);
+  // On the web the click fires AFTER the drag releases — swallow it, or every
+  // drop also opens the task's page.
+  const justDragged = useRef(false);
+  const endDrag = () => {
+    onDrop(id);
+    justDragged.current = true;
+    setTimeout(() => {
+      justDragged.current = false;
+    }, 250);
+  };
 
   const lift = Gesture.Pan()
     .activateAfterLongPress(220)
@@ -276,9 +313,13 @@ function DraggableRow({
         positions.value = next;
       }
     })
+    // onEnd, not onFinalize: only a drag that actually lifted commits an
+    // order — a plain tap must not touch sort_order at all.
+    .onEnd(() => {
+      runOnJS(endDrag)();
+    })
     .onFinalize(() => {
       dragging.value = false;
-      runOnJS(onDrop)(id);
     });
 
   // Swipe the row LEFT to bare its delete on the right, iOS-style (native
@@ -397,6 +438,7 @@ function DraggableRow({
                 web && ({ cursor: "grab" } as unknown as ViewStyle),
               ]}
               onPress={() => {
+                if (justDragged.current) return;
                 if (!web && reveal.value > 0) closeReveal();
                 else router.push(`/task/${id}`);
               }}
@@ -551,6 +593,15 @@ const styles = StyleSheet.create({
   sheet: {
     padding: 20,
     paddingTop: 36,
+  },
+  sheetScroll: {
+    flex: 1,
+    marginHorizontal: -20,
+    marginBottom: -20,
+  },
+  sheetScrollContent: {
+    paddingHorizontal: 20,
+    paddingBottom: 24,
   },
   holesRow: {
     position: "absolute",

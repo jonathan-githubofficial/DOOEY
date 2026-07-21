@@ -75,6 +75,7 @@ export default function Planner() {
   // Two fingers zoom the time axis, exactly like the legacy web grid.
   const pinchBase = useRef(PX_DEFAULT);
   const pinch = Gesture.Pinch()
+    .enabled(mode !== "agenda")
     .runOnJS(true)
     .onStart(() => {
       pinchBase.current = px;
@@ -89,20 +90,20 @@ export default function Planner() {
       <Grain />
       <Animated.View layout={settle} style={styles.strip}>
         <Panel style={styles.stripPanel}>
-          <View style={styles.shelfTop}>
-            <ModeToggle
-              mode={mode}
-              onChange={(m) => {
-                hapticTap();
-                setMode(m);
-              }}
-            />
-          </View>
           <Animated.View key={shelf} entering={FadeIn.duration(180)}>
             {shelf === "week" ? (
               <WeekStrip
                 selected={selected}
                 onSelect={select}
+                leading={
+                  <ModeToggle
+                    mode={mode}
+                    onChange={(m) => {
+                      hapticTap();
+                      setMode(m);
+                    }}
+                  />
+                }
                 onToggleView={() => {
                   setMonth(selected.slice(0, 7));
                   setShelf("month");
@@ -124,65 +125,50 @@ export default function Planner() {
         </Panel>
       </Animated.View>
 
-      {mode === "agenda" ? (
-        // The agenda page scrolls as a whole — it's a sheet of paper.
-        <Animated.View layout={settle} style={styles.body}>
-          <ScrollView
-            style={styles.body}
-            contentContainerStyle={[
-              styles.agendaContent,
-              { paddingBottom: Math.max(16, insets.bottom) + 128 },
-            ]}
-            keyboardShouldPersistTaps="handled"
-          >
+      {/* Every view lives in a pinned frame: the shelf and the page stay put,
+          only the page's own content scrolls. */}
+      <GestureDetector gesture={pinch}>
+        <Animated.View
+          layout={settle}
+          collapsable={false}
+          style={[styles.body, { paddingBottom: Math.max(16, insets.bottom) + 56 }]}
+          onLayout={(e) => setVh(e.nativeEvent.layout.height)}
+        >
+          {vh > 0 && mode !== "week" && (
             <PlannerBook
               page={selected}
               direction={direction}
-              renderPage={(d) => <AgendaSheet date={d} />}
-            />
-          </ScrollView>
-        </Animated.View>
-      ) : (
-        // The time grids stay put and scroll their hours INSIDE the page.
-        <GestureDetector gesture={pinch}>
-          <Animated.View
-            layout={settle}
-            collapsable={false}
-            style={[styles.timeArea, { paddingBottom: Math.max(16, insets.bottom) + 56 }]}
-            onLayout={(e) => setVh(e.nativeEvent.layout.height)}
-          >
-            {vh > 0 && mode === "day" && (
-              <PlannerBook
-                page={selected}
-                direction={direction}
-                renderPage={(d) => (
+              renderPage={(d) =>
+                mode === "agenda" ? (
+                  <AgendaSheet date={d} height={pageH} />
+                ) : (
                   <View style={{ height: pageH }}>
                     <ScrollView nestedScrollEnabled contentContainerStyle={styles.gridScroll}>
                       <TimeboxSheet date={d} pxPerMin={px} onAddSlot={openSlot} />
                     </ScrollView>
                   </View>
-                )}
-              />
-            )}
-            {vh > 0 && mode === "week" && (
-              <Animated.View key={selected} entering={FadeIn.duration(200)}>
-                <Panel style={[styles.gridPanel, { height: vh }]}>
-                  <ScrollView nestedScrollEnabled contentContainerStyle={styles.gridScroll}>
-                    <WeekGrid
-                      anchor={selected}
-                      pxPerMin={px}
-                      onPickDay={(d) => {
-                        select(d);
-                        setMode("day");
-                      }}
-                    />
-                  </ScrollView>
-                </Panel>
-              </Animated.View>
-            )}
-          </Animated.View>
-        </GestureDetector>
-      )}
+                )
+              }
+            />
+          )}
+          {vh > 0 && mode === "week" && (
+            <Animated.View key={selected} entering={FadeIn.duration(200)}>
+              <Panel style={[styles.gridPanel, { height: vh }]}>
+                <ScrollView nestedScrollEnabled contentContainerStyle={styles.gridScroll}>
+                  <WeekGrid
+                    anchor={selected}
+                    pxPerMin={px}
+                    onPickDay={(d) => {
+                      select(d);
+                      setMode("day");
+                    }}
+                  />
+                </ScrollView>
+              </Panel>
+            </Animated.View>
+          )}
+        </Animated.View>
+      </GestureDetector>
 
       {/* Mouse users can't pinch — the web keeps the zoom stepper. */}
       {mode !== "agenda" && Platform.OS === "web" && (
@@ -284,11 +270,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     paddingVertical: 10,
   },
-  shelfTop: {
-    flexDirection: "row",
-    paddingHorizontal: 4,
-    paddingBottom: 10,
-  },
   toggleWell: {
     flexDirection: "row",
     borderRadius: 999,
@@ -307,13 +288,6 @@ const styles = StyleSheet.create({
     paddingLeft: 6,
   },
   body: {
-    flex: 1,
-  },
-  agendaContent: {
-    paddingHorizontal: 16,
-    paddingTop: 24,
-  },
-  timeArea: {
     flex: 1,
     paddingHorizontal: 16,
     paddingTop: 24,

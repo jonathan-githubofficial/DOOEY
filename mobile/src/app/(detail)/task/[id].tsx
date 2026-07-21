@@ -1,5 +1,16 @@
 import { useLocalSearchParams, useRouter } from "expo-router";
-import { ChevronLeft, Link2, Paperclip, Play, Plus, Trash2, X } from "lucide-react-native";
+import {
+  ChevronLeft,
+  Link2,
+  ListChecks,
+  Paperclip,
+  Play,
+  Plus,
+  StickyNote,
+  Trash2,
+  X,
+  type LucideIcon,
+} from "lucide-react-native";
 import { useState } from "react";
 import {
   Alert,
@@ -20,6 +31,7 @@ import { Eyebrow, Panel, Stamp } from "@/components/surface";
 import { attachmentUrl, useDeleteTask, useTask, useUpdateTask } from "@/features/tasks/api";
 import type { ChecklistItem, Resource, Task } from "@/features/tasks/types";
 import { dateOnly, toLocalNoon } from "@/lib/dates";
+import { hapticTap } from "@/lib/haptics";
 import { alpha } from "@/lib/theme";
 import { usePalette, useType } from "@/stores/theme";
 
@@ -77,17 +89,88 @@ export default function TaskPage() {
           )}
         </View>
 
-        {task && (
-          <Animated.View entering={FadeIn.duration(200)}>
-            <TaskHead task={task} />
-            <NotesSection task={task} />
-            <ChecklistSection task={task} />
-            <ResourcesSection task={task} />
-            <AttachmentsSection task={task} />
-          </Animated.View>
-        )}
+        {task && <TaskBody task={task} />}
       </ScrollView>
     </View>
+  );
+}
+
+const SECTIONS = [
+  { key: "notes", label: "Notes", icon: StickyNote },
+  { key: "checklist", label: "Checklist", icon: ListChecks },
+  { key: "resources", label: "Resources", icon: Link2 },
+] as const;
+type SectionKey = (typeof SECTIONS)[number]["key"];
+
+/** The page body, legacy-web style: sections only exist once they hold
+ * something — the empty ones wait behind a row of dashed add-keys. */
+function TaskBody({ task }: { task: Task }) {
+  const [opened, setOpened] = useState<Set<SectionKey>>(new Set());
+
+  const visible: Record<SectionKey, boolean> = {
+    notes: !!task.notes || opened.has("notes"),
+    checklist: task.checklist.length > 0 || opened.has("checklist"),
+    resources: task.resources.length > 0 || opened.has("resources"),
+  };
+  const missing = SECTIONS.filter(({ key }) => !visible[key]);
+
+  return (
+    <Animated.View entering={FadeIn.duration(200)}>
+      <TaskHead task={task} />
+      {visible.notes && <NotesSection task={task} autoFocus={opened.has("notes") && !task.notes} />}
+      {visible.checklist && (
+        <ChecklistSection
+          task={task}
+          autoFocus={opened.has("checklist") && task.checklist.length === 0}
+        />
+      )}
+      {visible.resources && (
+        <ResourcesSection
+          task={task}
+          autoFocus={opened.has("resources") && task.resources.length === 0}
+        />
+      )}
+      {task.attachments.length > 0 && <AttachmentsSection task={task} />}
+
+      {missing.length > 0 && (
+        <View style={styles.addKeys}>
+          {missing.map(({ key, label, icon }) => (
+            <AddSectionKey
+              key={key}
+              label={label}
+              icon={icon}
+              onPress={() => {
+                hapticTap();
+                setOpened((s) => new Set(s).add(key));
+              }}
+            />
+          ))}
+        </View>
+      )}
+    </Animated.View>
+  );
+}
+
+/** A dashed, waiting circle — tap it and the section takes its place. */
+function AddSectionKey({
+  label,
+  icon: IconGlyph,
+  onPress,
+}: {
+  label: string;
+  icon: LucideIcon;
+  onPress: () => void;
+}) {
+  const colors = usePalette();
+  return (
+    <PressableScale
+      scaleTo={0.85}
+      accessibilityLabel={`Add ${label.toLowerCase()}`}
+      onPress={onPress}
+      style={[styles.addKey, { borderColor: alpha(colors.rule, 0.9) }]}
+    >
+      <IconGlyph size={14} color={alpha(colors.inkMuted, 0.6)} />
+    </PressableScale>
   );
 }
 
@@ -150,7 +233,7 @@ function TaskHead({ task }: { task: Task }) {
   );
 }
 
-function NotesSection({ task }: { task: Task }) {
+function NotesSection({ task, autoFocus }: { task: Task; autoFocus?: boolean }) {
   const colors = usePalette();
   const type = useType();
   const update = useUpdateTask();
@@ -159,6 +242,7 @@ function NotesSection({ task }: { task: Task }) {
     <Panel style={styles.panel}>
       <Eyebrow>notes</Eyebrow>
       <TextInput
+        autoFocus={autoFocus}
         value={notes}
         onChangeText={setNotes}
         onEndEditing={() => {
@@ -173,7 +257,7 @@ function NotesSection({ task }: { task: Task }) {
   );
 }
 
-function ChecklistSection({ task }: { task: Task }) {
+function ChecklistSection({ task, autoFocus }: { task: Task; autoFocus?: boolean }) {
   const colors = usePalette();
   const type = useType();
   const update = useUpdateTask();
@@ -234,6 +318,7 @@ function ChecklistSection({ task }: { task: Task }) {
       </View>
       <View style={styles.addRow}>
         <TextInput
+          autoFocus={autoFocus}
           value={draft}
           onChangeText={setDraft}
           onSubmitEditing={add}
@@ -261,7 +346,7 @@ function ChecklistSection({ task }: { task: Task }) {
   );
 }
 
-function ResourcesSection({ task }: { task: Task }) {
+function ResourcesSection({ task, autoFocus }: { task: Task; autoFocus?: boolean }) {
   const colors = usePalette();
   const type = useType();
   const update = useUpdateTask();
@@ -311,6 +396,7 @@ function ResourcesSection({ task }: { task: Task }) {
       </View>
       <View style={styles.addRow}>
         <TextInput
+          autoFocus={autoFocus}
           value={draft}
           onChangeText={setDraft}
           onSubmitEditing={add}
@@ -421,4 +507,19 @@ const styles = StyleSheet.create({
     borderRadius: 999,
   },
   attachHint: { marginTop: 8, fontSize: 11 },
+  addKeys: {
+    marginTop: 16,
+    flexDirection: "row",
+    gap: 8,
+    paddingHorizontal: 4,
+  },
+  addKey: {
+    height: 32,
+    width: 32,
+    alignItems: "center",
+    justifyContent: "center",
+    borderRadius: 999,
+    borderWidth: 1,
+    borderStyle: "dashed",
+  },
 });

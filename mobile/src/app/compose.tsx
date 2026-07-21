@@ -17,7 +17,8 @@ export default function Compose() {
   if (!isAuthenticated) return <Redirect href="/login" />;
 
   return (
-    <View style={[styles.sheet, { paddingBottom: Math.max(24, insets.bottom + 8) }]}>
+    // The sheet hugs its content — a big bottom pad reads as dead space.
+    <View style={[styles.sheet, { paddingBottom: Math.max(12, insets.bottom) }]}>
       <Grain radius={24} />
       <ComposerForm
         date={date ?? localDate()}

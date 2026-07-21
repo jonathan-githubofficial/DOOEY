@@ -1,5 +1,5 @@
 import { ChevronDown, ChevronLeft, ChevronRight } from "lucide-react-native";
-import { useState } from "react";
+import { useState, type ReactNode } from "react";
 import { Pressable, StyleSheet, Text, View } from "react-native";
 import { PressableScale } from "@/components/pressable-scale";
 import { addDays, localDate, mondayOf, toLocalNoon, weekOf } from "@/lib/dates";
@@ -7,15 +7,19 @@ import { alpha } from "@/lib/theme";
 import { usePalette, useType } from "@/stores/theme";
 
 /** The week ribbon: seven day chips in a pressed tray, chevrons to page weeks.
- * Today wears a zest dot; the chevron on the right unfolds the whole month. */
+ * Today wears a zest dot; the chevron on the right unfolds the whole month.
+ * The head row hosts `leading` (the view keys) on the left and the month +
+ * year beside the unfold chevron on the right — one row, no stacking. */
 export function WeekStrip({
   selected,
   onSelect,
   onToggleView,
+  leading,
 }: {
   selected: string;
   onSelect: (date: string) => void;
   onToggleView: () => void;
+  leading?: ReactNode;
 }) {
   const colors = usePalette();
   const type = useType();
@@ -32,9 +36,7 @@ export function WeekStrip({
   return (
     <View>
       <View style={styles.head}>
-        <Text style={[styles.month, type.display, { color: colors.ink }]}>
-          {monthName} <Text style={{ color: colors.inkMuted }}>{yearName}</Text>
-        </Text>
+        {leading}
         <View style={styles.headRight}>
           {!todayInView && (
             <Pressable
@@ -48,6 +50,9 @@ export function WeekStrip({
               </Text>
             </Pressable>
           )}
+          <Text style={[styles.month, type.display, { color: colors.ink }]}>
+            {monthName} <Text style={{ color: colors.inkMuted }}>{yearName}</Text>
+          </Text>
           <PressableScale
             scaleTo={0.85}
             accessibilityLabel="Open the month"

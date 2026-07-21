@@ -1,5 +1,6 @@
+import DateTimePicker, { DateTimePickerAndroid } from "@react-native-community/datetimepicker";
 import { useRouter } from "expo-router";
-import { Plus, StickyNote, X } from "lucide-react-native";
+import { CalendarClock, Plus, StickyNote, X } from "lucide-react-native";
 import { useState } from "react";
 import {
   KeyboardAvoidingView,
@@ -26,7 +27,7 @@ import { PressableScale } from "@/components/pressable-scale";
 import { StampEdge } from "@/components/stamp-edge";
 import { Eyebrow } from "@/components/surface";
 import { useShadow } from "@/features/style/store";
-import { localDate, toLocalNoon, toPbDate } from "@/lib/dates";
+import { addDays, localDate, pad2, toLocalNoon, toPbDate } from "@/lib/dates";
 import { hapticSuccess, hapticTap } from "@/lib/haptics";
 import { alpha } from "@/lib/theme";
 import { usePalette, useType } from "@/stores/theme";
@@ -164,12 +165,57 @@ export function ComposerForm({
   const [showNotes, setShowNotes] = useState(false);
   const [start, setStart] = useState<number | null>(initialStart ?? null);
   const [dur, setDur] = useState(60);
+  // Where the task lands: null = the viewed day's default; the chips and the
+  // native picker override it.
+  const [due, setDue] = useState<string | null>(null);
+  const [showPicker, setShowPicker] = useState(false);
 
-  const dayLabel = toLocalNoon(date).toLocaleDateString("en", {
+  const today = localDate();
+  const effDate = due ?? date;
+  const dayLabel = toLocalNoon(effDate).toLocaleDateString("en", {
     weekday: "short",
     month: "short",
     day: "numeric",
   });
+
+  const applyPick = (d: Date) => {
+    setDue(`${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`);
+    setStart(d.getHours() * 60 + d.getMinutes());
+  };
+  // The picker starts from what's chosen, or the next round hour today.
+  const pickValue = (() => {
+    const v = toLocalNoon(effDate);
+    if (start != null) v.setHours(Math.floor(start / 60), start % 60, 0, 0);
+    else v.setHours(new Date().getHours() + 1, 0, 0, 0);
+    return v;
+  })();
+
+  const pickDay = (d: string) => {
+    hapticTap();
+    setDue((cur) => (cur === d ? null : d));
+  };
+  const openClock = () => {
+    hapticTap();
+    if (Platform.OS === "android") {
+      // Android has no combined picker — date dialog, then time dialog.
+      DateTimePickerAndroid.open({
+        value: pickValue,
+        mode: "date",
+        onChange: (e, day) => {
+          if (e.type !== "set" || !day) return;
+          DateTimePickerAndroid.open({
+            value: day,
+            mode: "time",
+            onChange: (e2, when) => {
+              if (e2.type === "set" && when) applyPick(when);
+            },
+          });
+        },
+      });
+    } else {
+      setShowPicker((s) => !s);
+    }
+  };
 
   const submit = () => {
     if (!title.trim()) return;
@@ -180,7 +226,14 @@ export function ComposerForm({
       notes: notes.trim() || undefined,
       // A timed task must belong to a day; otherwise the viewed day is the
       // default due date and plain "today" needs none.
-      due_date: start != null ? toPbDate(date) : isToday ? undefined : toPbDate(date),
+      due_date:
+        due != null
+          ? toPbDate(due)
+          : start != null
+            ? toPbDate(date)
+            : isToday
+              ? undefined
+              : toPbDate(date),
       start_min: start ?? 0,
       dur_min: dur,
     });
@@ -189,7 +242,7 @@ export function ComposerForm({
 
   return (
     <View>
-      <Eyebrow>new task{start != null || !isToday ? ` · ${dayLabel}` : ""}</Eyebrow>
+      <Eyebrow>new task{due != null || start != null || !isToday ? ` · ${dayLabel}` : ""}</Eyebrow>
       <TextInput
         autoFocus
         value={title}
@@ -246,6 +299,35 @@ export function ComposerForm({
       )}
 
       <View style={styles.chips}>
+        {/* When it lands: today, tomorrow, or the native clock for anything else. */}
+        <WhenChip
+          label="today"
+          active={effDate === today}
+          tint={colors.zest}
+          onPress={() => pickDay(today)}
+        />
+        <WhenChip
+          label="tomorrow"
+          active={effDate === addDays(today, 1)}
+          tint={colors.zest}
+          onPress={() => pickDay(addDays(today, 1))}
+        />
+        {Platform.OS !== "web" && (
+          <PressableScale
+            scaleTo={0.95}
+            accessibilityLabel="Pick a date and time"
+            accessibilityState={{ selected: showPicker }}
+            onPress={openClock}
+            style={[
+              styles.chip,
+              showPicker
+                ? { borderColor: alpha(colors.sky, 0.5), backgroundColor: alpha(colors.sky, 0.1) }
+                : { borderColor: colors.rule },
+            ]}
+          >
+            <CalendarClock size={14} color={showPicker ? colors.ink : colors.inkMuted} />
+          </PressableScale>
+        )}
         <PressableScale
           scaleTo={0.95}
           accessibilityState={{ selected: showNotes }}
@@ -263,6 +345,21 @@ export function ComposerForm({
           </Text>
         </PressableScale>
       </View>
+
+      {/* The system's own date + time control — it knows its locale, its
+          calendar, and its dark mode better than we do. */}
+      {showPicker && Platform.OS === "ios" && (
+        <Animated.View entering={FadeIn.duration(180)} style={styles.pickerRow}>
+          <DateTimePicker
+            value={pickValue}
+            mode="datetime"
+            display="compact"
+            minuteInterval={5}
+            accentColor={colors.zest}
+            onChange={(_e, d) => d && applyPick(d)}
+          />
+        </Animated.View>
+      )}
 
       {showNotes && (
         <Animated.View entering={FadeIn.duration(180)} layout={LinearTransition.springify().stiffness(400).damping(34)}>
@@ -305,6 +402,39 @@ export function ComposerForm({
         </PressableScale>
       </View>
     </View>
+  );
+}
+
+/** A little scheduling key — zest-inked while it's the chosen day. */
+function WhenChip({
+  label,
+  active,
+  tint,
+  onPress,
+}: {
+  label: string;
+  active: boolean;
+  tint: string;
+  onPress: () => void;
+}) {
+  const colors = usePalette();
+  const type = useType();
+  return (
+    <PressableScale
+      scaleTo={0.95}
+      accessibilityState={{ selected: active }}
+      onPress={onPress}
+      style={[
+        styles.chip,
+        active
+          ? { borderColor: alpha(tint, 0.5), backgroundColor: alpha(tint, 0.1) }
+          : { borderColor: colors.rule },
+      ]}
+    >
+      <Text style={[styles.chipText, type.sansMedium, { color: active ? tint : colors.inkMuted }]}>
+        {label}
+      </Text>
+    </PressableScale>
   );
 }
 
@@ -399,7 +529,12 @@ const styles = StyleSheet.create({
   chips: {
     marginTop: 8,
     flexDirection: "row",
+    flexWrap: "wrap",
     gap: 8,
+  },
+  pickerRow: {
+    marginTop: 10,
+    flexDirection: "row",
   },
   chip: {
     flexDirection: "row",
