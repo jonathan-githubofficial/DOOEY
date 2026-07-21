@@ -97,23 +97,45 @@ export function AgendaSheet({ date, height }: { date: string; height?: number })
   );
 
   return (
+    <PageSheet date={date} count={open.length} height={height}>
+      {body}
+    </PageSheet>
+  );
+}
+
+/** The planner page itself, shared by every day view: the punched paper sheet
+ * with its heading pinned at the top and the content scrolling INSIDE it. */
+export function PageSheet({
+  date,
+  count,
+  height,
+  children,
+}: {
+  date: string;
+  count: number;
+  height?: number;
+  children: React.ReactNode;
+}) {
+  const colors = usePalette();
+  return (
     <View>
       <Panel style={[styles.sheet, height != null && { height }]}>
-        <SheetHeading date={date} count={open.length} />
+        <SheetHeading date={date} count={count} />
         {height != null ? (
-          // Pinned page: the heading stays inked at the top, the day's list
-          // scrolls inside the paper. The scroller spans the panel's full
-          // width so rows bleeding past the padding aren't clipped.
+          // Pinned page: the heading stays inked at the top, the day's
+          // content scrolls inside the paper. The scroller spans the panel's
+          // full width so rows bleeding past the padding aren't clipped.
           <ScrollView
             nestedScrollEnabled
+            showsVerticalScrollIndicator={false}
             style={styles.sheetScroll}
             contentContainerStyle={styles.sheetScrollContent}
             keyboardShouldPersistTaps="handled"
           >
-            {body}
+            {children}
           </ScrollView>
         ) : (
-          body
+          children
         )}
       </Panel>
 

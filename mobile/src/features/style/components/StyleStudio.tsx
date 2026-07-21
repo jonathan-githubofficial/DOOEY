@@ -1,4 +1,5 @@
 import Slider from "@react-native-community/slider";
+import { LinearGradient } from "expo-linear-gradient";
 import { Pencil, RotateCcw } from "lucide-react-native";
 import { useState } from "react";
 import { Pressable, StyleSheet, Text, View } from "react-native";
@@ -8,10 +9,11 @@ import { DoodleSvg } from "@/components/DoodleSvg";
 import { Grain } from "@/components/grain";
 import { PressableScale } from "@/components/pressable-scale";
 import { Eyebrow, Panel, Stamp, StampButton } from "@/components/surface";
-import { alpha } from "@/lib/theme";
+import { alpha, type Palette } from "@/lib/theme";
 import { usePalette, useThemeStore, useType } from "@/stores/theme";
 import { BASE, useStyleStore } from "../store";
 import {
+  BACKDROPS,
   COLOR_TOKENS,
   DEFAULT_COLORS,
   FONT_CHOICES,
@@ -44,6 +46,7 @@ export function StyleStudio() {
       <PageDoodlesPanel />
       <TypePanel />
       <ShapePanel />
+      <BackdropPanel />
       <SpecimenPanel />
     </View>
   );
@@ -531,6 +534,79 @@ function SliderRow({
   );
 }
 
+/* --------------------------------------------------------------- backdrop */
+
+/** A quiet colour wash over the paper — always through the palette, always
+ * faint, so the app keeps its paper feel. */
+function BackdropPanel() {
+  const colors = usePalette();
+  const type = useType();
+  const backdrop = useStyleStore((s) => s.backdrop);
+  const setBackdrop = useStyleStore((s) => s.setBackdrop);
+
+  return (
+    <Panel style={styles.panel}>
+      <Eyebrow>backdrop</Eyebrow>
+      <Text style={[styles.hint, type.sans, { color: colors.inkMuted }]}>
+        A breath of colour over the paper. It follows your palette, so presets and dark mode
+        re-ink it.
+      </Text>
+      <View style={styles.backdropRow}>
+        <PressableScale
+          scaleTo={0.95}
+          accessibilityState={{ selected: backdrop == null }}
+          onPress={() => setBackdrop(null)}
+          style={[
+            styles.backdropPill,
+            {
+              backgroundColor: colors.paper,
+              borderColor: backdrop == null ? colors.zest : alpha(colors.rule, 0.7),
+              borderWidth: backdrop == null ? 1.5 : 1,
+            },
+          ]}
+        >
+          <Text style={[styles.backdropLabel, type.sansMedium, { color: colors.inkMuted }]}>
+            plain
+          </Text>
+        </PressableScale>
+        {BACKDROPS.map((b) => {
+          const active = backdrop === b.key;
+          return (
+            <PressableScale
+              key={b.key}
+              scaleTo={0.95}
+              accessibilityState={{ selected: active }}
+              onPress={() => setBackdrop(active ? null : b.key)}
+              style={[
+                styles.backdropPill,
+                {
+                  borderColor: active ? colors.zest : alpha(colors.rule, 0.7),
+                  borderWidth: active ? 1.5 : 1,
+                },
+              ]}
+            >
+              <LinearGradient
+                pointerEvents="none"
+                colors={[
+                  alpha(colors[b.from as keyof Palette], 0.35),
+                  colors.paper,
+                  alpha(colors[b.to as keyof Palette], 0.3),
+                ]}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 1 }}
+                style={StyleSheet.absoluteFill}
+              />
+              <Text style={[styles.backdropLabel, type.sansMedium, { color: colors.ink }]}>
+                {b.label}
+              </Text>
+            </PressableScale>
+          );
+        })}
+      </View>
+    </Panel>
+  );
+}
+
 /* --------------------------------------------------------------- specimen */
 
 function SpecimenPanel() {
@@ -636,6 +712,18 @@ const styles = StyleSheet.create({
   fontPillText: { fontSize: 14 },
 
   shapeStack: { marginTop: 12, gap: 16 },
+
+  backdropRow: { marginTop: 12, flexDirection: "row", flexWrap: "wrap", gap: 8 },
+  backdropPill: {
+    height: 44,
+    minWidth: 76,
+    alignItems: "center",
+    justifyContent: "center",
+    borderRadius: 12,
+    overflow: "hidden",
+    paddingHorizontal: 12,
+  },
+  backdropLabel: { fontSize: 12 },
   sliderHead: { flexDirection: "row", alignItems: "baseline", justifyContent: "space-between" },
   sliderValue: { flexDirection: "row", alignItems: "center", gap: 6 },
   sliderValueText: { fontSize: 12, fontVariant: ["tabular-nums"] },

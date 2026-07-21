@@ -39,6 +39,7 @@ export default function ProjectPage() {
     <View style={[styles.screen, { backgroundColor: colors.paper, paddingTop: insets.top + 12 }]}>
       <Grain />
       <ScrollView
+        showsVerticalScrollIndicator={false}
         contentContainerStyle={[
           styles.scrollContent,
           { paddingBottom: Math.max(16, insets.bottom) + 96 },
@@ -128,7 +129,7 @@ export default function ProjectPage() {
               <Text style={[styles.readerClose, type.sansMedium, { color: colors.zest }]}>done</Text>
             </Pressable>
           </View>
-          <ScrollView contentContainerStyle={styles.readerBody}>
+          <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.readerBody}>
             <Text style={[styles.readerText, fontStyle("mono", "400"), { color: colors.ink }]}>
               {reading ? program?.files[reading] : ""}
             </Text>

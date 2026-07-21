@@ -12,15 +12,15 @@ import Animated, {
   withSpring,
 } from "react-native-reanimated";
 import { Check } from "@/components/Check";
-import { Eyebrow, Panel } from "@/components/surface";
+import { Eyebrow } from "@/components/surface";
 import { localDate } from "@/lib/dates";
+import { hapticLift } from "@/lib/haptics";
 import { alpha } from "@/lib/theme";
 import { usePalette, useType } from "@/stores/theme";
 import { useDayTasks, useUpdateTask } from "../api";
 import { DAY_END, DAY_START, GUTTER, SNAP, clamp, fmtMin, layoutLanes, snap } from "../timeGrid";
 import type { Task } from "../types";
-import { SheetHeading } from "./AgendaSheet";
-import { BINDING_INSET, RING_COUNT } from "./PlannerBook";
+import { PageSheet } from "./AgendaSheet";
 
 const settle = LinearTransition.springify().stiffness(420).damping(32);
 
@@ -31,10 +31,12 @@ const settle = LinearTransition.springify().stiffness(420).damping(32);
 export function TimeboxSheet({
   date,
   pxPerMin,
+  height,
   onAddSlot,
 }: {
   date: string;
   pxPerMin: number;
+  height?: number;
   onAddSlot: (date: string, startMin: number) => void;
 }) {
   const colors = usePalette();
@@ -74,17 +76,7 @@ export function TimeboxSheet({
   };
 
   return (
-    <Panel style={styles.sheet}>
-      <View pointerEvents="none" style={styles.holesRow}>
-        {Array.from({ length: RING_COUNT }).map((_, i) => (
-          <View key={i} style={styles.holeSlot}>
-            <View style={[styles.hole, { backgroundColor: alpha(colors.ink, 0.18) }]} />
-          </View>
-        ))}
-      </View>
-
-      <SheetHeading date={date} count={open.length} />
-
+    <PageSheet date={date} count={open.length} height={height}>
       {error && (
         <View
           style={[
@@ -157,7 +149,7 @@ export function TimeboxSheet({
           )}
         </>
       )}
-    </Panel>
+    </PageSheet>
   );
 }
 
@@ -275,6 +267,7 @@ function TimeBlock({
     .activateAfterLongPress(180)
     .onStart(() => {
       lifted.value = true;
+      runOnJS(hapticLift)();
     })
     .onUpdate((e) => {
       const raw = start + e.translationY / pxPerMin;
@@ -297,7 +290,10 @@ function TimeBlock({
       offset.value = 0;
     });
 
+  // A tight activation window so the hem wins the race against the page's
+  // scroll — grabbing the hem must stretch the block, never scroll the day.
   const hemPan = Gesture.Pan()
+    .activeOffsetY([-4, 4])
     .onStart(() => {
       resizing.value = true;
     })
@@ -423,27 +419,6 @@ function ShelfChip({
 }
 
 const styles = StyleSheet.create({
-  sheet: {
-    padding: 20,
-    paddingTop: 36,
-  },
-  holesRow: {
-    position: "absolute",
-    left: BINDING_INSET,
-    right: BINDING_INSET,
-    top: 9,
-    flexDirection: "row",
-    justifyContent: "space-between",
-  },
-  holeSlot: {
-    width: 12,
-    alignItems: "center",
-  },
-  hole: {
-    height: 10,
-    width: 10,
-    borderRadius: 999,
-  },
   errorBox: {
     marginTop: 12,
     borderWidth: 1,

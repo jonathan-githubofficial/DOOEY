@@ -1,9 +1,9 @@
 import { useRouter } from "expo-router";
-import { CalendarRange, Clock, ListChecks, Minus, Plus, type LucideIcon } from "lucide-react-native";
+import { Minus, Plus } from "lucide-react-native";
 import { useRef, useState } from "react";
 import { Platform, ScrollView, StyleSheet, Text, View } from "react-native";
 import { Gesture, GestureDetector } from "react-native-gesture-handler";
-import Animated, { Easing, FadeIn, FadeOut, LinearTransition } from "react-native-reanimated";
+import Animated, { FadeIn, LinearTransition } from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Grain } from "@/components/grain";
 import { PressableScale } from "@/components/pressable-scale";
@@ -24,17 +24,16 @@ import { alpha } from "@/lib/theme";
 import { usePalette, useType } from "@/stores/theme";
 
 const settle = LinearTransition.springify().stiffness(380).damping(34);
-const keySettle = LinearTransition.duration(200).easing(Easing.bezier(0.2, 0, 0, 1));
 
 /** How the day's work is laid out: the agenda list, the timeboxed day grid,
  * or the whole week in time. The month is not a mode — it unfolds out of the
  * date shelf. */
 type Mode = "agenda" | "day" | "week";
 
-const MODES: { key: Mode; label: string; icon: LucideIcon }[] = [
-  { key: "agenda", label: "Agenda", icon: ListChecks },
-  { key: "day", label: "Day", icon: Clock },
-  { key: "week", label: "Week", icon: CalendarRange },
+const MODES: { key: Mode; label: string }[] = [
+  { key: "agenda", label: "Agenda" },
+  { key: "day", label: "Day" },
+  { key: "week", label: "Week" },
 ];
 
 /** The planner IS the calendar: one space, three ways to look at your time.
@@ -131,7 +130,12 @@ export default function Planner() {
         <Animated.View
           layout={settle}
           collapsable={false}
-          style={[styles.body, { paddingBottom: Math.max(16, insets.bottom) + 56 }]}
+          style={[
+            styles.body,
+            // Enough clearance that the page (and its pad edges) ends above
+            // the tab bar / dock island, never under it.
+            { paddingBottom: Math.max(16, insets.bottom) + (Platform.OS === "web" ? 96 : 76) },
+          ]}
           onLayout={(e) => setVh(e.nativeEvent.layout.height)}
         >
           {vh > 0 && mode !== "week" && (
@@ -142,11 +146,7 @@ export default function Planner() {
                 mode === "agenda" ? (
                   <AgendaSheet date={d} height={pageH} />
                 ) : (
-                  <View style={{ height: pageH }}>
-                    <ScrollView nestedScrollEnabled contentContainerStyle={styles.gridScroll}>
-                      <TimeboxSheet date={d} pxPerMin={px} onAddSlot={openSlot} />
-                    </ScrollView>
-                  </View>
+                  <TimeboxSheet date={d} pxPerMin={px} height={pageH} onAddSlot={openSlot} />
                 )
               }
             />
@@ -154,7 +154,11 @@ export default function Planner() {
           {vh > 0 && mode === "week" && (
             <Animated.View key={selected} entering={FadeIn.duration(200)}>
               <Panel style={[styles.gridPanel, { height: vh }]}>
-                <ScrollView nestedScrollEnabled contentContainerStyle={styles.gridScroll}>
+                <ScrollView
+                  nestedScrollEnabled
+                  showsVerticalScrollIndicator={false}
+                  contentContainerStyle={styles.gridScroll}
+                >
                   <WeekGrid
                     anchor={selected}
                     pxPerMin={px}
@@ -215,44 +219,41 @@ export default function Planner() {
   );
 }
 
-/** The view keys, dock-style: every mode shows its glyph, the active one
- * raises to a paper key and speaks its name. */
+/** The view keys: plain words in the pressed tray, the active one raised to
+ * a paper key. */
 function ModeToggle({ mode, onChange }: { mode: Mode; onChange: (m: Mode) => void }) {
   const colors = usePalette();
   const type = useType();
   return (
     <View style={[styles.toggleWell, { backgroundColor: alpha(colors.ink, 0.05) }]}>
-      {MODES.map(({ key, label, icon: IconGlyph }) => {
+      {MODES.map(({ key, label }) => {
         const active = mode === key;
-        const tint = active ? colors.ink : colors.inkMuted;
         return (
-          <Animated.View key={key} layout={keySettle}>
-            <PressableScale
-              scaleTo={0.93}
-              accessibilityLabel={`${label} view`}
-              accessibilityState={{ selected: active }}
-              onPress={() => onChange(key)}
+          <PressableScale
+            key={key}
+            scaleTo={0.93}
+            accessibilityLabel={`${label} view`}
+            accessibilityState={{ selected: active }}
+            onPress={() => onChange(key)}
+            style={[
+              styles.toggleKey,
+              active && {
+                backgroundColor: colors.surface,
+                borderColor: alpha(colors.rule, 0.7),
+                borderWidth: 1,
+              },
+            ]}
+          >
+            <Text
               style={[
-                styles.toggleKey,
-                active && {
-                  backgroundColor: colors.surface,
-                  borderColor: alpha(colors.rule, 0.7),
-                  borderWidth: 1,
-                },
+                styles.toggleLabel,
+                type.sansMedium,
+                { color: active ? colors.ink : colors.inkMuted },
               ]}
             >
-              <IconGlyph size={14} strokeWidth={active ? 2.2 : 1.8} color={tint} />
-              {active && (
-                <Animated.Text
-                  entering={FadeIn.duration(180)}
-                  exiting={FadeOut.duration(120)}
-                  style={[styles.toggleLabel, type.sansMedium, { color: tint }]}
-                >
-                  {label}
-                </Animated.Text>
-              )}
-            </PressableScale>
-          </Animated.View>
+              {label}
+            </Text>
+          </PressableScale>
         );
       })}
     </View>
@@ -278,14 +279,12 @@ const styles = StyleSheet.create({
   },
   toggleKey: {
     height: 30,
-    flexDirection: "row",
-    alignItems: "center",
-    paddingHorizontal: 11,
+    justifyContent: "center",
+    paddingHorizontal: 12,
     borderRadius: 999,
   },
   toggleLabel: {
     fontSize: 11,
-    paddingLeft: 6,
   },
   body: {
     flex: 1,

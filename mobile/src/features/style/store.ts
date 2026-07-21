@@ -23,6 +23,8 @@ interface StyleStore {
   radius: number;
   grain: number;
   shadow: number;
+  /** A soft colour wash breathed over the paper — a BACKDROPS key, or null. */
+  backdrop: string | null;
   /** Hand-drawn icons worn next to page titles, keyed by page. */
   pageDoodles: Record<string, Stroke[]>;
   /** Whether the dock island uses those doodles (on) or the stock glyphs (off). */
@@ -31,6 +33,7 @@ interface StyleStore {
   resetColor: (mode: Mode, key: ColorKey) => void;
   setFont: (slot: "sans" | "display", font: FontKey) => void;
   setShape: (patch: Partial<Pick<StyleStore, "radius" | "grain" | "shadow">>) => void;
+  setBackdrop: (key: string | null) => void;
   setPageDoodle: (page: string, strokes: Stroke[]) => void;
   setDockDoodles: (on: boolean) => void;
   applyPreset: (key: string) => void;
@@ -42,8 +45,10 @@ export const useStyleStore = create<StyleStore>()(
     (set, get) => ({
       colors: { light: {}, dark: {} },
       ...BASE,
+      backdrop: null,
       pageDoodles: {},
       dockDoodles: true,
+      setBackdrop: (key) => set({ backdrop: key }),
       setDockDoodles: (on) => set({ dockDoodles: on }),
       setPageDoodle: (page, strokes) => {
         const pageDoodles = { ...get().pageDoodles, [page]: strokes };
@@ -64,7 +69,7 @@ export const useStyleStore = create<StyleStore>()(
         if (!preset) return;
         set({ colors: { light: { ...preset.colors.light }, dark: { ...preset.colors.dark } } });
       },
-      resetAll: () => set({ colors: { light: {}, dark: {} }, ...BASE }),
+      resetAll: () => set({ colors: { light: {}, dark: {} }, ...BASE, backdrop: null }),
     }),
     {
       name: "dooey-style",
@@ -75,13 +80,14 @@ export const useStyleStore = create<StyleStore>()(
       migrate: () => ({}),
       // pageDoodles are intentionally NOT persisted locally — they live on the
       // user record so they follow the account across devices (and the web app).
-      partialize: ({ colors, fontSans, fontDisplay, radius, grain, shadow, dockDoodles }) => ({
+      partialize: ({ colors, fontSans, fontDisplay, radius, grain, shadow, backdrop, dockDoodles }) => ({
         colors,
         fontSans,
         fontDisplay,
         radius,
         grain,
         shadow,
+        backdrop,
         dockDoodles,
       }),
     },

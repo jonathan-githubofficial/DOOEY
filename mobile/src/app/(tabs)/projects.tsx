@@ -25,6 +25,7 @@ export default function Projects() {
     <View style={[styles.screen, { backgroundColor: colors.paper, paddingTop: insets.top + 12 }]}>
       <Grain />
       <ScrollView
+        showsVerticalScrollIndicator={false}
         contentContainerStyle={[
           styles.scrollContent,
           { paddingBottom: Math.max(16, insets.bottom) + 96 },

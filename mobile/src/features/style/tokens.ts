@@ -212,6 +212,18 @@ export const PRESETS: Preset[] = [
   },
 ];
 
+/** Backdrops: quiet colour washes breathed diagonally over the paper — always
+ * through the palette (so presets and dark mode re-ink them) and always at
+ * single-digit opacities, so the paper stays paper. */
+export const BACKDROPS = [
+  { key: "dawn", label: "Dawn", from: "zest", to: "honey" },
+  { key: "mist", label: "Mist", from: "sky", to: "rule" },
+  { key: "moss", label: "Moss", from: "leaf", to: "sky" },
+  { key: "ember", label: "Ember", from: "clay", to: "honey" },
+  { key: "dusk", label: "Dusk", from: "sky", to: "clay" },
+] as const;
+export type BackdropKey = (typeof BACKDROPS)[number]["key"];
+
 /** Pages that can wear a hand-drawn icon — keys shared with the web app's
  * user record, so doodles drawn on either client appear on both. */
 export const DOODLE_PAGES = [

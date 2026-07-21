@@ -17,10 +17,10 @@ export default function Compose() {
   if (!isAuthenticated) return <Redirect href="/login" />;
 
   return (
-    // The sheet hugs its content — a big bottom pad reads as dead space.
     <View style={[styles.sheet, { paddingBottom: Math.max(12, insets.bottom) }]}>
       <Grain radius={24} />
       <ComposerForm
+        fill
         date={date ?? localDate()}
         initialStart={start ? Number(start) : undefined}
         onDone={() => router.back()}
@@ -30,8 +30,10 @@ export default function Compose() {
 }
 
 const styles = StyleSheet.create({
-  // No flex: the sheet's "fitToContents" detent sizes itself to this view.
+  // flex: 1 — the form (grain and all) reaches the sheet's bottom edge, with
+  // the footer anchored down there.
   sheet: {
+    flex: 1,
     paddingHorizontal: 20,
     paddingTop: 20,
   },

@@ -1,8 +1,9 @@
 import DateTimePicker, { DateTimePickerAndroid } from "@react-native-community/datetimepicker";
 import { useRouter } from "expo-router";
 import { CalendarClock, Plus, StickyNote, X } from "lucide-react-native";
-import { useState } from "react";
+import { createElement, useState } from "react";
 import {
+  Keyboard,
   KeyboardAvoidingView,
   Modal,
   Platform,
@@ -34,15 +35,13 @@ import { usePalette, useType } from "@/stores/theme";
 import { useCreateTask } from "../api";
 import { fmtMin } from "../timeGrid";
 
-const DURATIONS = [
-  { min: 15, label: "15m" },
-  { min: 30, label: "30m" },
-  { min: 45, label: "45m" },
-  { min: 60, label: "1h" },
-  { min: 90, label: "1h 30" },
-  { min: 120, label: "2h" },
-  { min: 180, label: "3h" },
-];
+const minsOf = (d: Date) => d.getHours() * 60 + d.getMinutes();
+const dateAtMin = (m: number) => {
+  const d = new Date();
+  d.setHours(Math.floor(m / 60), m % 60, 0, 0);
+  return d;
+};
+const hhmm = (m: number) => `${pad2(Math.floor(m / 60))}:${pad2(m % 60)}`;
 
 /** The new-task button: a postage stamp pinned above the tab bar — a fresh
  * slip waiting to be stuck onto the day. On native it opens the system form
@@ -148,10 +147,13 @@ export function ComposerSheet({
 export function ComposerForm({
   date,
   initialStart,
+  fill,
   onDone,
 }: {
   date: string;
   initialStart?: number;
+  /** Stretch to the host's height and anchor the footer at the bottom. */
+  fill?: boolean;
   onDone: () => void;
 }) {
   const colors = usePalette();
@@ -164,7 +166,7 @@ export function ComposerForm({
   const [notes, setNotes] = useState("");
   const [showNotes, setShowNotes] = useState(false);
   const [start, setStart] = useState<number | null>(initialStart ?? null);
-  const [dur, setDur] = useState(60);
+  const [end, setEnd] = useState<number | null>(initialStart != null ? initialStart + 60 : null);
   // Where the task lands: null = the viewed day's default; the chips and the
   // native picker override it.
   const [due, setDue] = useState<string | null>(null);
@@ -178,9 +180,17 @@ export function ComposerForm({
     day: "numeric",
   });
 
+  // Start moves the whole box; end just restretches it (never before start).
+  const pickStart = (m: number) => {
+    setStart(m);
+    setEnd((e) => (e == null || e <= m ? Math.min(m + 60, 24 * 60) : e));
+  };
+  const pickEnd = (m: number) => {
+    if (start != null) setEnd(Math.max(start + 15, m));
+  };
   const applyPick = (d: Date) => {
     setDue(`${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`);
-    setStart(d.getHours() * 60 + d.getMinutes());
+    pickStart(minsOf(d));
   };
   // The picker starts from what's chosen, or the next round hour today.
   const pickValue = (() => {
@@ -196,24 +206,34 @@ export function ComposerForm({
   };
   const openClock = () => {
     hapticTap();
-    if (Platform.OS === "android") {
-      // Android has no combined picker — date dialog, then time dialog.
-      DateTimePickerAndroid.open({
-        value: pickValue,
-        mode: "date",
-        onChange: (e, day) => {
-          if (e.type !== "set" || !day) return;
-          DateTimePickerAndroid.open({
-            value: day,
-            mode: "time",
-            onChange: (e2, when) => {
-              if (e2.type === "set" && when) applyPick(when);
-            },
-          });
-        },
-      });
+    const show = () => {
+      if (Platform.OS === "android") {
+        // Android has no combined picker — date dialog, then time dialog.
+        DateTimePickerAndroid.open({
+          value: pickValue,
+          mode: "date",
+          onChange: (e, day) => {
+            if (e.type !== "set" || !day) return;
+            DateTimePickerAndroid.open({
+              value: day,
+              mode: "time",
+              onChange: (e2, when) => {
+                if (e2.type === "set" && when) applyPick(when);
+              },
+            });
+          },
+        });
+      } else {
+        setShowPicker((s) => !s);
+      }
+    };
+    // The keyboard must clear the stage first, or the system control lands
+    // where the keyboard was and then jumps.
+    if (Keyboard.isVisible()) {
+      Keyboard.dismiss();
+      setTimeout(show, 300);
     } else {
-      setShowPicker((s) => !s);
+      show();
     }
   };
 
@@ -235,13 +255,13 @@ export function ComposerForm({
               ? undefined
               : toPbDate(date),
       start_min: start ?? 0,
-      dur_min: dur,
+      dur_min: start != null && end != null ? Math.max(15, end - start) : 60,
     });
     onDone();
   };
 
   return (
-    <View>
+    <View style={fill && styles.fill}>
       <Eyebrow>new task{due != null || start != null || !isToday ? ` · ${dayLabel}` : ""}</Eyebrow>
       <TextInput
         autoFocus
@@ -262,37 +282,26 @@ export function ComposerForm({
         style={[styles.detailsInput, type.sans, { color: colors.ink }]}
       />
 
-      {start != null && (
+      {start != null && end != null && (
         <View
           style={[
             styles.timedRow,
             { borderColor: alpha(colors.rule, 0.6), backgroundColor: alpha(colors.paper, 0.5) },
           ]}
         >
-          <Text style={[styles.timedStart, type.sansMedium, { color: colors.ink }]}>
-            {fmtMin(start)}
-          </Text>
-          <Text style={[styles.timedFor, type.sans, { color: colors.inkMuted }]}>for</Text>
-          <View style={styles.durations}>
-            {DURATIONS.map((d) => (
-              <Pressable
-                key={d.min}
-                onPress={() => setDur(d.min)}
-                style={[styles.durChip, dur === d.min && { backgroundColor: colors.zest }]}
-              >
-                <Text
-                  style={[
-                    styles.durChipText,
-                    type.sansMedium,
-                    { color: dur === d.min ? colors.paper : colors.inkMuted },
-                  ]}
-                >
-                  {d.label}
-                </Text>
-              </Pressable>
-            ))}
-          </View>
-          <Pressable accessibilityLabel="Remove time" onPress={() => setStart(null)} hitSlop={8}>
+          <Text style={[styles.timedFor, type.sans, { color: colors.inkMuted }]}>from</Text>
+          <TimeControl value={start} onChange={pickStart} />
+          <Text style={[styles.timedFor, type.sans, { color: colors.inkMuted }]}>to</Text>
+          <TimeControl value={end} onChange={pickEnd} />
+          <View style={styles.timedSpacer} />
+          <Pressable
+            accessibilityLabel="Remove time"
+            onPress={() => {
+              setStart(null);
+              setEnd(null);
+            }}
+            hitSlop={8}
+          >
             <X size={14} color={alpha(colors.inkMuted, 0.6)} />
           </Pressable>
         </View>
@@ -312,22 +321,20 @@ export function ComposerForm({
           tint={colors.zest}
           onPress={() => pickDay(addDays(today, 1))}
         />
-        {Platform.OS !== "web" && (
-          <PressableScale
-            scaleTo={0.95}
-            accessibilityLabel="Pick a date and time"
-            accessibilityState={{ selected: showPicker }}
-            onPress={openClock}
-            style={[
-              styles.chip,
-              showPicker
-                ? { borderColor: alpha(colors.sky, 0.5), backgroundColor: alpha(colors.sky, 0.1) }
-                : { borderColor: colors.rule },
-            ]}
-          >
-            <CalendarClock size={14} color={showPicker ? colors.ink : colors.inkMuted} />
-          </PressableScale>
-        )}
+        <PressableScale
+          scaleTo={0.95}
+          accessibilityLabel="Pick a date and time"
+          accessibilityState={{ selected: showPicker }}
+          onPress={openClock}
+          style={[
+            styles.chip,
+            showPicker
+              ? { borderColor: alpha(colors.sky, 0.5), backgroundColor: alpha(colors.sky, 0.1) }
+              : { borderColor: colors.rule },
+          ]}
+        >
+          <CalendarClock size={14} color={showPicker ? colors.ink : colors.inkMuted} />
+        </PressableScale>
         <PressableScale
           scaleTo={0.95}
           accessibilityState={{ selected: showNotes }}
@@ -360,6 +367,19 @@ export function ComposerForm({
           />
         </Animated.View>
       )}
+      {showPicker && Platform.OS === "web" && (
+        <Animated.View entering={FadeIn.duration(180)} style={styles.pickerRow}>
+          {createElement("input", {
+            type: "datetime-local",
+            defaultValue: `${effDate}T${hhmm(start ?? pickValue.getHours() * 60)}`,
+            onChange: (e: { target: { value: string } }) => {
+              const d = new Date(e.target.value);
+              if (!Number.isNaN(d.getTime())) applyPick(d);
+            },
+            style: domInputStyle(colors.ink, alpha(colors.rule, 0.9)),
+          })}
+        </Animated.View>
+      )}
 
       {showNotes && (
         <Animated.View entering={FadeIn.duration(180)} layout={LinearTransition.springify().stiffness(400).damping(34)}>
@@ -381,6 +401,8 @@ export function ComposerForm({
           />
         </Animated.View>
       )}
+
+      {fill && <View style={styles.fill} />}
 
       <View style={styles.footer}>
         <Pressable onPress={onDone} hitSlop={8}>
@@ -404,6 +426,69 @@ export function ComposerForm({
     </View>
   );
 }
+
+/** One end of the time box, in the platform's own control: the compact iOS
+ * time pill, Android's time dialog behind a chip, a plain time input on web. */
+function TimeControl({ value, onChange }: { value: number; onChange: (m: number) => void }) {
+  const colors = usePalette();
+  const type = useType();
+  if (Platform.OS === "ios") {
+    return (
+      <DateTimePicker
+        value={dateAtMin(value)}
+        mode="time"
+        display="compact"
+        minuteInterval={5}
+        accentColor={colors.zest}
+        onChange={(_e, d) => d && onChange(minsOf(d))}
+      />
+    );
+  }
+  if (Platform.OS === "web") {
+    return createElement("input", {
+      type: "time",
+      value: hhmm(value),
+      onChange: (e: { target: { value: string } }) => {
+        const [h, m] = e.target.value.split(":").map(Number);
+        if (!Number.isNaN(h)) onChange(h * 60 + (m || 0));
+      },
+      style: domInputStyle(colors.ink, alpha(colors.rule, 0.9)),
+    });
+  }
+  return (
+    <Pressable
+      accessibilityLabel="Pick a time"
+      onPress={() =>
+        DateTimePickerAndroid.open({
+          value: dateAtMin(value),
+          mode: "time",
+          onChange: (e, d) => {
+            if (e.type === "set" && d) onChange(minsOf(d));
+          },
+        })
+      }
+      style={[
+        styles.timePill,
+        { borderColor: alpha(colors.rule, 0.8), backgroundColor: colors.surface },
+      ]}
+    >
+      <Text style={[styles.timedStart, type.sansMedium, { color: colors.ink }]}>
+        {fmtMin(value)}
+      </Text>
+    </Pressable>
+  );
+}
+
+/** Inline styles for the web's raw DOM inputs — RNW styles don't reach them. */
+const domInputStyle = (color: string, borderColor: string) => ({
+  fontFamily: "inherit",
+  fontSize: 13,
+  color,
+  background: "transparent",
+  border: `1px solid ${borderColor}`,
+  borderRadius: 8,
+  padding: "3px 8px",
+});
 
 /** A little scheduling key — zest-inked while it's the chosen day. */
 function WhenChip({
@@ -439,6 +524,9 @@ function WhenChip({
 }
 
 const styles = StyleSheet.create({
+  fill: {
+    flex: 1,
+  },
   // The -4° tilt lives on PressableScale's `rotate`, not here — a transform
   // in this style would be clobbered by the press-scale animation.
   stampFab: {
@@ -511,20 +599,14 @@ const styles = StyleSheet.create({
   timedFor: {
     fontSize: 12,
   },
-  durations: {
+  timedSpacer: {
     flex: 1,
-    flexDirection: "row",
-    flexWrap: "wrap",
-    gap: 4,
   },
-  durChip: {
-    borderRadius: 999,
-    paddingHorizontal: 9,
+  timePill: {
+    borderWidth: 1,
+    borderRadius: 8,
+    paddingHorizontal: 10,
     paddingVertical: 4,
-  },
-  durChipText: {
-    fontSize: 11,
-    fontVariant: ["tabular-nums"],
   },
   chips: {
     marginTop: 8,

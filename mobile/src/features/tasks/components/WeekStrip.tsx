@@ -65,8 +65,8 @@ export function WeekStrip({
       </View>
 
       <View style={styles.row}>
-        <Pager dir={-1} onPress={() => setWeekAnchor((a) => addDays(a, -7))} />
         <View style={[styles.tray, { backgroundColor: alpha(colors.ink, 0.04) }]}>
+          <Pager dir={-1} onPress={() => setWeekAnchor((a) => addDays(a, -7))} />
           {days.map((d) => {
             const isSelected = d === selected;
             const isToday = d === today;
@@ -125,8 +125,8 @@ export function WeekStrip({
               </PressableScale>
             );
           })}
+          <Pager dir={1} onPress={() => setWeekAnchor((a) => addDays(a, 7))} />
         </View>
-        <Pager dir={1} onPress={() => setWeekAnchor((a) => addDays(a, 7))} />
       </View>
     </View>
   );
@@ -178,14 +178,15 @@ const styles = StyleSheet.create({
     marginTop: 8,
     flexDirection: "row",
     alignItems: "center",
-    gap: 4,
   },
+  // The pagers live INSIDE the pressed well, bookending the days.
   tray: {
     flex: 1,
     flexDirection: "row",
+    alignItems: "center",
     borderRadius: 16,
     padding: 4,
-    gap: 4,
+    gap: 2,
   },
   chip: {
     flex: 1,
