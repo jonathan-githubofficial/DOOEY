@@ -18,6 +18,7 @@ const SPACES = [
   { name: "index", label: "Planner", sf: "checklist", md: "event-note", doodle: "planner" },
   { name: "boards", label: "Boards", sf: "square.on.square", md: "dashboard", doodle: "boards" },
   { name: "projects", label: "Projects", sf: "folder", md: "folder", doodle: "learning" },
+  { name: "gym", label: "Gym", sf: "dumbbell", md: "fitness-center", doodle: "gym" },
   { name: "account", label: "Account", sf: "person.crop.circle", md: "person", doodle: "account" },
 ] as const;
 

@@ -1,5 +1,6 @@
 import { Tabs } from "expo-router";
 import {
+  Dumbbell,
   FolderOpen,
   NotebookPen,
   Shapes,
@@ -38,6 +39,7 @@ const SPACES = [
   { key: "planner", route: "index", label: "Planner", icon: NotebookPen, doodle: "planner" },
   { key: "boards", route: "boards", label: "Boards", icon: Shapes, doodle: "boards" },
   { key: "projects", route: "projects", label: "Projects", icon: FolderOpen, doodle: "learning" },
+  { key: "gym", route: "gym", label: "Gym", icon: Dumbbell, doodle: "gym" },
 ] as const;
 
 /** The dock: a floating island. The wordmark anchors the left end (its zest
@@ -59,7 +61,9 @@ export function Dock({ state, navigation }: TabBarProps) {
         ? "boards"
         : routeName === "projects" || routeName.startsWith("project/")
           ? "projects"
-          : "account";
+          : routeName === "gym" || routeName.startsWith("workout") || routeName.startsWith("routine")
+            ? "gym"
+            : "account";
 
   const stops = useRef<Record<string, { x: number; width: number }>>({});
   const pillX = useSharedValue(0);

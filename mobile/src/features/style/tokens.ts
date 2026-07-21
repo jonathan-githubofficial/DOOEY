@@ -231,5 +231,6 @@ export const DOODLE_PAGES = [
   { key: "calendar", label: "Calendar" },
   { key: "boards", label: "Boards" },
   { key: "learning", label: "Projects" },
+  { key: "gym", label: "Gym" },
   { key: "account", label: "Account" },
 ] as const;
