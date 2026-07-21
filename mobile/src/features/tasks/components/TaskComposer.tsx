@@ -1,4 +1,4 @@
-import { Plus, StickyNote } from "lucide-react-native";
+import { Plus, StickyNote, X } from "lucide-react-native";
 import { useState } from "react";
 import {
   KeyboardAvoidingView,
@@ -10,7 +10,14 @@ import {
   TextInput,
   View,
 } from "react-native";
-import Animated, { FadeIn, FadeOut, LinearTransition, SlideInDown, SlideOutDown } from "react-native-reanimated";
+import Animated, {
+  Easing,
+  FadeIn,
+  FadeOut,
+  LinearTransition,
+  SlideInDown,
+  SlideOutDown,
+} from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Grain } from "@/components/grain";
 import { PressableScale } from "@/components/pressable-scale";
@@ -20,6 +27,17 @@ import { localDate, toLocalNoon, toPbDate } from "@/lib/dates";
 import { alpha } from "@/lib/theme";
 import { usePalette, useType } from "@/stores/theme";
 import { useCreateTask } from "../api";
+import { fmtMin } from "../timeGrid";
+
+const DURATIONS = [
+  { min: 15, label: "15m" },
+  { min: 30, label: "30m" },
+  { min: 45, label: "45m" },
+  { min: 60, label: "1h" },
+  { min: 90, label: "1h 30" },
+  { min: 120, label: "2h" },
+  { min: 180, label: "3h" },
+];
 
 /** The new-task button: a postage stamp pinned above the dock — a fresh slip
  * waiting to be stuck onto the day. Tapping it slides the task drawer up from
@@ -63,9 +81,17 @@ export function TaskComposer({ date }: { date: string }) {
 }
 
 /** The task drawer: slides up from the bottom edge with everything you need to
- * shape a task — title, details, notes. Timeboxing and the full page live on
- * the web app for now. */
-function ComposerSheet({ date, onClose }: { date: string; onClose: () => void }) {
+ * shape a task — title, details, notes, and (when opened from a calendar slot)
+ * the time box. */
+export function ComposerSheet({
+  date,
+  initialStart,
+  onClose,
+}: {
+  date: string;
+  initialStart?: number;
+  onClose: () => void;
+}) {
   const colors = usePalette();
   const type = useType();
   const insets = useSafeAreaInsets();
@@ -76,6 +102,8 @@ function ComposerSheet({ date, onClose }: { date: string; onClose: () => void })
   const [description, setDescription] = useState("");
   const [notes, setNotes] = useState("");
   const [showNotes, setShowNotes] = useState(false);
+  const [start, setStart] = useState<number | null>(initialStart ?? null);
+  const [dur, setDur] = useState(60);
 
   const dayLabel = toLocalNoon(date).toLocaleDateString("en", {
     weekday: "short",
@@ -89,8 +117,11 @@ function ComposerSheet({ date, onClose }: { date: string; onClose: () => void })
       title: title.trim(),
       description: description.trim() || undefined,
       notes: notes.trim() || undefined,
-      // The viewed day is the default due date; plain "today" needs none.
-      due_date: isToday ? undefined : toPbDate(date),
+      // A timed task must belong to a day; otherwise the viewed day is the
+      // default due date and plain "today" needs none.
+      due_date: start != null ? toPbDate(date) : isToday ? undefined : toPbDate(date),
+      start_min: start ?? 0,
+      dur_min: dur,
     });
     onClose();
   };
@@ -106,7 +137,9 @@ function ComposerSheet({ date, onClose }: { date: string; onClose: () => void })
         pointerEvents="box-none"
       >
         <Animated.View
-          entering={SlideInDown.springify().stiffness(400).damping(36)}
+          // Ease-out, no spring: the drawer travels the whole screen height,
+          // so even a small overshoot reads as a wobble, not a settle.
+          entering={SlideInDown.duration(300).easing(Easing.out(Easing.cubic))}
           exiting={SlideOutDown.duration(220)}
           style={[
             styles.sheet,
@@ -122,7 +155,7 @@ function ComposerSheet({ date, onClose }: { date: string; onClose: () => void })
             <View style={[styles.handle, { backgroundColor: alpha(colors.ink, 0.15) }]} />
           </View>
 
-          <Eyebrow>new task{isToday ? "" : ` · ${dayLabel}`}</Eyebrow>
+          <Eyebrow>new task{start != null || !isToday ? ` · ${dayLabel}` : ""}</Eyebrow>
           <TextInput
             autoFocus
             value={title}
@@ -141,6 +174,42 @@ function ComposerSheet({ date, onClose }: { date: string; onClose: () => void })
             multiline
             style={[styles.detailsInput, type.sans, { color: colors.ink }]}
           />
+
+          {start != null && (
+            <View
+              style={[
+                styles.timedRow,
+                { borderColor: alpha(colors.rule, 0.6), backgroundColor: alpha(colors.paper, 0.5) },
+              ]}
+            >
+              <Text style={[styles.timedStart, type.sansMedium, { color: colors.ink }]}>
+                {fmtMin(start)}
+              </Text>
+              <Text style={[styles.timedFor, type.sans, { color: colors.inkMuted }]}>for</Text>
+              <View style={styles.durations}>
+                {DURATIONS.map((d) => (
+                  <Pressable
+                    key={d.min}
+                    onPress={() => setDur(d.min)}
+                    style={[styles.durChip, dur === d.min && { backgroundColor: colors.zest }]}
+                  >
+                    <Text
+                      style={[
+                        styles.durChipText,
+                        type.sansMedium,
+                        { color: dur === d.min ? colors.paper : colors.inkMuted },
+                      ]}
+                    >
+                      {d.label}
+                    </Text>
+                  </Pressable>
+                ))}
+              </View>
+              <Pressable accessibilityLabel="Remove time" onPress={() => setStart(null)} hitSlop={8}>
+                <X size={14} color={alpha(colors.inkMuted, 0.6)} />
+              </Pressable>
+            </View>
+          )}
 
           <View style={styles.chips}>
             <PressableScale
@@ -264,6 +333,38 @@ const styles = StyleSheet.create({
     fontSize: 14,
     maxHeight: 80,
     paddingVertical: 2,
+  },
+  timedRow: {
+    marginTop: 10,
+    flexDirection: "row",
+    alignItems: "center",
+    flexWrap: "wrap",
+    gap: 8,
+    borderWidth: 1,
+    borderRadius: 12,
+    padding: 10,
+  },
+  timedStart: {
+    fontSize: 13,
+    fontVariant: ["tabular-nums"],
+  },
+  timedFor: {
+    fontSize: 12,
+  },
+  durations: {
+    flex: 1,
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 4,
+  },
+  durChip: {
+    borderRadius: 999,
+    paddingHorizontal: 9,
+    paddingVertical: 4,
+  },
+  durChipText: {
+    fontSize: 11,
+    fontVariant: ["tabular-nums"],
   },
   chips: {
     marginTop: 8,

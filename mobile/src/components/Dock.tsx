@@ -1,5 +1,5 @@
 import { Tabs } from "expo-router";
-import { NotebookPen, UserRound } from "lucide-react-native";
+import { CalendarDays, NotebookPen, UserRound, type LucideIcon } from "lucide-react-native";
 import { useEffect, useRef } from "react";
 import { Pressable, StyleSheet, Text, View, type LayoutChangeEvent } from "react-native";
 import Animated, {
@@ -35,7 +35,8 @@ export function Dock({ state, navigation }: TabBarProps) {
 
   const routeName = state.routes[state.index].name;
   // The style studio is a drill-in of account — the parent stop stays lit there.
-  const active = routeName === "index" ? "planner" : "account";
+  const active =
+    routeName === "index" ? "planner" : routeName === "calendar" ? "calendar" : "account";
 
   const stops = useRef<Record<string, { x: number; width: number }>>({});
   const pillX = useSharedValue(0);
@@ -103,10 +104,19 @@ export function Dock({ state, navigation }: TabBarProps) {
         <View style={[styles.divider, { backgroundColor: alpha(colors.rule, 0.8) }]} />
         <DockTab
           label="Planner"
+          icon={NotebookPen}
           doodleKey="planner"
           active={active === "planner"}
           onLayout={measure("planner")}
           onPress={() => navigation.navigate("index")}
+        />
+        <DockTab
+          label="Calendar"
+          icon={CalendarDays}
+          doodleKey="calendar"
+          active={active === "calendar"}
+          onLayout={measure("calendar")}
+          onPress={() => navigation.navigate("calendar")}
         />
       </View>
     </View>
@@ -166,12 +176,14 @@ function AccountCluster({
 
 function DockTab({
   label,
+  icon: Icon,
   doodleKey,
   active,
   onLayout,
   onPress,
 }: {
   label: string;
+  icon: LucideIcon;
   doodleKey: string;
   active: boolean;
   onLayout: (e: LayoutChangeEvent) => void;
@@ -197,7 +209,7 @@ function DockTab({
             <DoodleSvg strokes={strokes} strokeWidth={2.6} />
           </View>
         ) : (
-          <NotebookPen size={18} strokeWidth={active ? 2.2 : 1.8} color={tint} />
+          <Icon size={18} strokeWidth={active ? 2.2 : 1.8} color={tint} />
         )}
         {active && (
           <Animated.Text

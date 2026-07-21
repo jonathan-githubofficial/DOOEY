@@ -82,7 +82,7 @@ export function AgendaSheet({ date }: { date: string }) {
 
 /** The sheet's date line: the day in display type, the actual date inked on as
  * a small rubber stamp, and the open count in a pressed counter chip. */
-function SheetHeading({ date, count }: { date: string; count: number }) {
+export function SheetHeading({ date, count }: { date: string; count: number }) {
   const colors = usePalette();
   const type = useType();
   const isToday = date === localDate();

@@ -69,6 +69,10 @@ export const useStyleStore = create<StyleStore>()(
     {
       name: "dooey-style",
       storage: createJSONStorage(() => AsyncStorage),
+      // v1: radius went from px (24) to rem (1.5) — stale v0 state would render
+      // 384px corners, so anything persisted before versioning is discarded.
+      version: 1,
+      migrate: () => ({}),
       // pageDoodles are intentionally NOT persisted locally — they live on the
       // user record so they follow the account across devices (and the web app).
       partialize: ({ colors, fontSans, fontDisplay, radius, grain, shadow, dockDoodles }) => ({

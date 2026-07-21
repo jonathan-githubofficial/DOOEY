@@ -49,6 +49,12 @@ export function dayTitle(date: string): string {
   return toLocalNoon(date).toLocaleDateString("en", { weekday: "long" });
 }
 
+/** "2026-07" → "2026-08", rolling over the year. */
+export function nextMonth(month: string): string {
+  const [y, m] = month.split("-").map(Number);
+  return m === 12 ? `${y + 1}-01` : `${y}-${pad2(m + 1)}`;
+}
+
 export interface DueInfo {
   text: string;
   tone: "overdue" | "today" | "future";

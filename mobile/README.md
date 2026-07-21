@@ -8,16 +8,21 @@ on the web app and vice versa.
 
 - **Auth** (`src/app/login.tsx`) — email + password sign in / sign up; the session
   persists in AsyncStorage and every tab lives behind a guard.
-- **Planner** (`src/app/(tabs)/index.tsx`) — week ribbon, one day at a glance,
-  check-off, long-press to delete, quick-add composer.
+- **Planner** (`src/app/(tabs)/index.tsx`) — week ribbon, the ring-bound planner
+  book with page-flip, check-off, long-press to delete, floating stamp composer.
+- **Calendar** (`src/app/(tabs)/calendar.tsx`) — day/week/month views: the timeboxed
+  day sheet (tap an hour to add, shelf for unscheduled), the week spread, the month
+  grid with open-task dots, and a time-zoom stepper.
 - **Doodling** (`src/components/Doodle*.tsx`) — the pad, four inks, pen/eraser/undo.
   Strokes share the web app's format (% points), so avatars round-trip.
 - **Account** (`src/app/(tabs)/account.tsx`) — doodled avatar, light/dark toggle,
-  sign out.
+  sign out, and the door to the Style studio.
+- **Style studio** (`src/app/(tabs)/style.tsx`) — presets, per-token colour mixing,
+  page doodles (synced to the user record), fonts, corners/grain/shadow.
 
-Not ported yet: task pages, boards, projects/learning, calendar sync, PocketBase
-realtime (React Native has no EventSource — needs a polyfill; lists refetch on
-mutation instead).
+Not ported yet: task pages, boards, projects/learning, Google Calendar sync,
+drag-to-move/resize timeboxes, PocketBase realtime (React Native has no
+EventSource — needs a polyfill; lists refetch on mutation instead).
 
 ## Run it
 

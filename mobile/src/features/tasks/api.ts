@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import type { RecordModel } from "pocketbase";
-import { addDays, localDate } from "@/lib/dates";
+import { addDays, localDate, nextMonth } from "@/lib/dates";
 import { pb } from "@/lib/pb";
 import { useAuthStore } from "@/stores/auth";
 import type { Task, TaskPatch } from "./types";
@@ -18,6 +18,8 @@ function toTask(r: RecordModel): Task {
     due_date: r.due_date ?? "",
     done_at: r.done_at ?? "",
     sort_order: r.sort_order ?? 0,
+    start_min: r.start_min ?? 0,
+    dur_min: r.dur_min || 60,
     project: r.project ?? "",
     gate: r.gate ?? false,
     created: r.created,
@@ -54,6 +56,30 @@ export function useDayTasks(date: string) {
   });
 }
 
+/** Open-task counts per day for one month ("YYYY-MM") — the month grid's dots. */
+export function useMonthOpenCounts(month: string) {
+  const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
+  return useQuery({
+    queryKey: ["tasks", "monthCounts", month] as const,
+    enabled: isAuthenticated,
+    queryFn: async () => {
+      const records = await pb.collection("tasks").getFullList({
+        filter: pb.filter("done_at = '' && due_date >= {:start} && due_date < {:end}", {
+          start: new Date(`${month}-01T00:00:00.000Z`),
+          end: new Date(`${nextMonth(month)}-01T00:00:00.000Z`),
+        }),
+        fields: "due_date",
+      });
+      const counts: Record<string, number> = {};
+      for (const r of records) {
+        const d = (r.due_date as string).slice(0, 10);
+        counts[d] = (counts[d] ?? 0) + 1;
+      }
+      return counts;
+    },
+  });
+}
+
 // requestKey: null on all mutations — the SDK auto-cancels same-key requests,
 // and two quick writes to one record must both land, not race.
 
@@ -65,11 +91,15 @@ export function useCreateTask() {
       description,
       notes,
       due_date,
+      start_min,
+      dur_min,
     }: {
       title: string;
       description?: string;
       notes?: string;
       due_date?: string;
+      start_min?: number;
+      dur_min?: number;
     }) =>
       pb.collection("tasks").create(
         {
@@ -78,6 +108,8 @@ export function useCreateTask() {
           description: description ?? "",
           notes: notes ?? "",
           due_date: due_date ?? "",
+          start_min: start_min ?? 0,
+          dur_min: dur_min ?? 60,
           sort_order: Date.now(),
         },
         { requestKey: null },
