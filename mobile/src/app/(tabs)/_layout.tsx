@@ -95,7 +95,7 @@ export default function TabsLayout() {
 // The icon draws at ICON_PT points in the bar. Since switching to full-color
 // imageSource icons, the declared `scale` is honored — so the bitmap carries
 // PixelRatio× pixels for a crisp render instead of a 1× upscale.
-const ICON_PT = 22;
+const ICON_PT = 10;
 const ICON_SCALE = PixelRatio.get();
 const ICON_PX = ICON_PT * ICON_SCALE;
 const EASEL_PX = ICON_PX * 2;
