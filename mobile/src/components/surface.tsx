@@ -1,5 +1,13 @@
 import type { PropsWithChildren } from "react";
-import { StyleSheet, Text, View, type StyleProp, type TextStyle, type ViewStyle } from "react-native";
+import {
+  Platform,
+  StyleSheet,
+  Text,
+  View,
+  type StyleProp,
+  type TextStyle,
+  type ViewStyle,
+} from "react-native";
 import { Grain } from "@/components/grain";
 import { PressableScale } from "@/components/pressable-scale";
 import { StampEdge } from "@/components/stamp-edge";
@@ -99,8 +107,11 @@ export function StampButton({
       style={[
         styles.stampBtn,
         // iOS shadows trace the layer's alpha, so the soft shadow follows the
-        // perforated silhouette; Android's elevation stays rectangular.
+        // perforated silhouette; Android's elevation stays rectangular; the
+        // web gets the legacy .stamp-btn drop-shadow filter.
         { shadowOpacity: 0.2 * shadow, elevation: Math.round(2 * shadow) },
+        Platform.OS === "web" &&
+          ({ filter: "drop-shadow(0 1.5px 1.5px rgb(40 32 24 / 0.2))" } as unknown as ViewStyle),
         disabled && { opacity: 0.4 },
         style,
       ]}

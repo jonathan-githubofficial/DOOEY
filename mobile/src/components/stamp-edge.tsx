@@ -1,5 +1,5 @@
-import { useState } from "react";
-import { Platform, StyleSheet, View, type ViewStyle } from "react-native";
+import { useEffect, useRef, useState } from "react";
+import { Platform, StyleSheet, View } from "react-native";
 import Svg, { Path } from "react-native-svg";
 
 const R = 3.5; // perforation radius — same numbers as the web's .stamp-edge
@@ -19,6 +19,29 @@ function hole(cx: number, cy: number): string {
   return `M${cx + R} ${cy} A${R} ${R} 0 1 0 ${cx - R} ${cy} A${R} ${R} 0 1 0 ${cx + R} ${cy} Z`;
 }
 
+/** react-native-web whitelists style properties and silently drops `mask`,
+ * so the legacy perforation is written straight onto the DOM node. */
+function WebStampEdge({ color }: { color: string }) {
+  const ref = useRef<View>(null);
+  useEffect(() => {
+    const el = ref.current as unknown as HTMLElement | null;
+    if (!el?.style) return;
+    // Shorthand first — it resets composite — then the composite mode
+    // (Chrome wants the legacy keyword, the standard wants intersect).
+    el.style.setProperty("-webkit-mask", MASK);
+    el.style.setProperty("-webkit-mask-composite", "source-in");
+    el.style.setProperty("mask", MASK);
+    el.style.setProperty("mask-composite", "intersect");
+  }, []);
+  return (
+    <View
+      ref={ref}
+      pointerEvents="none"
+      style={[StyleSheet.absoluteFill, { backgroundColor: color }]}
+    />
+  );
+}
+
 /** The postage-stamp fill: a colored rect with notches punched along all four
  * sides. On the web it IS the legacy stamp — the same CSS mask — which also
  * keeps the corners crisp; native builds the perforations as one evenodd SVG
@@ -28,21 +51,7 @@ export function StampEdge({ color }: { color: string }) {
   const { w, h } = size;
 
   if (Platform.OS === "web") {
-    return (
-      <View
-        pointerEvents="none"
-        style={[
-          StyleSheet.absoluteFill,
-          { backgroundColor: color },
-          {
-            maskImage: MASK,
-            maskComposite: "intersect",
-            WebkitMaskImage: MASK,
-            WebkitMaskComposite: "source-in",
-          } as unknown as ViewStyle,
-        ]}
-      />
-    );
+    return <WebStampEdge color={color} />;
   }
 
   let d = "";

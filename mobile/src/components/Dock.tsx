@@ -1,6 +1,5 @@
 import { Tabs } from "expo-router";
 import {
-  CalendarDays,
   FolderOpen,
   NotebookPen,
   Shapes,
@@ -37,7 +36,6 @@ type TabBarProps = Parameters<NonNullable<React.ComponentProps<typeof Tabs>["tab
 /** The spaces, in dock order — routes, glyphs and their doodle keys. */
 const SPACES = [
   { key: "planner", route: "index", label: "Planner", icon: NotebookPen, doodle: "planner" },
-  { key: "calendar", route: "calendar", label: "Calendar", icon: CalendarDays, doodle: "calendar" },
   { key: "boards", route: "boards", label: "Boards", icon: Shapes, doodle: "boards" },
   { key: "projects", route: "projects", label: "Projects", icon: FolderOpen, doodle: "learning" },
 ] as const;
@@ -57,13 +55,11 @@ export function Dock({ state, navigation }: TabBarProps) {
   const active =
     routeName === "index" || routeName.startsWith("task")
       ? "planner"
-      : routeName === "calendar"
-        ? "calendar"
-        : routeName === "boards" || routeName.startsWith("board")
-          ? "boards"
-          : routeName === "projects" || routeName.startsWith("project/")
-            ? "projects"
-            : "account";
+      : routeName === "boards" || routeName.startsWith("board")
+        ? "boards"
+        : routeName === "projects" || routeName.startsWith("project/")
+          ? "projects"
+          : "account";
 
   const stops = useRef<Record<string, { x: number; width: number }>>({});
   const pillX = useSharedValue(0);

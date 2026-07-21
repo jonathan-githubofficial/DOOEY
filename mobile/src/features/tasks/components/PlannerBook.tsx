@@ -3,6 +3,7 @@ import { useEffect, useState, type ReactNode } from "react";
 import { StyleSheet, View } from "react-native";
 import Animated, {
   Easing,
+  LinearTransition,
   runOnJS,
   useAnimatedStyle,
   useSharedValue,
@@ -22,6 +23,10 @@ interface Flip {
   from: string;
   dir: number;
 }
+
+// Days differ in height; the pad glides between them instead of snapping.
+// Tween, not spring: a resizing pad must never bounce — it reads as glitch.
+const padResize = LinearTransition.duration(320).easing(Easing.bezier(0.3, 0.6, 0.3, 1).factory());
 
 /** The top-bound planner pad: static wire rings, pages that flip up over the
  * binding (desk-calendar style), and the rest of the pad peeking out below.
@@ -94,7 +99,7 @@ export function PlannerBook({
   return (
     <View style={styles.book}>
       <Rings />
-      <Animated.View style={[styles.page, flip ? underStyle : null]}>
+      <Animated.View layout={padResize} style={[styles.page, flip ? underStyle : null]}>
         {renderPage(underPage)}
       </Animated.View>
       {flip && topPage && (
@@ -109,7 +114,9 @@ export function PlannerBook({
           {renderPage(topPage)}
         </Animated.View>
       )}
-      <View
+      {/* The pad edges ride the page's bottom — they glide with the resize. */}
+      <Animated.View
+        layout={padResize}
         pointerEvents="none"
         style={[
           styles.padEdge,
@@ -124,7 +131,8 @@ export function PlannerBook({
           },
         ]}
       />
-      <View
+      <Animated.View
+        layout={padResize}
         pointerEvents="none"
         style={[
           styles.padEdge,

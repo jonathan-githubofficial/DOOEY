@@ -1,7 +1,7 @@
 import { useRouter } from "expo-router";
 import { Trash2 } from "lucide-react-native";
 import { useEffect, useMemo, useState } from "react";
-import { Platform, Pressable, StyleSheet, Text, View } from "react-native";
+import { Platform, Pressable, StyleSheet, Text, View, type ViewStyle } from "react-native";
 import { Gesture, GestureDetector } from "react-native-gesture-handler";
 import Animated, {
   FadeIn,
@@ -388,9 +388,14 @@ function DraggableRow({
           <Animated.View style={[styles.rowCard, cardStyle]}>
             {/* The WHOLE row opens the task's page; the check, the checklist
                 lines and the trash are nested pressables, so they win their
-                own taps. Holding anywhere lifts the row for a drag. */}
+                own taps. Holding anywhere lifts the row for a drag — the
+                pressed wash tells your finger the row heard it. */}
             <Pressable
-              style={styles.rowPress}
+              style={({ pressed }) => [
+                styles.rowPress,
+                pressed && { backgroundColor: alpha(colors.ink, 0.04), borderRadius: 14 },
+                web && ({ cursor: "grab" } as unknown as ViewStyle),
+              ]}
               onPress={() => {
                 if (!web && reveal.value > 0) closeReveal();
                 else router.push(`/task/${id}`);

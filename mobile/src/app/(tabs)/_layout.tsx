@@ -1,7 +1,7 @@
 import { Redirect, Tabs } from "expo-router";
 import { Icon, Label, NativeTabs, VectorIcon } from "expo-router/unstable-native-tabs";
 import { useEffect, useRef, useState } from "react";
-import { Platform, StyleSheet, View, type ImageSourcePropType } from "react-native";
+import { PixelRatio, Platform, StyleSheet, View, type ImageSourcePropType } from "react-native";
 import Svg, { Path } from "react-native-svg";
 import ViewShot from "react-native-view-shot";
 import { MaterialIcons } from "@expo/vector-icons";
@@ -16,7 +16,6 @@ import { usePalette } from "@/stores/theme";
  * by your hand-drawn page doodles when "doodle icons in dock" is on. */
 const SPACES = [
   { name: "index", label: "Planner", sf: "checklist", md: "event-note", doodle: "planner" },
-  { name: "calendar", label: "Calendar", sf: "calendar", md: "calendar-month", doodle: "calendar" },
   { name: "boards", label: "Boards", sf: "square.on.square", md: "dashboard", doodle: "boards" },
   { name: "projects", label: "Projects", sf: "folder", md: "folder", doodle: "learning" },
   { name: "account", label: "Account", sf: "person.crop.circle", md: "person", doodle: "account" },
@@ -60,7 +59,9 @@ export default function TabsLayout() {
                   // __keepColor rides through our expo-router patch (see
                   // patches/) so the bar shows the doodle's real inks instead
                   // of tinting it as a template.
-                  <Icon src={{ uri, __keepColor: true } as ImageSourcePropType} />
+                  <Icon
+                    src={{ uri, scale: ICON_SCALE, __keepColor: true } as ImageSourcePropType}
+                  />
                 ) : Platform.OS === "ios" ? (
                   <Icon sf={space.sf} />
                 ) : (
@@ -84,7 +85,6 @@ export default function TabsLayout() {
       }}
     >
       <Tabs.Screen name="index" options={{ title: "Planner" }} />
-      <Tabs.Screen name="calendar" options={{ title: "Calendar" }} />
       <Tabs.Screen name="boards" options={{ title: "Boards" }} />
       <Tabs.Screen name="projects" options={{ title: "Projects" }} />
       <Tabs.Screen name="account" options={{ title: "Account" }} />
@@ -92,12 +92,13 @@ export default function TabsLayout() {
   );
 }
 
-// A tab icon is ~24pt, and the bar reads a bare tmpfile's PIXELS as POINTS —
-// density metadata doesn't survive the capture, so the PNG is exported at
-// exactly icon size. It's drawn on a 4× easel first so the downsample
-// antialiases the strokes instead of leaving them ragged.
-const ICON_PT = 10;
-const EASEL_PX = ICON_PT * 4;
+// The icon draws at ICON_PT points in the bar. Since switching to full-color
+// imageSource icons, the declared `scale` is honored — so the bitmap carries
+// PixelRatio× pixels for a crisp render instead of a 1× upscale.
+const ICON_PT = 22;
+const ICON_SCALE = PixelRatio.get();
+const ICON_PX = ICON_PT * ICON_SCALE;
+const EASEL_PX = ICON_PX * 2;
 
 /** Off-screen easels: one per doodled space, snapshotted to PNGs whenever the
  * drawings — or the palette they're inked with — change. Strokes keep their
@@ -143,7 +144,7 @@ function DoodleIconRig({
           ref={(r) => {
             shots.current[key] = r;
           }}
-          options={{ format: "png", result: "tmpfile", width: ICON_PT, height: ICON_PT }}
+          options={{ format: "png", result: "tmpfile", width: ICON_PX, height: ICON_PX }}
           style={styles.shot}
         >
           <Svg viewBox="0 0 100 100" width={EASEL_PX} height={EASEL_PX}>

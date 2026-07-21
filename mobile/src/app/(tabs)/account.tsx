@@ -54,15 +54,6 @@ export default function Account() {
             </Text>
             <ThemeToggle />
           </View>
-
-          <View style={styles.signOutRow}>
-            <StampButton onPress={signOut}>
-              <LogOut size={16} color={colors.inkMuted} />
-              <Text style={[styles.signOutLabel, type.sansMedium, { color: colors.inkMuted }]}>
-                Sign out
-              </Text>
-            </StampButton>
-          </View>
         </Panel>
 
         <PressableScale scaleTo={0.98} onPress={() => router.push("/style")}>
@@ -81,6 +72,14 @@ export default function Account() {
             <ChevronRight size={16} color={colors.inkMuted} />
           </Panel>
         </PressableScale>
+
+        {/* The way out, at the very bottom — one wide stamp across the page. */}
+        <StampButton onPress={signOut} style={styles.signOut}>
+          <LogOut size={16} color={colors.inkMuted} />
+          <Text style={[styles.signOutLabel, type.sansMedium, { color: colors.inkMuted }]}>
+            Sign out
+          </Text>
+        </StampButton>
       </ScrollView>
     </View>
   );
@@ -173,9 +172,11 @@ const styles = StyleSheet.create({
   appearanceLabel: {
     fontSize: 14,
   },
-  signOutRow: {
-    marginTop: 20,
-    flexDirection: "row",
+  signOut: {
+    marginTop: 28,
+    alignSelf: "stretch",
+    justifyContent: "center",
+    paddingVertical: 14,
   },
   signOutLabel: {
     fontSize: 13,
