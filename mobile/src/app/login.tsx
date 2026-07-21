@@ -1,6 +1,6 @@
 import { Redirect, useRouter } from "expo-router";
 import { LinearGradient } from "expo-linear-gradient";
-import { Eye, EyeOff, PenLine } from "lucide-react-native";
+import { Eye, EyeOff } from "lucide-react-native";
 import { useMemo, useState } from "react";
 import {
   KeyboardAvoidingView,
@@ -20,7 +20,6 @@ import Animated, {
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Grain } from "@/components/grain";
 import { PressableScale } from "@/components/pressable-scale";
-import { StampEdge } from "@/components/stamp-edge";
 import { signIn, signUp } from "@/features/auth/api";
 import { fontStyle } from "@/features/style/tokens";
 import { hapticSuccess, hapticTap, hapticWarn } from "@/lib/haptics";
@@ -30,7 +29,8 @@ import { usePalette, useThemeStore, useType } from "@/stores/theme";
 
 const settle = LinearTransition.springify().stiffness(400).damping(32);
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-const LINE = 48; // ruled-line spacing; inputs sit one line tall
+const LINE = 40; // ruled-line rhythm; each field is one line tall
+const RINGS = 6;
 
 function strengthOf(pw: string): { score: number; label: string } {
   if (!pw) return { score: 0, label: "" };
@@ -41,9 +41,9 @@ function strengthOf(pw: string): { score: number; label: string } {
   return { score: Math.min(3, s), label: ["too short", "okay", "good", "strong"][Math.min(3, s)] };
 }
 
-/** The front door as a tactile object: a manila file folder (its tabs switch
- * sign-in / sign-up) holding a ruled index card. You write your details on
- * the lines and press a wax seal to enter. */
+/** The front door as the first page of your DOOEY: a ruled, ring-bound sheet
+ * (the planner's own binder), your details written on the lines, a rubber
+ * stamp to enter. */
 export default function Login() {
   const colors = usePalette();
   const type = useType();
@@ -69,10 +69,12 @@ export default function Login() {
   const confirmOk = mode === "in" || confirm === password;
   const canSubmit = !busy && emailOk && pwOk && confirmOk;
 
-  const switchTo = (m: "in" | "up") => {
-    if (m === mode) return;
+  const rows = mode === "up" ? 3 : 2;
+  const rule = alpha(colors.sky, dark ? 0.32 : 0.22);
+
+  const swap = () => {
     hapticTap();
-    setMode(m);
+    setMode((m) => (m === "in" ? "up" : "in"));
     setError(null);
     setConfirm("");
   };
@@ -93,10 +95,6 @@ export default function Login() {
     }
   };
 
-  // Manila warms the paper a touch; the folder reads as card stock, not page.
-  const manila = dark ? alpha(colors.honey, 0.16) : alpha(colors.honey, 0.28);
-  const rule = alpha(colors.sky, dark ? 0.35 : 0.28); // ruled lines, faint blue
-
   return (
     <KeyboardAvoidingView
       behavior={Platform.OS === "ios" ? "padding" : undefined}
@@ -106,198 +104,209 @@ export default function Login() {
       ]}
     >
       <Grain />
-      <Text style={[styles.wordmark, fontStyle("fraunces", "900"), { color: colors.ink }]}>
-        DOOEY
-        <Text style={{ color: colors.zest }}>.</Text>
-      </Text>
 
-      <Animated.View entering={FadeInDown.springify().stiffness(220).damping(24)} style={styles.deskArea}>
-        {/* The folder tabs — the active one merges into the folder below it. */}
-        <View style={styles.tabs}>
-          {(["in", "up"] as const).map((m) => {
-            const active = mode === m;
-            return (
-              <Pressable
-                key={m}
-                accessibilityRole="tab"
-                accessibilityState={{ selected: active }}
-                onPress={() => switchTo(m)}
-                style={[
-                  styles.tab,
-                  {
-                    backgroundColor: active ? manila : alpha(manila, 0.5),
-                    borderColor: alpha(colors.honey, 0.4),
-                    zIndex: active ? 2 : 1,
-                    marginBottom: active ? -1 : 2,
-                  },
-                ]}
-              >
-                <Text
-                  style={[
-                    styles.tabText,
-                    type.sansSemiBold,
-                    { color: active ? colors.ink : colors.inkMuted },
-                  ]}
-                >
-                  {m === "in" ? "Sign in" : "Sign up"}
-                </Text>
-              </Pressable>
-            );
-          })}
-        </View>
+      <Animated.View entering={FadeInDown.springify().stiffness(200).damping(22)} style={styles.deskArea}>
+        {/* The binder wire, arcing over the top edge — the planner's own. */}
+        <Rings />
 
-        {/* The folder itself, holding the index card. */}
+        {/* The page. */}
         <View
           style={[
-            styles.folder,
+            styles.page,
             {
-              backgroundColor: manila,
-              borderColor: alpha(colors.honey, 0.4),
+              backgroundColor: colors.surface,
+              borderColor: alpha(colors.rule, 0.6),
               shadowColor: "#282018",
             },
           ]}
         >
+          <Grain radius={19} />
+          {/* Top-lit paper edge. */}
           <View
-            style={[
-              styles.cardStock,
-              { backgroundColor: colors.surface, borderColor: alpha(colors.rule, 0.6) },
-            ]}
-          >
-            <Grain radius={13} />
-
-            {/* A postage stamp, franked into the corner. */}
-            <View style={styles.postage}>
-              <StampEdge color={alpha(colors.zest, 0.9)} />
-              <PenLine size={20} color={colors.paper} />
-            </View>
-
-            <Text style={[styles.eyebrow, type.sansMedium, { color: colors.inkMuted }]}>
-              {mode === "in" ? "member card" : "new member"}
-            </Text>
-            <Text style={[styles.heading, type.display, { color: colors.ink }]}>
-              {mode === "in" ? "Welcome back." : "Make it yours."}
-            </Text>
-
-            {/* The writing area: red margin down the left, faint ruled lines,
-                and the fields written straight onto them. */}
-            <View style={styles.ruled}>
-              <View style={[styles.margin, { backgroundColor: alpha(colors.clay, 0.4) }]} />
-              {[0, 1, 2, 3].map((i) => (
-                <View
-                  key={i}
-                  pointerEvents="none"
-                  style={[styles.ruleLine, { top: (i + 1) * LINE - 1, backgroundColor: rule }]}
+            pointerEvents="none"
+            style={[styles.topEdge, { backgroundColor: dark ? "rgba(255,255,255,0.08)" : "rgba(255,255,255,0.6)" }]}
+          />
+          {/* Punched holes, dead-centre under each ring. */}
+          <View pointerEvents="none" style={styles.holes}>
+            {Array.from({ length: RINGS }).map((_, i) => (
+              <View key={i} style={styles.holeSlot}>
+                <LinearGradient
+                  colors={[alpha(colors.ink, 0.22), alpha(colors.ink, 0.08)]}
+                  style={styles.hole}
                 />
-              ))}
+              </View>
+            ))}
+          </View>
 
+          <Text style={[styles.brand, fontStyle("fraunces", "900"), { color: colors.ink }]}>
+            DOOEY<Text style={{ color: colors.zest }}>.</Text>
+          </Text>
+          <Text style={[styles.eyebrow, type.sansMedium, { color: colors.inkMuted }]}>
+            {mode === "in" ? "sign in" : "new member"}
+          </Text>
+          <Text style={[styles.heading, type.display, { color: colors.ink }]}>
+            {mode === "in" ? "Welcome back." : "Make it yours."}
+          </Text>
+
+          {/* The writing area: a red margin, faint blue rules, ink on the line. */}
+          <View style={[styles.ruled, { height: rows * LINE }]}>
+            <View style={[styles.margin, { backgroundColor: alpha(colors.clay, 0.35) }]} />
+            {Array.from({ length: rows }).map((_, i) => (
+              <View
+                key={i}
+                pointerEvents="none"
+                style={[styles.ruleLine, { top: (i + 1) * LINE - 1, backgroundColor: rule }]}
+              />
+            ))}
+
+            <LineInput
+              value={email}
+              onChangeText={setEmail}
+              placeholder="email"
+              autoCapitalize="none"
+              autoCorrect={false}
+              autoComplete="email"
+              keyboardType="email-address"
+              textContentType="emailAddress"
+              colors={colors}
+              type={type}
+            />
+            <View style={styles.pwRow}>
               <LineInput
-                value={email}
-                onChangeText={setEmail}
-                placeholder="email"
+                value={password}
+                onChangeText={setPassword}
+                onSubmitEditing={submit}
+                placeholder="password"
+                secureTextEntry={!reveal}
                 autoCapitalize="none"
-                autoCorrect={false}
-                autoComplete="email"
-                keyboardType="email-address"
-                textContentType="emailAddress"
+                autoComplete={mode === "in" ? "current-password" : "new-password"}
+                textContentType={mode === "in" ? "password" : "newPassword"}
                 colors={colors}
                 type={type}
+                style={styles.flex}
               />
-              <View style={styles.pwRow}>
+              <Pressable
+                accessibilityLabel={reveal ? "Hide password" : "Show password"}
+                hitSlop={8}
+                onPress={() => setReveal((r) => !r)}
+                style={styles.eye}
+              >
+                {reveal ? <EyeOff size={17} color={colors.inkMuted} /> : <Eye size={17} color={colors.inkMuted} />}
+              </Pressable>
+            </View>
+            {mode === "up" && (
+              <Animated.View entering={FadeIn.duration(160)} exiting={FadeOut.duration(120)} layout={settle}>
                 <LineInput
-                  value={password}
-                  onChangeText={setPassword}
+                  value={confirm}
+                  onChangeText={setConfirm}
                   onSubmitEditing={submit}
-                  placeholder="password"
+                  placeholder="confirm password"
                   secureTextEntry={!reveal}
                   autoCapitalize="none"
-                  autoComplete={mode === "in" ? "current-password" : "new-password"}
-                  textContentType={mode === "in" ? "password" : "newPassword"}
+                  autoComplete="new-password"
                   colors={colors}
                   type={type}
-                  style={styles.flex}
                 />
-                <Pressable
-                  accessibilityLabel={reveal ? "Hide password" : "Show password"}
-                  hitSlop={8}
-                  onPress={() => setReveal((r) => !r)}
-                  style={styles.eye}
-                >
-                  {reveal ? (
-                    <EyeOff size={18} color={colors.inkMuted} />
-                  ) : (
-                    <Eye size={18} color={colors.inkMuted} />
-                  )}
-                </Pressable>
-              </View>
-              {mode === "up" && (
-                <Animated.View entering={FadeIn.duration(160)} exiting={FadeOut.duration(120)} layout={settle}>
-                  <LineInput
-                    value={confirm}
-                    onChangeText={setConfirm}
-                    onSubmitEditing={submit}
-                    placeholder="confirm password"
-                    secureTextEntry={!reveal}
-                    autoCapitalize="none"
-                    autoComplete="new-password"
-                    colors={colors}
-                    type={type}
-                  />
-                </Animated.View>
-              )}
-            </View>
-
-            {mode === "up" && password.length > 0 && (
-              <Animated.View entering={FadeIn.duration(160)} style={styles.strengthRow}>
-                <View style={styles.pips}>
-                  {[0, 1, 2].map((i) => (
-                    <View
-                      key={i}
-                      style={[
-                        styles.pip,
-                        {
-                          backgroundColor:
-                            i < strength.score
-                              ? strength.score >= 3
-                                ? colors.leaf
-                                : colors.honey
-                              : alpha(colors.ink, 0.12),
-                        },
-                      ]}
-                    />
-                  ))}
-                </View>
-                <Text style={[styles.strengthLabel, type.sans, { color: colors.inkMuted }]}>
-                  {strength.label}
-                </Text>
               </Animated.View>
             )}
-
-            {error && (
-              <Animated.Text
-                entering={FadeIn.duration(160)}
-                style={[styles.error, type.sans, { color: colors.clay }]}
-              >
-                {error}
-              </Animated.Text>
-            )}
-
-            {/* The submit: a wax seal you press to enter. */}
-            <View style={styles.sealRow}>
-              <WaxSeal
-                label={mode === "in" ? "press to sign in" : "press to seal it"}
-                disabled={!canSubmit}
-                busy={busy}
-                onPress={submit}
-              />
-            </View>
           </View>
+
+          {mode === "up" && password.length > 0 && (
+            <Animated.View entering={FadeIn.duration(160)} layout={settle} style={styles.strengthRow}>
+              <View style={styles.pips}>
+                {[0, 1, 2].map((i) => (
+                  <View
+                    key={i}
+                    style={[
+                      styles.pip,
+                      {
+                        backgroundColor:
+                          i < strength.score
+                            ? strength.score >= 3
+                              ? colors.leaf
+                              : colors.honey
+                            : alpha(colors.ink, 0.12),
+                      },
+                    ]}
+                  />
+                ))}
+              </View>
+              <Text style={[styles.strengthLabel, type.sans, { color: colors.inkMuted }]}>
+                {strength.label}
+              </Text>
+            </Animated.View>
+          )}
+
+          {error && (
+            <Animated.Text
+              entering={FadeIn.duration(160)}
+              layout={settle}
+              style={[styles.error, type.sans, { color: colors.clay }]}
+            >
+              {error}
+            </Animated.Text>
+          )}
+
+          <Animated.View layout={settle} style={styles.footer}>
+            <StampSubmit
+              label={busy ? "one sec" : mode === "in" ? "sign in" : "sign up"}
+              disabled={!canSubmit}
+              onPress={submit}
+            />
+            <Pressable onPress={swap} hitSlop={8}>
+              <Text style={[styles.swap, type.sansMedium, { color: colors.inkMuted }]}>
+                {mode === "in" ? "new here? " : "have an account? "}
+                <Text style={{ color: colors.zest }}>{mode === "in" ? "make one" : "sign in"}</Text>
+              </Text>
+            </Pressable>
+          </Animated.View>
         </View>
+
+        {/* Two more pages of the pad, peeking out below — depth, like the planner. */}
+        <View
+          pointerEvents="none"
+          style={[
+            styles.padEdge,
+            { marginHorizontal: 10, backgroundColor: alpha(colors.surface, 0.9), borderColor: alpha(colors.rule, 0.5) },
+          ]}
+        />
+        <View
+          pointerEvents="none"
+          style={[
+            styles.padEdge,
+            { marginHorizontal: 22, backgroundColor: alpha(colors.surface, 0.7), borderColor: alpha(colors.rule, 0.4) },
+          ]}
+        />
       </Animated.View>
     </KeyboardAvoidingView>
   );
 }
 
-/** An input written on a ruled line: no box, just ink on the line. */
+/** The three slim binder loops, arcing over the page's top edge. */
+function Rings() {
+  const colors = usePalette();
+  const dark = useThemeStore((s) => s.theme) === "dark";
+  return (
+    <View pointerEvents="none" style={styles.ringRow}>
+      {Array.from({ length: RINGS }).map((_, i) => (
+        <View key={i} style={styles.ringSlot}>
+          <View style={styles.ringShadow}>
+            <LinearGradient
+              colors={
+                dark
+                  ? ["rgba(255,255,255,0.4)", "rgba(255,255,255,0.1)", "rgba(0,0,0,0.4)"]
+                  : ["#ffffff", alpha(colors.ink, 0.05), alpha(colors.ink, 0.3)]
+              }
+              style={[styles.ring, { borderColor: dark ? "rgba(255,255,255,0.3)" : alpha(colors.ink, 0.4) }]}
+            />
+          </View>
+        </View>
+      ))}
+    </View>
+  );
+}
+
+/** An input written on a ruled line — no box, ink sitting on the rule. */
 function LineInput({
   colors,
   type,
@@ -309,52 +318,39 @@ function LineInput({
 }) {
   return (
     <TextInput
-      placeholderTextColor={alpha(colors.inkMuted, 0.55)}
+      placeholderTextColor={alpha(colors.inkMuted, 0.5)}
       style={[styles.lineInput, type.sans, { color: colors.ink }, style]}
       {...props}
     />
   );
 }
 
-/** A blob of sealing wax with the DOOEY monogram embossed — presses in on
- * tap. The gloss is a diagonal sheen; the emboss is a light top edge over a
- * darker face. */
-function WaxSeal({
+/** The submit as a red rubber stamp — a double-ruled border, tracked caps,
+ * grain showing through, tilted; it presses and straightens on tap. */
+function StampSubmit({
   label,
   disabled,
-  busy,
   onPress,
 }: {
   label: string;
   disabled: boolean;
-  busy: boolean;
   onPress: () => void;
 }) {
   const colors = usePalette();
   const type = useType();
   return (
     <PressableScale
-      scaleTo={0.9}
-      rotate={-6}
+      scaleTo={0.93}
+      rotate={-3}
       accessibilityRole="button"
       accessibilityLabel={label}
       disabled={disabled}
       onPress={onPress}
-      style={styles.sealPress}
+      style={[styles.stamp, { borderColor: colors.clay }, disabled && { opacity: 0.35 }]}
     >
-      <View style={[styles.seal, disabled && { opacity: 0.4 }]}>
-        <LinearGradient
-          colors={[alpha("#ffffff", 0.5), alpha(colors.clay, 0), alpha("#000000", 0.28)]}
-          start={{ x: 0.15, y: 0.1 }}
-          end={{ x: 0.9, y: 0.95 }}
-          style={StyleSheet.absoluteFill}
-        />
-        <View style={[styles.sealRim, { borderColor: alpha("#000000", 0.18) }]} />
-        <Text style={[styles.sealMark, fontStyle("fraunces", "900"), { color: alpha("#000000", 0.28) }]}>
-          {busy ? "…" : "D"}
-        </Text>
-      </View>
-      <Text style={[styles.sealLabel, type.sansMedium, { color: colors.inkMuted }]}>{label}</Text>
+      <Grain radius={6} />
+      <View style={[styles.stampInner, { borderColor: alpha(colors.clay, 0.45) }]} />
+      <Text style={[styles.stampText, type.sansSemiBold, { color: colors.clay }]}>{label}</Text>
     </PressableScale>
   );
 }
@@ -373,77 +369,97 @@ const styles = StyleSheet.create({
   screen: {
     flex: 1,
     justifyContent: "center",
-    paddingHorizontal: 20,
-  },
-  wordmark: {
-    fontSize: 40,
-    letterSpacing: -0.8,
-    textAlign: "center",
-    marginBottom: 22,
+    paddingHorizontal: 22,
   },
   deskArea: {
     alignSelf: "stretch",
+    marginTop: 12,
   },
-  tabs: {
-    flexDirection: "row",
-    gap: 6,
-    paddingLeft: 18,
-  },
-  tab: {
-    borderWidth: 1,
-    borderBottomWidth: 0,
-    borderTopLeftRadius: 12,
-    borderTopRightRadius: 12,
-    paddingHorizontal: 18,
-    paddingTop: 8,
-    paddingBottom: 9,
-  },
-  tabText: {
-    fontSize: 12.5,
-  },
-  folder: {
-    borderWidth: 1,
-    borderRadius: 18,
-    borderTopLeftRadius: 4,
-    padding: 10,
-    shadowOpacity: 0.16,
-    shadowRadius: 16,
-    shadowOffset: { width: 0, height: 8 },
-    elevation: 6,
-  },
-  cardStock: {
-    borderWidth: 1,
-    borderRadius: 13,
-    padding: 22,
-    overflow: "hidden",
-  },
-  postage: {
+  ringRow: {
     position: "absolute",
-    top: 16,
-    right: 16,
-    height: 40,
-    width: 34,
+    left: "12%",
+    right: "12%",
+    top: -14,
+    zIndex: 20,
+    flexDirection: "row",
+    justifyContent: "space-between",
+  },
+  ringSlot: {
+    width: 12,
     alignItems: "center",
-    justifyContent: "center",
-    transform: [{ rotate: "6deg" }],
+  },
+  ringShadow: {
+    borderRadius: 999,
+    shadowColor: "#282018",
+    shadowOpacity: 0.28,
+    shadowRadius: 2,
+    shadowOffset: { width: 0, height: 1 },
+    elevation: 2,
+  },
+  ring: {
+    height: 30,
+    width: 6,
+    borderRadius: 999,
+    borderWidth: 1,
+  },
+  page: {
+    borderWidth: 1,
+    borderRadius: 20,
+    paddingTop: 30,
+    paddingHorizontal: 26,
+    paddingBottom: 26,
+    overflow: "hidden",
+    shadowOpacity: 0.16,
+    shadowRadius: 22,
+    shadowOffset: { width: 0, height: 14 },
+    elevation: 8,
+  },
+  topEdge: {
+    position: "absolute",
+    left: 16,
+    right: 16,
+    top: 0,
+    height: 1,
+  },
+  holes: {
+    position: "absolute",
+    left: "12%",
+    right: "12%",
+    top: 11,
+    flexDirection: "row",
+    justifyContent: "space-between",
+  },
+  holeSlot: {
+    width: 12,
+    alignItems: "center",
+  },
+  hole: {
+    height: 9,
+    width: 9,
+    borderRadius: 999,
+  },
+  brand: {
+    fontSize: 22,
+    letterSpacing: -0.5,
   },
   eyebrow: {
+    marginTop: 14,
     fontSize: 10,
-    letterSpacing: 1.8,
+    letterSpacing: 2,
     textTransform: "uppercase",
   },
   heading: {
-    marginTop: 6,
+    marginTop: 4,
     fontSize: 27,
     letterSpacing: -0.6,
   },
   ruled: {
-    marginTop: 16,
+    marginTop: 18,
     position: "relative",
   },
   margin: {
     position: "absolute",
-    left: 22,
+    left: 20,
     top: 0,
     bottom: 0,
     width: 1.5,
@@ -456,7 +472,7 @@ const styles = StyleSheet.create({
   },
   lineInput: {
     height: LINE,
-    paddingLeft: 34,
+    paddingLeft: 32,
     paddingRight: 4,
     fontSize: 16,
   },
@@ -468,17 +484,17 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   eye: {
-    height: 32,
-    width: 32,
+    height: LINE,
+    width: 34,
     alignItems: "center",
     justifyContent: "center",
   },
   strengthRow: {
-    marginTop: 14,
+    marginTop: 16,
     flexDirection: "row",
     alignItems: "center",
     gap: 10,
-    paddingLeft: 34,
+    paddingLeft: 32,
   },
   pips: {
     flexDirection: "row",
@@ -496,43 +512,44 @@ const styles = StyleSheet.create({
     marginTop: 14,
     fontSize: 12.5,
     lineHeight: 17,
-    paddingLeft: 34,
+    paddingLeft: 32,
   },
-  sealRow: {
-    marginTop: 22,
-    alignItems: "center",
+  padEdge: {
+    height: 14,
+    marginTop: -9,
+    borderWidth: 1,
+    borderTopWidth: 0,
+    borderBottomLeftRadius: 18,
+    borderBottomRightRadius: 18,
+    zIndex: -1,
   },
-  sealPress: {
+  footer: {
+    marginTop: 24,
+    flexDirection: "row",
     alignItems: "center",
-    gap: 10,
+    justifyContent: "space-between",
   },
-  seal: {
-    height: 68,
-    width: 68,
-    borderRadius: 999,
-    backgroundColor: "#a8412c",
-    alignItems: "center",
-    justifyContent: "center",
+  stamp: {
+    borderWidth: 2,
+    borderRadius: 9,
+    paddingHorizontal: 20,
+    paddingVertical: 11,
     overflow: "hidden",
-    shadowColor: "#282018",
-    shadowOpacity: 0.3,
-    shadowRadius: 5,
-    shadowOffset: { width: 0, height: 3 },
-    elevation: 4,
   },
-  sealRim: {
+  stampInner: {
     ...StyleSheet.absoluteFillObject,
-    margin: 5,
-    borderRadius: 999,
-    borderWidth: 1.5,
+    margin: 3,
+    borderRadius: 6,
+    borderWidth: 1,
   },
-  sealMark: {
-    fontSize: 30,
-    lineHeight: 34,
-  },
-  sealLabel: {
-    fontSize: 11,
-    letterSpacing: 1.4,
+  stampText: {
+    fontSize: 13,
+    letterSpacing: 2.5,
     textTransform: "uppercase",
+  },
+  swap: {
+    fontSize: 12,
+    maxWidth: 130,
+    textAlign: "right",
   },
 });
