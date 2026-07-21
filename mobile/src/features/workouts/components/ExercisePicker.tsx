@@ -569,6 +569,11 @@ const styles = StyleSheet.create({
   },
   detailCard: {
     marginTop: 14,
+    alignSelf: "center",
+    // The source loops are 180×180 — stretching them full-width just blurs
+    // them. Cap near native size so they stay crisp.
+    width: 240,
+    maxWidth: "100%",
     borderWidth: 1,
     borderRadius: 16,
     overflow: "hidden",

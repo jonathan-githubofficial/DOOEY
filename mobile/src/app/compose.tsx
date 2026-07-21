@@ -45,6 +45,10 @@ export default function Compose() {
   }, [navigation]);
 
   if (!isAuthenticated) return <Redirect href="/login" />;
+  // On the web the composer lives at /compose; a page reload would land on a
+  // contextless sheet with nothing behind it. If there's no history to close
+  // back into, send them home instead.
+  if (Platform.OS === "web" && !router.canGoBack()) return <Redirect href="/" />;
 
   return (
     <View style={[styles.sheet, { paddingBottom: Math.max(12, insets.bottom) }]}>

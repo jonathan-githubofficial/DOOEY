@@ -1,5 +1,5 @@
 import { useLocalSearchParams, useRouter } from "expo-router";
-import { Check as CheckIcon, ChevronLeft, Play, Plus, Square, Trash2, X } from "lucide-react-native";
+import { Check as CheckIcon, ChevronLeft, Flag, Play, Plus, Square, Trash2, X } from "lucide-react-native";
 import { useEffect, useRef, useState } from "react";
 import {
   Image,
@@ -13,7 +13,6 @@ import {
 import Animated, { FadeIn, LinearTransition, SlideInDown, SlideOutDown } from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Grain } from "@/components/grain";
-import { Plate } from "@/components/plate";
 import { PressableScale } from "@/components/pressable-scale";
 import { Panel } from "@/components/surface";
 import { fontStyle } from "@/features/style/tokens";
@@ -270,6 +269,19 @@ export default function WorkoutPage() {
               {effTitle}
             </Text>
           )}
+          {/* Finish (stop) rides up top beside the timer — start happened on
+              the routine page; this ends it. */}
+          {live && (
+            <PressableScale
+              scaleTo={0.94}
+              accessibilityLabel="Finish workout"
+              onPress={finish}
+              style={[styles.finishBtn, { backgroundColor: colors.leaf }]}
+            >
+              <Flag size={13} color="#fff" />
+              <Text style={[styles.finishBtnText, type.sansSemiBold, { color: "#fff" }]}>Finish</Text>
+            </PressableScale>
+          )}
         </View>
 
         <View style={[styles.stats, { borderBottomColor: alpha(colors.rule, 0.5) }]}>
@@ -374,11 +386,7 @@ export default function WorkoutPage() {
           )}
         </View>
 
-        {live ? (
-          <View style={styles.finishRow}>
-            <Plate label="Finish workout" onPress={finish} style={styles.finishPlate} />
-          </View>
-        ) : (
+        {!live && (
           <Pressable
             accessibilityLabel="Delete session"
             onPress={() =>
@@ -619,9 +627,18 @@ function Cell({
 const styles = StyleSheet.create({
   screen: { flex: 1 },
   scrollContent: { paddingHorizontal: 16, paddingTop: 8 },
-  headRow: { flexDirection: "row", alignItems: "center", gap: 2 },
+  headRow: { flexDirection: "row", alignItems: "center", gap: 8 },
   back: { height: 40, width: 36, alignItems: "center", justifyContent: "center" },
   titleInput: { flex: 1, minWidth: 0, fontSize: 24, letterSpacing: -0.5, paddingVertical: 4 },
+  finishBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    borderRadius: 999,
+    paddingVertical: 8,
+    paddingHorizontal: 16,
+  },
+  finishBtnText: { fontSize: 13, letterSpacing: 0.3 },
   stats: {
     marginTop: 10,
     flexDirection: "row",
@@ -692,8 +709,6 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   addText: { fontSize: 13 },
-  finishRow: { marginTop: 24, alignItems: "center" },
-  finishPlate: { alignSelf: "stretch", borderRadius: 14, paddingVertical: 15 },
   deleteRow: {
     marginTop: 28,
     flexDirection: "row",

@@ -1,6 +1,6 @@
-import { ChevronDown, ChevronLeft, ChevronRight } from "lucide-react-native";
+import { CalendarDays, ChevronDown, ChevronLeft, ChevronRight } from "lucide-react-native";
 import { useState, type ReactNode } from "react";
-import { Pressable, StyleSheet, Text, View } from "react-native";
+import { StyleSheet, Text, View } from "react-native";
 import { PressableScale } from "@/components/pressable-scale";
 import { addDays, localDate, mondayOf, toLocalNoon, weekOf } from "@/lib/dates";
 import { alpha } from "@/lib/theme";
@@ -39,16 +39,17 @@ export function WeekStrip({
         {leading}
         <View style={styles.headRight}>
           {!todayInView && (
-            <Pressable
+            <PressableScale
+              scaleTo={0.85}
+              accessibilityLabel="Back to today"
               onPress={() => {
                 setWeekAnchor(today);
                 onSelect(today);
               }}
+              style={[styles.todayBtn, { backgroundColor: alpha(colors.zest, 0.14) }]}
             >
-              <Text style={[styles.backToToday, type.sansMedium, { color: colors.zest }]}>
-                back to today
-              </Text>
-            </Pressable>
+              <CalendarDays size={15} color={colors.zest} />
+            </PressableScale>
           )}
           <Text style={[styles.month, type.display, { color: colors.ink }]}>
             {monthName} <Text style={{ color: colors.inkMuted }}>{yearName}</Text>
@@ -163,10 +164,12 @@ const styles = StyleSheet.create({
     alignItems: "center",
     gap: 8,
   },
-  backToToday: {
-    fontSize: 10,
-    letterSpacing: 1.8,
-    textTransform: "uppercase",
+  todayBtn: {
+    height: 28,
+    width: 28,
+    borderRadius: 999,
+    alignItems: "center",
+    justifyContent: "center",
   },
   toggleBtn: {
     height: 28,

@@ -8,7 +8,6 @@ import { Grain } from "@/components/grain";
 import { Masthead } from "@/components/Masthead";
 import { PressableScale } from "@/components/pressable-scale";
 import { Eyebrow, Panel } from "@/components/surface";
-import { useCardRadius } from "@/features/style/store";
 import { PageDoodle } from "@/features/style/components/PageDoodle";
 import { fontStyle } from "@/features/style/tokens";
 import {
@@ -222,7 +221,6 @@ function LiveBanner({ workout, onPress }: { workout: Workout; onPress: () => voi
 function RoutineCard({ routine, onOpen }: { routine: Routine; onOpen: () => void }) {
   const colors = usePalette();
   const type = useType();
-  const radius = useCardRadius();
   const del = useDeleteRoutine();
   const gifs = routine.items
     .map((i) => libraryExercise(i.libId))
@@ -233,41 +231,39 @@ function RoutineCard({ routine, onOpen }: { routine: Routine; onOpen: () => void
   return (
     <PressableScale scaleTo={0.99} accessibilityLabel={`Open ${routine.name}`} onPress={onOpen}>
       <Panel>
-        <View style={[styles.cardClip, { borderRadius: radius - 1 }]}>
-          <Text numberOfLines={1} style={[styles.cardTitle, type.display, { color: colors.ink }]}>
-            {routine.name}
-          </Text>
-          <Text numberOfLines={1} style={[styles.cardDesc, type.sans, { color: colors.inkMuted }]}>
-            {routine.description || `${count} ${count === 1 ? "exercise" : "exercises"}`}
-          </Text>
+        <Text numberOfLines={1} style={[styles.cardTitle, type.display, { color: colors.ink }]}>
+          {routine.name}
+        </Text>
+        <Text numberOfLines={1} style={[styles.cardDesc, type.sans, { color: colors.inkMuted }]}>
+          {routine.description || `${count} ${count === 1 ? "exercise" : "exercises"}`}
+        </Text>
 
-          {/* A tidy strip of demo loops — reads as "put together" even with a
-              couple of exercises, unlike a lonely fan. */}
-          <View style={styles.stripRow}>
-            {gifs.length === 0 ? (
-              <Text style={[styles.stripEmpty, type.sans, { color: alpha(colors.inkMuted, 0.6) }]}>
-                No exercises yet — tap to build it.
-              </Text>
-            ) : (
-              <>
-                {gifs.map((ex) => (
-                  <Image
-                    key={ex.id}
-                    source={{ uri: exerciseGif(ex) }}
-                    resizeMode="cover"
-                    style={[styles.stripPhoto, { borderColor: alpha(colors.rule, 0.6) }]}
-                  />
-                ))}
-                {count > gifs.length && (
-                  <View style={[styles.stripMore, { backgroundColor: alpha(colors.ink, 0.06) }]}>
-                    <Text style={[styles.stripMoreText, type.sansMedium, { color: colors.inkMuted }]}>
-                      +{count - gifs.length}
-                    </Text>
-                  </View>
-                )}
-              </>
-            )}
-          </View>
+        {/* A tidy strip of demo loops — reads as "put together" even with a
+            couple of exercises, unlike a lonely fan. */}
+        <View style={styles.stripRow}>
+          {gifs.length === 0 ? (
+            <Text style={[styles.stripEmpty, type.sans, { color: alpha(colors.inkMuted, 0.6) }]}>
+              No exercises yet — tap to build it.
+            </Text>
+          ) : (
+            <>
+              {gifs.map((ex) => (
+                <Image
+                  key={ex.id}
+                  source={{ uri: exerciseGif(ex) }}
+                  resizeMode="cover"
+                  style={[styles.stripPhoto, { borderColor: alpha(colors.rule, 0.6) }]}
+                />
+              ))}
+              {count > gifs.length && (
+                <View style={[styles.stripMore, { backgroundColor: alpha(colors.ink, 0.06) }]}>
+                  <Text style={[styles.stripMoreText, type.sansMedium, { color: colors.inkMuted }]}>
+                    +{count - gifs.length}
+                  </Text>
+                </View>
+              )}
+            </>
+          )}
         </View>
 
         <Pressable
@@ -365,7 +361,6 @@ const styles = StyleSheet.create({
   liveTitle: { fontSize: 15 },
   liveSub: { marginTop: 1, fontSize: 12 },
   liveClock: { fontSize: 22, fontVariant: ["tabular-nums"] },
-  cardClip: { overflow: "hidden" },
   cardTitle: { maxWidth: "80%", fontSize: 18, letterSpacing: -0.3 },
   cardDesc: { marginTop: 3, maxWidth: "80%", fontSize: 12.5, lineHeight: 16 },
   menuBtn: {
