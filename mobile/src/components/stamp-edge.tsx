@@ -37,7 +37,9 @@ function WebStampEdge({ color }: { color: string }) {
     <View
       ref={ref}
       pointerEvents="none"
-      style={[StyleSheet.absoluteFill, { backgroundColor: color }]}
+      // zIndex -1: on the web, positioned elements paint over static siblings
+      // regardless of order — without this the fill covers the button's label.
+      style={[StyleSheet.absoluteFill, { backgroundColor: color, zIndex: -1 }]}
     />
   );
 }

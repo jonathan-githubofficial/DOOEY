@@ -119,8 +119,9 @@ function ThemeToggle() {
           styles.knob,
           { backgroundColor: colors.surface },
           {
+            // Travel = width 68 − padding 8 − knob 28.
             transform: [
-              { translateX: slide.interpolate({ inputRange: [0, 1], outputRange: [0, 36] }) },
+              { translateX: slide.interpolate({ inputRange: [0, 1], outputRange: [0, 32] }) },
             ],
           },
         ]}

@@ -13,13 +13,12 @@ import { PressableScale } from "@/components/pressable-scale";
 import { StampEdge } from "@/components/stamp-edge";
 import { useCardRadius, useShadow } from "@/features/style/store";
 import { alpha } from "@/lib/theme";
-import { usePalette, useThemeStore, useType } from "@/stores/theme";
+import { usePalette, useType } from "@/stores/theme";
 
 /** The skeuomorphic building block: a soft, rounded, grained, gently-shadowed
- * card. A hairline top highlight sells the "sheet of paper" edge. */
+ * card. */
 export function Panel({ style, children }: PropsWithChildren<{ style?: StyleProp<ViewStyle> }>) {
   const colors = usePalette();
-  const dark = useThemeStore((s) => s.theme) === "dark";
   const radius = useCardRadius();
   const shadow = useShadow();
   return (
@@ -39,13 +38,6 @@ export function Panel({ style, children }: PropsWithChildren<{ style?: StyleProp
       {/* The grain clips itself to the card's corners — an overflow:hidden on
           the panel would clip the iOS shadow instead. */}
       <Grain radius={radius - 1} />
-      <View
-        pointerEvents="none"
-        style={[
-          styles.hairline,
-          { backgroundColor: dark ? "rgba(255,255,255,0.1)" : "rgba(255,255,255,0.5)" },
-        ]}
-      />
       {children}
     </View>
   );
@@ -129,14 +121,6 @@ const styles = StyleSheet.create({
     shadowColor: "#282018",
     shadowRadius: 8,
     shadowOffset: { width: 0, height: 3 },
-  },
-  hairline: {
-    position: "absolute",
-    left: 12,
-    right: 12,
-    top: 0,
-    height: 1,
-    borderRadius: 999,
   },
   eyebrow: {
     fontSize: 10,

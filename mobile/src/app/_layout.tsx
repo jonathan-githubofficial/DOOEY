@@ -20,6 +20,7 @@ import { StatusBar } from "expo-status-bar";
 import { useEffect, useState } from "react";
 import { Appearance, Platform, StyleSheet, View } from "react-native";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
+import { Grain } from "@/components/grain";
 import { initSession } from "@/features/auth/api";
 import { usePalette, useThemeStore } from "@/stores/theme";
 
@@ -66,6 +67,9 @@ export default function RootLayout() {
 
   return (
     <GestureHandlerRootView style={[styles.fill, { backgroundColor: colors.paper }]}>
+      {/* The gutters beside the tablet frame are paper too — grain them, or
+          the texture visibly stops at the frame's edges. */}
+      {Platform.OS === "web" && <Grain />}
       <QueryClientProvider client={queryClient}>
         {/* On the web the app sits in a tablet-width frame instead of
             stretching wall-to-wall — room for a sidebar later. */}

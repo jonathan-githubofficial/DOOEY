@@ -1,8 +1,9 @@
 import { useRouter } from "expo-router";
-import { Minus, Plus } from "lucide-react-native";
-import { useState } from "react";
+import { CalendarRange, Clock, ListChecks, Minus, Plus, type LucideIcon } from "lucide-react-native";
+import { useRef, useState } from "react";
 import { Platform, ScrollView, StyleSheet, Text, View } from "react-native";
-import Animated, { FadeIn, LinearTransition } from "react-native-reanimated";
+import { Gesture, GestureDetector } from "react-native-gesture-handler";
+import Animated, { Easing, FadeIn, FadeOut, LinearTransition } from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Grain } from "@/components/grain";
 import { PressableScale } from "@/components/pressable-scale";
@@ -18,20 +19,28 @@ import { WeekGrid } from "@/features/tasks/components/WeekGrid";
 import { WeekStrip } from "@/features/tasks/components/WeekStrip";
 import { PX_DEFAULT, PX_MAX, PX_MIN, clampPx } from "@/features/tasks/timeGrid";
 import { localDate } from "@/lib/dates";
+import { hapticTap } from "@/lib/haptics";
 import { alpha } from "@/lib/theme";
 import { usePalette, useType } from "@/stores/theme";
 
 const settle = LinearTransition.springify().stiffness(380).damping(34);
+const keySettle = LinearTransition.duration(200).easing(Easing.bezier(0.2, 0, 0, 1));
 
 /** How the day's work is laid out: the agenda list, the timeboxed day grid,
  * or the whole week in time. The month is not a mode — it unfolds out of the
  * date shelf. */
-type Mode = "list" | "day" | "week";
+type Mode = "agenda" | "day" | "week";
+
+const MODES: { key: Mode; label: string; icon: LucideIcon }[] = [
+  { key: "agenda", label: "Agenda", icon: ListChecks },
+  { key: "day", label: "Day", icon: Clock },
+  { key: "week", label: "Week", icon: CalendarRange },
+];
 
 /** The planner IS the calendar: one space, three ways to look at your time.
- * The date shelf up top pages weeks and unfolds into the month; the toggle
- * picks list / day / week; the new-task stamp floats above the tab bar.
- * Switching days flips the page over the rings, desk-calendar style. */
+ * The date shelf up top pages weeks, unfolds into the month, and carries the
+ * view keys; the new-task stamp floats above the tab bar. Switching days
+ * flips the page over the rings, desk-calendar style. */
 export default function Planner() {
   const colors = usePalette();
   const insets = useSafeAreaInsets();
@@ -42,9 +51,11 @@ export default function Planner() {
   const [direction, setDirection] = useState(1);
   const [shelf, setShelf] = useState<"week" | "month">("week");
   const [month, setMonth] = useState(() => localDate().slice(0, 7));
-  const [mode, setMode] = useState<Mode>("list");
+  const [mode, setMode] = useState<Mode>("agenda");
   // Vertical time zoom (day + week grids), in px per minute.
   const [px, setPx] = useState(PX_DEFAULT);
+  // The height the time grids get to live in — they scroll inside it.
+  const [vh, setVh] = useState(0);
   // The tapped slot opens the task form at that time, Google-Calendar style —
   // as the system sheet on native, as the web drawer on web.
   const [slot, setSlot] = useState<{ date: string; start: number } | null>(null);
@@ -61,11 +72,32 @@ export default function Planner() {
       ? setSlot({ date, start })
       : router.push({ pathname: "/compose", params: { date, start: String(start) } });
 
+  // Two fingers zoom the time axis, exactly like the legacy web grid.
+  const pinchBase = useRef(PX_DEFAULT);
+  const pinch = Gesture.Pinch()
+    .runOnJS(true)
+    .onStart(() => {
+      pinchBase.current = px;
+    })
+    .onUpdate((e) => setPx(clampPx(pinchBase.current * e.scale)));
+
+  // Room for the binder above the page and the pad edges below it.
+  const pageH = Math.max(240, vh - 34);
+
   return (
     <View style={[styles.screen, { backgroundColor: colors.paper, paddingTop: insets.top + 20 }]}>
       <Grain />
       <Animated.View layout={settle} style={styles.strip}>
         <Panel style={styles.stripPanel}>
+          <View style={styles.shelfTop}>
+            <ModeToggle
+              mode={mode}
+              onChange={(m) => {
+                hapticTap();
+                setMode(m);
+              }}
+            />
+          </View>
           <Animated.View key={shelf} entering={FadeIn.duration(180)}>
             {shelf === "week" ? (
               <WeekStrip
@@ -92,51 +124,68 @@ export default function Planner() {
         </Panel>
       </Animated.View>
 
-      <View style={styles.modeRow}>
-        <ModeToggle mode={mode} onChange={setMode} />
-      </View>
-
-      {/* The pad glides down as the shelf unfolds — same settle as the shelf. */}
-      <Animated.View layout={settle} style={styles.scroll}>
-        <ScrollView
-          style={styles.scroll}
-          contentContainerStyle={[
-            styles.scrollContent,
-            { paddingBottom: Math.max(16, insets.bottom) + 128 },
-          ]}
-          keyboardShouldPersistTaps="handled"
-        >
-          {mode === "week" ? (
-            <Animated.View key={selected} entering={FadeIn.duration(200)}>
-              <Panel style={styles.gridPanel}>
-                <WeekGrid
-                  anchor={selected}
-                  pxPerMin={px}
-                  onPickDay={(d) => {
-                    select(d);
-                    setMode("day");
-                  }}
-                />
-              </Panel>
-            </Animated.View>
-          ) : (
+      {mode === "agenda" ? (
+        // The agenda page scrolls as a whole — it's a sheet of paper.
+        <Animated.View layout={settle} style={styles.body}>
+          <ScrollView
+            style={styles.body}
+            contentContainerStyle={[
+              styles.agendaContent,
+              { paddingBottom: Math.max(16, insets.bottom) + 128 },
+            ]}
+            keyboardShouldPersistTaps="handled"
+          >
             <PlannerBook
               page={selected}
               direction={direction}
-              renderPage={(d) =>
-                mode === "list" ? (
-                  <AgendaSheet date={d} />
-                ) : (
-                  <TimeboxSheet date={d} pxPerMin={px} onAddSlot={openSlot} />
-                )
-              }
+              renderPage={(d) => <AgendaSheet date={d} />}
             />
-          )}
-        </ScrollView>
-      </Animated.View>
+          </ScrollView>
+        </Animated.View>
+      ) : (
+        // The time grids stay put and scroll their hours INSIDE the page.
+        <GestureDetector gesture={pinch}>
+          <Animated.View
+            layout={settle}
+            collapsable={false}
+            style={[styles.timeArea, { paddingBottom: Math.max(16, insets.bottom) + 56 }]}
+            onLayout={(e) => setVh(e.nativeEvent.layout.height)}
+          >
+            {vh > 0 && mode === "day" && (
+              <PlannerBook
+                page={selected}
+                direction={direction}
+                renderPage={(d) => (
+                  <View style={{ height: pageH }}>
+                    <ScrollView nestedScrollEnabled contentContainerStyle={styles.gridScroll}>
+                      <TimeboxSheet date={d} pxPerMin={px} onAddSlot={openSlot} />
+                    </ScrollView>
+                  </View>
+                )}
+              />
+            )}
+            {vh > 0 && mode === "week" && (
+              <Animated.View key={selected} entering={FadeIn.duration(200)}>
+                <Panel style={[styles.gridPanel, { height: vh }]}>
+                  <ScrollView nestedScrollEnabled contentContainerStyle={styles.gridScroll}>
+                    <WeekGrid
+                      anchor={selected}
+                      pxPerMin={px}
+                      onPickDay={(d) => {
+                        select(d);
+                        setMode("day");
+                      }}
+                    />
+                  </ScrollView>
+                </Panel>
+              </Animated.View>
+            )}
+          </Animated.View>
+        </GestureDetector>
+      )}
 
-      {/* Time zoom: taller hours on +, more of the day on −. */}
-      {mode !== "list" && (
+      {/* Mouse users can't pinch — the web keeps the zoom stepper. */}
+      {mode !== "agenda" && Platform.OS === "web" && (
         <View
           style={[
             styles.zoom,
@@ -180,38 +229,46 @@ export default function Planner() {
   );
 }
 
-/** List / Day / Week — keys in the same pressed tray the shelf uses. */
+/** The view keys, dock-style: every mode shows its glyph, the active one
+ * raises to a paper key and speaks its name. */
 function ModeToggle({ mode, onChange }: { mode: Mode; onChange: (m: Mode) => void }) {
   const colors = usePalette();
   const type = useType();
   return (
     <View style={[styles.toggleWell, { backgroundColor: alpha(colors.ink, 0.05) }]}>
-      {(["list", "day", "week"] as const).map((m) => (
-        <PressableScale
-          key={m}
-          scaleTo={0.95}
-          accessibilityState={{ selected: mode === m }}
-          onPress={() => onChange(m)}
-          style={[
-            styles.toggleBtn,
-            mode === m && {
-              backgroundColor: colors.surface,
-              borderColor: alpha(colors.rule, 0.7),
-              borderWidth: 1,
-            },
-          ]}
-        >
-          <Text
-            style={[
-              styles.toggleText,
-              type.sansMedium,
-              { color: mode === m ? colors.ink : colors.inkMuted },
-            ]}
-          >
-            {m}
-          </Text>
-        </PressableScale>
-      ))}
+      {MODES.map(({ key, label, icon: IconGlyph }) => {
+        const active = mode === key;
+        const tint = active ? colors.ink : colors.inkMuted;
+        return (
+          <Animated.View key={key} layout={keySettle}>
+            <PressableScale
+              scaleTo={0.93}
+              accessibilityLabel={`${label} view`}
+              accessibilityState={{ selected: active }}
+              onPress={() => onChange(key)}
+              style={[
+                styles.toggleKey,
+                active && {
+                  backgroundColor: colors.surface,
+                  borderColor: alpha(colors.rule, 0.7),
+                  borderWidth: 1,
+                },
+              ]}
+            >
+              <IconGlyph size={14} strokeWidth={active ? 2.2 : 1.8} color={tint} />
+              {active && (
+                <Animated.Text
+                  entering={FadeIn.duration(180)}
+                  exiting={FadeOut.duration(120)}
+                  style={[styles.toggleLabel, type.sansMedium, { color: tint }]}
+                >
+                  {label}
+                </Animated.Text>
+              )}
+            </PressableScale>
+          </Animated.View>
+        );
+      })}
     </View>
   );
 }
@@ -227,31 +284,42 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     paddingVertical: 10,
   },
-  modeRow: {
+  shelfTop: {
     flexDirection: "row",
-    paddingHorizontal: 16,
-    paddingTop: 12,
+    paddingHorizontal: 4,
+    paddingBottom: 10,
   },
   toggleWell: {
     flexDirection: "row",
     borderRadius: 999,
-    padding: 4,
+    padding: 3,
+    gap: 2,
   },
-  toggleBtn: {
+  toggleKey: {
+    height: 30,
+    flexDirection: "row",
+    alignItems: "center",
+    paddingHorizontal: 11,
     borderRadius: 999,
-    paddingHorizontal: 14,
-    paddingVertical: 4,
   },
-  toggleText: {
-    fontSize: 12,
-    textTransform: "capitalize",
+  toggleLabel: {
+    fontSize: 11,
+    paddingLeft: 6,
   },
-  scroll: {
+  body: {
     flex: 1,
   },
-  scrollContent: {
+  agendaContent: {
     paddingHorizontal: 16,
     paddingTop: 24,
+  },
+  timeArea: {
+    flex: 1,
+    paddingHorizontal: 16,
+    paddingTop: 24,
+  },
+  gridScroll: {
+    paddingBottom: 8,
   },
   gridPanel: {
     padding: 12,
