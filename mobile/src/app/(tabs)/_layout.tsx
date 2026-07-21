@@ -1,7 +1,7 @@
 import { Redirect, Tabs } from "expo-router";
 import { Icon, Label, NativeTabs, VectorIcon } from "expo-router/unstable-native-tabs";
 import { useEffect, useRef, useState } from "react";
-import { PixelRatio, Platform, StyleSheet, View } from "react-native";
+import { Platform, StyleSheet, View } from "react-native";
 import Svg, { Path } from "react-native-svg";
 import ViewShot from "react-native-view-shot";
 import { MaterialIcons } from "@expo/vector-icons";
@@ -56,7 +56,7 @@ export default function TabsLayout() {
             return (
               <NativeTabs.Trigger key={space.name} name={space.name}>
                 {uri ? (
-                  <Icon src={{ uri, scale: ICON_SCALE }} />
+                  <Icon src={{ uri }} />
                 ) : Platform.OS === "ios" ? (
                   <Icon sf={space.sf} />
                 ) : (
@@ -88,12 +88,12 @@ export default function TabsLayout() {
   );
 }
 
-// A tab icon is ~25pt; capture at the device's pixel ratio and declare that
-// `scale` in the image source, or the system reads the bitmap's pixels as
-// points and the doodle sprawls across the whole bar.
-const ICON_PT = 25;
-const ICON_SCALE = PixelRatio.get();
-const ICON_PX = ICON_PT * ICON_SCALE;
+// A tab icon is ~24pt, and the bar reads a bare tmpfile's PIXELS as POINTS —
+// density metadata doesn't survive the capture, so the PNG is exported at
+// exactly icon size. It's drawn on a 4× easel first so the downsample
+// antialiases the strokes instead of leaving them ragged.
+const ICON_PT = 24;
+const EASEL_PX = ICON_PT * 4;
 
 /** Off-screen easels: one per doodled space, snapshotted to PNGs whenever the
  * drawings change. Strokes render opaque black — the tab bar reads the alpha
@@ -138,17 +138,17 @@ function DoodleIconRig({
           ref={(r) => {
             shots.current[key] = r;
           }}
-          options={{ format: "png", result: "tmpfile", width: ICON_PX, height: ICON_PX }}
+          options={{ format: "png", result: "tmpfile", width: ICON_PT, height: ICON_PT }}
           style={styles.shot}
         >
-          <Svg viewBox="0 0 100 100" width={ICON_PX} height={ICON_PX}>
+          <Svg viewBox="0 0 100 100" width={EASEL_PX} height={EASEL_PX}>
             {strokes.map((s, i) => (
               <Path
                 key={i}
                 d={strokePath(s.points)}
                 fill="none"
                 stroke="black"
-                strokeWidth={7}
+                strokeWidth={5}
                 strokeLinecap="round"
                 strokeLinejoin="round"
               />
@@ -167,8 +167,8 @@ const styles = StyleSheet.create({
     top: 0,
   },
   shot: {
-    height: ICON_PX,
-    width: ICON_PX,
+    height: EASEL_PX,
+    width: EASEL_PX,
     backgroundColor: "transparent",
   },
 });
