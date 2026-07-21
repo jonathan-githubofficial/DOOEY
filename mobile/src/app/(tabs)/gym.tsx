@@ -232,7 +232,7 @@ function RoutineCard({ routine, onOpen }: { routine: Routine; onOpen: () => void
 
   return (
     <PressableScale scaleTo={0.99} accessibilityLabel={`Open ${routine.name}`} onPress={onOpen}>
-      <Panel style={styles.card}>
+      <Panel>
         <View style={[styles.cardClip, { borderRadius: radius - 1 }]}>
           <Text numberOfLines={1} style={[styles.cardTitle, type.display, { color: colors.ink }]}>
             {routine.name}
@@ -365,7 +365,6 @@ const styles = StyleSheet.create({
   liveTitle: { fontSize: 15 },
   liveSub: { marginTop: 1, fontSize: 12 },
   liveClock: { fontSize: 22, fontVariant: ["tabular-nums"] },
-  card: { padding: 16 },
   cardClip: { overflow: "hidden" },
   cardTitle: { maxWidth: "80%", fontSize: 18, letterSpacing: -0.3 },
   cardDesc: { marginTop: 3, maxWidth: "80%", fontSize: 12.5, lineHeight: 16 },

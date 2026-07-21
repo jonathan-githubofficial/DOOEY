@@ -7,10 +7,14 @@ import ViewShot from "react-native-view-shot";
 import { MaterialIcons } from "@expo/vector-icons";
 import { Dock } from "@/components/Dock";
 import { useStyleStore } from "@/features/style/store";
+import { fontStyle } from "@/features/style/tokens";
 import { strokePath, type Stroke } from "@/lib/doodle";
-import { type Palette } from "@/lib/theme";
+import { alpha, type Palette } from "@/lib/theme";
 import { useAuthStore } from "@/stores/auth";
 import { usePalette } from "@/stores/theme";
+
+// The tab labels wear Outfit, not the platform's stock sans.
+const LABEL_FONT = fontStyle("outfit", "500").fontFamily;
 
 /** The five spaces: SF symbols on iOS, material glyphs on Android — replaced
  * by your hand-drawn page doodles when "doodle icons in dock" is on. */
@@ -51,7 +55,20 @@ export default function TabsLayout() {
         {Object.keys(doodles).length > 0 && (
           <DoodleIconRig doodles={doodles} onCaptured={setIcons} />
         )}
-        <NativeTabs tintColor={colors.zest}>
+        <NativeTabs
+          tintColor={colors.zest}
+          labelStyle={{ fontFamily: LABEL_FONT, fontSize: 11 }}
+          iconColor={{ default: colors.inkMuted, selected: colors.zest }}
+          // Android's Material chrome is what looked "off": a stark surface, a
+          // loud secondary-container pill, a grey ripple. Theme all three to
+          // DOOEY — a paper-surface bar, a soft zest indicator + ripple. iOS
+          // keeps its native translucency instead of a flat fill.
+          indicatorColor={alpha(colors.zest, 0.16)}
+          rippleColor={alpha(colors.zest, 0.12)}
+          {...(Platform.OS === "android"
+            ? { backgroundColor: colors.surface }
+            : { blurEffect: "systemChromeMaterial" as const })}
+        >
           {SPACES.map((space) => {
             const uri = doodles[space.name] ? icons[space.name] : undefined;
             return (

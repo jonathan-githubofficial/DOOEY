@@ -117,6 +117,10 @@ export function StampButton({
 const styles = StyleSheet.create({
   panel: {
     borderWidth: 1,
+    // The standard inset for card content — callers override with their own
+    // `padding` (or `padding: 0` for a full-bleed card). Baked in here so no
+    // panel ends up with content flush against its edge.
+    padding: 20,
     // Soft two-layer web shadow approximated with one gentle native shadow.
     shadowColor: "#282018",
     shadowRadius: 8,
