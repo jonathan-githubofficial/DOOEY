@@ -16,9 +16,11 @@ import Animated, {
   withTiming,
   type SharedValue,
 } from "react-native-reanimated";
+import { LinearGradient } from "expo-linear-gradient";
 import { Check } from "@/components/Check";
 import { Eyebrow, Panel, Stamp } from "@/components/surface";
 import { dayTitle, dueInfo, localDate, toLocalNoon } from "@/lib/dates";
+import { hapticLift, hapticTap, hapticWarn } from "@/lib/haptics";
 import { alpha } from "@/lib/theme";
 import { usePalette, useType } from "@/stores/theme";
 import { useDayTasks, useDeleteTask, useUpdateTask } from "../api";
@@ -94,7 +96,11 @@ export function AgendaSheet({ date }: { date: string }) {
       <View pointerEvents="none" style={styles.holesRow}>
         {Array.from({ length: RING_COUNT }).map((_, i) => (
           <View key={i} style={styles.holeSlot}>
-            <View style={[styles.hole, { backgroundColor: alpha(colors.ink, 0.18) }]} />
+            {/* Punched wells, lit from above — the web's ink/25 → ink/10 fade. */}
+            <LinearGradient
+              colors={[alpha(colors.ink, 0.25), alpha(colors.ink, 0.1)]}
+              style={styles.hole}
+            />
           </View>
         ))}
       </View>
@@ -236,6 +242,7 @@ function DraggableRow({
     .onStart(() => {
       dragging.value = true;
       revealed.value = null;
+      runOnJS(hapticLift)();
       let top = 0;
       const idx = positions.value[id] ?? index;
       for (const k in positions.value) {
@@ -274,9 +281,9 @@ function DraggableRow({
       runOnJS(onDrop)(id);
     });
 
-  // Swipe the row right to bare its delete (native only — the web shows the
-  // trash on hover instead). Horizontal-only: any vertical drift fails it so
-  // scrolling and the long-press lift keep working.
+  // Swipe the row LEFT to bare its delete on the right, iOS-style (native
+  // only — the web shows the trash on hover instead). Horizontal-only: any
+  // vertical drift fails it so scrolling and the long-press lift keep working.
   const swipe = Gesture.Pan()
     .enabled(!web)
     .activeOffsetX([-16, 16])
@@ -286,12 +293,13 @@ function DraggableRow({
       revealed.value = id;
     })
     .onUpdate((e) => {
-      reveal.value = Math.max(0, Math.min(REVEAL_W, revealStart.value + e.translationX));
+      reveal.value = Math.max(0, Math.min(REVEAL_W, revealStart.value - e.translationX));
     })
     .onEnd(() => {
       const open = reveal.value > REVEAL_W / 2;
       reveal.value = withSpring(open ? REVEAL_W : 0, LIFT);
-      if (!open) revealed.value = null;
+      if (open) runOnJS(hapticTap)();
+      else revealed.value = null;
     });
 
   // Another row swiping (or this one lifting) tucks this delete back in.
@@ -340,7 +348,7 @@ function DraggableRow({
         };
   });
   const cardStyle = useAnimatedStyle(() => ({
-    transform: [{ translateX: reveal.value }],
+    transform: [{ translateX: -reveal.value }],
   }));
   const underStyle = useAnimatedStyle(() => ({
     opacity: reveal.value / REVEAL_W,
@@ -367,7 +375,10 @@ function DraggableRow({
             <Animated.View style={[styles.deleteUnder, underStyle]}>
               <Pressable
                 accessibilityLabel={`Delete "${task.title}"`}
-                onPress={() => del.mutate(id)}
+                onPress={() => {
+                  hapticWarn();
+                  del.mutate(id);
+                }}
                 style={[styles.deleteBtn, { backgroundColor: alpha(colors.clay, 0.14) }]}
               >
                 <Trash2 size={16} color={colors.clay} />
@@ -603,7 +614,7 @@ const styles = StyleSheet.create({
   },
   deleteUnder: {
     position: "absolute",
-    left: 0,
+    right: 0,
     top: 0,
     bottom: 0,
     width: REVEAL_W,

@@ -1,23 +1,49 @@
 import { useState } from "react";
-import { StyleSheet, View } from "react-native";
+import { Platform, StyleSheet, View, type ViewStyle } from "react-native";
 import Svg, { Path } from "react-native-svg";
 
 const R = 3.5; // perforation radius — same numbers as the web's .stamp-edge
 const S = 12; // spacing between perforations
 
-/** A circle as a path subpath — punched out of the rect by the evenodd fill.
- * (A single Path avoids SVG <Mask>, which react-native-svg renders wrong on
- * the web.) */
+// The legacy web app's exact perforation mask: a repeating notch punched
+// along each edge, the four layers intersected.
+const MASK = [
+  `radial-gradient(${R}px at 50% 0, #0000 98%, #000) 50% 0 / ${S}px 100% repeat-x`,
+  `radial-gradient(${R}px at 50% 100%, #0000 98%, #000) 50% 100% / ${S}px 100% repeat-x`,
+  `radial-gradient(${R}px at 0 50%, #0000 98%, #000) 0 50% / 100% ${S}px repeat-y`,
+  `radial-gradient(${R}px at 100% 50%, #0000 98%, #000) 100% 50% / 100% ${S}px repeat-y`,
+].join(", ");
+
+/** A circle as a path subpath — punched out of the rect by the evenodd fill. */
 function hole(cx: number, cy: number): string {
   return `M${cx + R} ${cy} A${R} ${R} 0 1 0 ${cx - R} ${cy} A${R} ${R} 0 1 0 ${cx + R} ${cy} Z`;
 }
 
 /** The postage-stamp fill: a colored rect with notches punched along all four
- * sides — the real perforation the web does with CSS masks. Absolutely fills
- * its parent; render it first, content on top. */
+ * sides. On the web it IS the legacy stamp — the same CSS mask — which also
+ * keeps the corners crisp; native builds the perforations as one evenodd SVG
+ * path. Absolutely fills its parent; render it first, content on top. */
 export function StampEdge({ color }: { color: string }) {
   const [size, setSize] = useState({ w: 0, h: 0 });
   const { w, h } = size;
+
+  if (Platform.OS === "web") {
+    return (
+      <View
+        pointerEvents="none"
+        style={[
+          StyleSheet.absoluteFill,
+          { backgroundColor: color },
+          {
+            maskImage: MASK,
+            maskComposite: "intersect",
+            WebkitMaskImage: MASK,
+            WebkitMaskComposite: "source-in",
+          } as unknown as ViewStyle,
+        ]}
+      />
+    );
+  }
 
   let d = "";
   if (w > 0 && h > 0) {

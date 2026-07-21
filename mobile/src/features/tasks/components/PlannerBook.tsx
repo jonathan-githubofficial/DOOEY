@@ -152,17 +152,21 @@ function Rings() {
     <View pointerEvents="none" style={styles.bindingRow}>
       {Array.from({ length: RING_COUNT }).map((_, i) => (
         <View key={i} style={styles.bindingSlot}>
-          <LinearGradient
-            colors={
-              dark
-                ? ["rgba(255,255,255,0.4)", "rgba(255,255,255,0.1)", "rgba(0,0,0,0.4)"]
-                : ["#ffffff", alpha(colors.ink, 0.05), alpha(colors.ink, 0.3)]
-            }
-            style={[
-              styles.ring,
-              { borderColor: dark ? "rgba(255,255,255,0.3)" : alpha(colors.ink, 0.4) },
-            ]}
-          />
+          {/* Shadow on a wrapper: the web's 0 1px 2px drop under each wire —
+              the gradient view itself would clip it. */}
+          <View style={styles.ringShadow}>
+            <LinearGradient
+              colors={
+                dark
+                  ? ["rgba(255,255,255,0.4)", "rgba(255,255,255,0.1)", "rgba(0,0,0,0.4)"]
+                  : ["#ffffff", alpha(colors.ink, 0.05), alpha(colors.ink, 0.3)]
+              }
+              style={[
+                styles.ring,
+                { borderColor: dark ? "rgba(255,255,255,0.3)" : alpha(colors.ink, 0.4) },
+              ]}
+            />
+          </View>
         </View>
       ))}
     </View>
@@ -201,6 +205,14 @@ const styles = StyleSheet.create({
   bindingSlot: {
     width: 12,
     alignItems: "center",
+  },
+  ringShadow: {
+    borderRadius: 999,
+    shadowColor: "#282018",
+    shadowOpacity: 0.3,
+    shadowRadius: 2,
+    shadowOffset: { width: 0, height: 1 },
+    elevation: 2,
   },
   ring: {
     height: 36,

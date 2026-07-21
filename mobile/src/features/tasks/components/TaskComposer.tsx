@@ -10,6 +10,7 @@ import {
   Text,
   TextInput,
   View,
+  type ViewStyle,
 } from "react-native";
 import Animated, {
   Easing,
@@ -26,6 +27,7 @@ import { StampEdge } from "@/components/stamp-edge";
 import { Eyebrow } from "@/components/surface";
 import { useShadow } from "@/features/style/store";
 import { localDate, toLocalNoon, toPbDate } from "@/lib/dates";
+import { hapticSuccess, hapticTap } from "@/lib/haptics";
 import { alpha } from "@/lib/theme";
 import { usePalette, useType } from "@/stores/theme";
 import { useCreateTask } from "../api";
@@ -61,12 +63,13 @@ export function TaskComposer({ date }: { date: string }) {
     <>
       <PressableScale
         scaleTo={0.9}
+        rotate={-4}
         accessibilityLabel={isToday ? "New task" : `New task for ${dayLabel}`}
-        onPress={() =>
-          Platform.OS === "web"
-            ? setOpen(true)
-            : router.push({ pathname: "/compose", params: { date } })
-        }
+        onPress={() => {
+          hapticTap();
+          if (Platform.OS === "web") setOpen(true);
+          else router.push({ pathname: "/compose", params: { date } });
+        }}
         style={[
           styles.stampFab,
           {
@@ -74,6 +77,9 @@ export function TaskComposer({ date }: { date: string }) {
             shadowOpacity: 0.25 * shadow,
             elevation: Math.round(4 * shadow),
           },
+          // Web: shadow the stamp's perforated silhouette, like .stamp-btn.
+          Platform.OS === "web" &&
+            ({ filter: "drop-shadow(0 1.5px 1.5px rgb(40 32 24 / 0.25))" } as unknown as ViewStyle),
         ]}
       >
         <StampEdge color={colors.zest} />
@@ -167,6 +173,7 @@ export function ComposerForm({
 
   const submit = () => {
     if (!title.trim()) return;
+    hapticSuccess();
     create.mutate({
       title: title.trim(),
       description: description.trim() || undefined,
@@ -302,6 +309,8 @@ export function ComposerForm({
 }
 
 const styles = StyleSheet.create({
+  // The -4° tilt lives on PressableScale's `rotate`, not here — a transform
+  // in this style would be clobbered by the press-scale animation.
   stampFab: {
     position: "absolute",
     right: 16,
@@ -310,7 +319,6 @@ const styles = StyleSheet.create({
     width: 56,
     alignItems: "center",
     justifyContent: "center",
-    transform: [{ rotate: "-4deg" }],
     shadowColor: "#282018",
     shadowRadius: 4,
     shadowOffset: { width: 0, height: 2 },

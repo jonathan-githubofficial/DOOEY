@@ -1,4 +1,4 @@
-import { ChevronLeft, ChevronRight } from "lucide-react-native";
+import { ChevronLeft, ChevronRight, ChevronUp } from "lucide-react-native";
 import { StyleSheet, Text, View } from "react-native";
 import { PressableScale } from "@/components/pressable-scale";
 import { addDays, localDate, pad2, toLocalNoon } from "@/lib/dates";
@@ -15,11 +15,14 @@ export function MonthView({
   onMonth,
   selected,
   onSelect,
+  onToggleView,
 }: {
   month: string; // YYYY-MM
   onMonth: (m: string) => void;
   selected: string;
   onSelect: (date: string) => void;
+  /** Present when the month grew out of the week shelf — folds it back up. */
+  onToggleView?: () => void;
 }) {
   const colors = usePalette();
   const type = useType();
@@ -64,6 +67,16 @@ export function MonthView({
           >
             <ChevronRight size={16} color={alpha(colors.inkMuted, 0.7)} />
           </PressableScale>
+          {onToggleView && (
+            <PressableScale
+              scaleTo={0.85}
+              accessibilityLabel="Back to the week"
+              onPress={onToggleView}
+              style={styles.navBtn}
+            >
+              <ChevronUp size={16} color={alpha(colors.inkMuted, 0.7)} />
+            </PressableScale>
+          )}
         </View>
       </View>
 

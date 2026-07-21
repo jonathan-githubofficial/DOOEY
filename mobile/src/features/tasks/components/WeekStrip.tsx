@@ -1,4 +1,4 @@
-import { ChevronLeft, ChevronRight } from "lucide-react-native";
+import { ChevronDown, ChevronLeft, ChevronRight } from "lucide-react-native";
 import { useState } from "react";
 import { Pressable, StyleSheet, Text, View } from "react-native";
 import { PressableScale } from "@/components/pressable-scale";
@@ -7,13 +7,15 @@ import { alpha } from "@/lib/theme";
 import { usePalette, useType } from "@/stores/theme";
 
 /** The week ribbon: seven day chips in a pressed tray, chevrons to page weeks.
- * Today wears a zest dot. */
+ * Today wears a zest dot; the chevron on the right unfolds the whole month. */
 export function WeekStrip({
   selected,
   onSelect,
+  onToggleView,
 }: {
   selected: string;
   onSelect: (date: string) => void;
+  onToggleView: () => void;
 }) {
   const colors = usePalette();
   const type = useType();
@@ -33,18 +35,28 @@ export function WeekStrip({
         <Text style={[styles.month, type.display, { color: colors.ink }]}>
           {monthName} <Text style={{ color: colors.inkMuted }}>{yearName}</Text>
         </Text>
-        {!todayInView && (
-          <Pressable
-            onPress={() => {
-              setWeekAnchor(today);
-              onSelect(today);
-            }}
+        <View style={styles.headRight}>
+          {!todayInView && (
+            <Pressable
+              onPress={() => {
+                setWeekAnchor(today);
+                onSelect(today);
+              }}
+            >
+              <Text style={[styles.backToToday, type.sansMedium, { color: colors.zest }]}>
+                back to today
+              </Text>
+            </Pressable>
+          )}
+          <PressableScale
+            scaleTo={0.85}
+            accessibilityLabel="Open the month"
+            onPress={onToggleView}
+            style={styles.toggleBtn}
           >
-            <Text style={[styles.backToToday, type.sansMedium, { color: colors.zest }]}>
-              back to today
-            </Text>
-          </Pressable>
-        )}
+            <ChevronDown size={16} color={alpha(colors.inkMuted, 0.7)} />
+          </PressableScale>
+        </View>
       </View>
 
       <View style={styles.row}>
@@ -133,7 +145,7 @@ function Pager({ dir, onPress }: { dir: -1 | 1; onPress: () => void }) {
 const styles = StyleSheet.create({
   head: {
     flexDirection: "row",
-    alignItems: "baseline",
+    alignItems: "center",
     justifyContent: "space-between",
     paddingHorizontal: 4,
   },
@@ -141,10 +153,21 @@ const styles = StyleSheet.create({
     fontSize: 14,
     letterSpacing: -0.2,
   },
+  headRight: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+  },
   backToToday: {
     fontSize: 10,
     letterSpacing: 1.8,
     textTransform: "uppercase",
+  },
+  toggleBtn: {
+    height: 28,
+    width: 28,
+    alignItems: "center",
+    justifyContent: "center",
   },
   row: {
     marginTop: 8,

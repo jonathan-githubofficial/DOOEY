@@ -2,6 +2,7 @@ import { Check as CheckIcon } from "lucide-react-native";
 import { useEffect } from "react";
 import Animated, { useAnimatedStyle, useSharedValue, withSpring } from "react-native-reanimated";
 import { PressableScale } from "@/components/pressable-scale";
+import { hapticTap } from "@/lib/haptics";
 import { alpha } from "@/lib/theme";
 import { usePalette } from "@/stores/theme";
 
@@ -33,7 +34,10 @@ export function Check({
       accessibilityRole="checkbox"
       accessibilityState={{ checked: done }}
       accessibilityLabel={label}
-      onPress={onToggle}
+      onPress={() => {
+        hapticTap();
+        onToggle();
+      }}
       hitSlop={8}
       style={{
         height: size,
