@@ -15,6 +15,7 @@ function toRoutine(r: RecordModel): Routine {
     id: r.id,
     name: r.name,
     position: r.position ?? 0,
+    group: r.group ?? "",
     items: (r.items as RoutineItem[] | null) ?? [],
   };
 }
@@ -67,18 +68,26 @@ export function useWorkout(id: string) {
 export function useSaveRoutine() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: async (routine: { id?: string; name: string; items: RoutineItem[]; position?: number }) => {
+    mutationFn: async (routine: {
+      id?: string;
+      name: string;
+      items: RoutineItem[];
+      group?: string;
+      position?: number;
+    }) => {
       const owner = useAuthStore.getState().user!.id;
       if (routine.id) {
         return pb.collection("routines").update(routine.id, {
           name: routine.name,
           items: routine.items,
+          group: routine.group ?? "",
         });
       }
       return pb.collection("routines").create({
         owner,
         name: routine.name,
         items: routine.items,
+        group: routine.group ?? "",
         position: routine.position ?? 0,
       });
     },
@@ -104,6 +113,7 @@ export function useStartWorkout() {
       const entries: WorkoutEntry[] = (routine?.items ?? []).map((item) => ({
         name: item.name,
         kind: item.kind,
+        libId: item.libId,
         sets: Array.from({ length: Math.max(1, item.sets) }, () => emptySet()),
       }));
       const rec = await pb.collection("workouts").create({
@@ -159,11 +169,3 @@ export function previousLookup(workouts: Workout[]): Map<string, WorkoutSet[]> {
   return map;
 }
 
-/** Every exercise name this account has ever planned or logged — the picker's
- * suggestion pool. */
-export function knownExercises(routines: Routine[], workouts: Workout[]): string[] {
-  const seen = new Set<string>();
-  for (const r of routines) for (const i of r.items) seen.add(i.name);
-  for (const w of workouts) for (const e of w.entries) seen.add(e.name);
-  return [...seen].sort((a, b) => a.localeCompare(b));
-}

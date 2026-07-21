@@ -1,6 +1,6 @@
 import { useRouter } from "expo-router";
 import { ChevronRight, Play, Plus } from "lucide-react-native";
-import { Alert, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+import { Alert, Image, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import Animated, { FadeInDown } from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Grain } from "@/components/grain";
@@ -17,6 +17,7 @@ import {
   useWorkouts,
 } from "@/features/workouts/api";
 import { useNow } from "@/features/workouts/clock";
+import { exerciseImage, libraryExercise } from "@/features/workouts/library";
 import { useWorkoutPrefs } from "@/features/workouts/store";
 import {
   formatElapsed,
@@ -43,6 +44,8 @@ export default function Gym() {
 
   const live = workouts?.find((w) => !w.ended_at) ?? null;
   const history = (workouts ?? []).filter((w) => w.ended_at);
+  const plans = [...new Set((routines ?? []).map((r) => r.group).filter(Boolean))];
+  const loose = (routines ?? []).filter((r) => !r.group);
 
   const openWorkout = (wid: string) =>
     router.push({ pathname: "/workout/[id]", params: { id: wid } });
@@ -90,9 +93,26 @@ export default function Gym() {
           </PressableScale>
         )}
 
+        {/* Routines gather under their plan — Push · Pull · Legs — with the
+            loose ones under a plain heading at the end. */}
+        {plans.map((plan) => (
+          <View key={plan}>
+            <Eyebrow style={styles.section}>{plan.toLowerCase()}</Eyebrow>
+            <View style={styles.cards}>
+              {(routines ?? [])
+                .filter((r) => r.group === plan)
+                .map((r, i) => (
+                  <Animated.View key={r.id} entering={FadeInDown.delay(i * 40).duration(220)}>
+                    <RoutineCard routine={r} onStart={() => startWorkout(r)} />
+                  </Animated.View>
+                ))}
+            </View>
+          </View>
+        ))}
+
         <Eyebrow style={styles.section}>routines</Eyebrow>
         <View style={styles.cards}>
-          {(routines ?? []).map((r, i) => (
+          {loose.map((r, i) => (
             <Animated.View key={r.id} entering={FadeInDown.delay(i * 40).duration(220)}>
               <RoutineCard routine={r} onStart={() => startWorkout(r)} />
             </Animated.View>
@@ -182,6 +202,11 @@ function RoutineCard({ routine, onStart }: { routine: Routine; onStart: () => vo
     routine.items.length === 0
       ? "no exercises yet"
       : routine.items.map((i) => i.name).join(" · ");
+  // Up to three demo photos, fanned like the pieces on a board card.
+  const photos = routine.items
+    .map((i) => libraryExercise(i.libId))
+    .filter((e) => !!e)
+    .slice(0, 3);
   return (
     <PressableScale
       scaleTo={0.98}
@@ -197,6 +222,27 @@ function RoutineCard({ routine, onStart }: { routine: Routine; onStart: () => vo
             {summary}
           </Text>
         </View>
+        {photos.length > 0 && (
+          <View style={styles.fan}>
+            {photos.map((ex, i) => (
+              <Image
+                key={ex.id}
+                source={{ uri: exerciseImage(ex) }}
+                resizeMode="cover"
+                style={[
+                  styles.fanPhoto,
+                  {
+                    backgroundColor: alpha(colors.ink, 0.05),
+                    borderColor: colors.surface,
+                    marginLeft: i === 0 ? 0 : -14,
+                    transform: [{ rotate: `${(i - 1) * 4}deg` }],
+                    zIndex: photos.length - i,
+                  },
+                ]}
+              />
+            ))}
+          </View>
+        )}
         <PressableScale
           scaleTo={0.88}
           accessibilityRole="button"
@@ -354,6 +400,16 @@ const styles = StyleSheet.create({
     borderRadius: 999,
     alignItems: "center",
     justifyContent: "center",
+  },
+  fan: {
+    flexDirection: "row",
+    alignItems: "center",
+  },
+  fanPhoto: {
+    height: 40,
+    width: 48,
+    borderRadius: 8,
+    borderWidth: 2,
   },
   historyRow: {
     flexDirection: "row",

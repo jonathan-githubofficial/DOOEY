@@ -1,19 +1,23 @@
 /** How an exercise is measured — weights racked, bodyweight reps, or a hold. */
 export type ExerciseKind = "weight_reps" | "reps" | "duration";
 
-/** One exercise line in a routine template. */
+/** One exercise line in a routine template. `libId` ties it to the bundled
+ * open-source library (photos, muscles); custom exercises go without. */
 export interface RoutineItem {
   name: string;
   kind: ExerciseKind;
   sets: number;
   target_reps: number;
   target_weight: number; // 0 for reps/duration kinds; seconds for duration
+  libId?: string;
 }
 
 export interface Routine {
   id: string;
   name: string;
   position: number;
+  /** The plan this routine belongs to — "Push", "Legs"… — or "" for loose. */
+  group: string;
   items: RoutineItem[];
 }
 
@@ -29,6 +33,7 @@ export interface WorkoutEntry {
   name: string;
   kind: ExerciseKind;
   sets: WorkoutSet[];
+  libId?: string;
 }
 
 export interface Workout {

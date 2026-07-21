@@ -3,6 +3,7 @@ import { ChevronLeft, Plus, Trash2, X } from "lucide-react-native";
 import { useEffect, useRef, useState } from "react";
 import {
   Alert,
+  Image,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -20,16 +21,15 @@ import { Panel } from "@/components/surface";
 import { fontStyle } from "@/features/style/tokens";
 import {
   emptySet,
-  knownExercises,
   previousLookup,
   useDeleteWorkout,
-  useRoutines,
   useUpdateWorkout,
   useWorkout,
   useWorkouts,
 } from "@/features/workouts/api";
 import { useNow } from "@/features/workouts/clock";
-import { ExercisePicker } from "@/features/workouts/components/ExercisePicker";
+import { ExercisePicker, type PickedExercise } from "@/features/workouts/components/ExercisePicker";
+import { exerciseImage, libraryExercise } from "@/features/workouts/library";
 import { useWorkoutPrefs } from "@/features/workouts/store";
 import {
   formatElapsed,
@@ -59,7 +59,6 @@ export default function WorkoutPage() {
   const restSeconds = useWorkoutPrefs((s) => s.restSeconds);
   const { data: workout } = useWorkout(id);
   const { data: workouts } = useWorkouts();
-  const { data: routines } = useRoutines();
   const update = useUpdateWorkout(id);
   const del = useDeleteWorkout();
 
@@ -118,10 +117,18 @@ export default function WorkoutPage() {
         .filter((e) => e.sets.length > 0),
     );
   };
-  const addExercise = (name: string, kind: ExerciseKind) => {
+  const addExercise = (picked: PickedExercise) => {
     setPicking(false);
-    const sets = prev.get(name)?.length ?? 3;
-    commit([...effEntries, { name, kind, sets: Array.from({ length: sets }, emptySet) }]);
+    const sets = prev.get(picked.name)?.length ?? 3;
+    commit([
+      ...effEntries,
+      {
+        name: picked.name,
+        kind: picked.kind,
+        libId: picked.libId,
+        sets: Array.from({ length: sets }, emptySet),
+      },
+    ]);
   };
   const removeExercise = (ei: number) =>
     Alert.alert("Remove exercise?", effEntries[ei].name, [
@@ -225,6 +232,7 @@ export default function WorkoutPage() {
             <Animated.View key={`${entry.name}-${ei}`} layout={settle} entering={FadeIn.duration(160)}>
               <Panel style={styles.entryCard}>
                 <View style={styles.entryHead}>
+                  <EntryThumb libId={entry.libId} />
                   <Text numberOfLines={1} style={[styles.entryName, type.sansSemiBold, { color: colors.ink }]}>
                     {entry.name}
                   </Text>
@@ -349,13 +357,22 @@ export default function WorkoutPage() {
         </Animated.View>
       )}
 
-      <ExercisePicker
-        visible={picking}
-        known={knownExercises(routines ?? [], workouts ?? [])}
-        onPick={addExercise}
-        onClose={() => setPicking(false)}
-      />
+      <ExercisePicker visible={picking} onPick={addExercise} onClose={() => setPicking(false)} />
     </View>
+  );
+}
+
+/** The exercise's demo photo beside its name — the library made visible. */
+function EntryThumb({ libId }: { libId?: string }) {
+  const colors = usePalette();
+  const ex = libraryExercise(libId);
+  if (!ex) return null;
+  return (
+    <Image
+      source={{ uri: exerciseImage(ex) }}
+      resizeMode="cover"
+      style={[styles.entryThumb, { backgroundColor: alpha(colors.ink, 0.05), borderColor: alpha(colors.rule, 0.7) }]}
+    />
   );
 }
 
@@ -560,6 +577,12 @@ const styles = StyleSheet.create({
     flex: 1,
     minWidth: 0,
     fontSize: 15.5,
+  },
+  entryThumb: {
+    height: 34,
+    width: 44,
+    borderRadius: 7,
+    borderWidth: 1,
   },
   entryRemove: {
     height: 28,
