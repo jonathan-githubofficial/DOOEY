@@ -2,12 +2,13 @@ import Slider from "@react-native-community/slider";
 import * as FileSystem from "expo-file-system/legacy";
 import * as ImagePicker from "expo-image-picker";
 import { LinearGradient } from "expo-linear-gradient";
-import { ImagePlus, Pencil, RotateCcw, X } from "lucide-react-native";
+import { ImagePlus, Pencil, Plus, RotateCcw, X } from "lucide-react-native";
 import { useState } from "react";
 import { Image, Pressable, StyleSheet, Text, View } from "react-native";
 import Animated, { FadeIn, FadeOut, LinearTransition } from "react-native-reanimated";
 import { DoodleEditor } from "@/components/DoodleEditor";
 import { DoodleSvg } from "@/components/DoodleSvg";
+import type { Stroke } from "@/lib/doodle";
 import { Grain } from "@/components/grain";
 import { PressableScale } from "@/components/pressable-scale";
 import { Eyebrow, Panel, Stamp, StampButton } from "@/components/surface";
@@ -46,6 +47,7 @@ export function StyleStudio() {
       <PresetsPanel />
       <PalettePanel />
       <PageDoodlesPanel />
+      <CompanionPanel />
       <TypePanel />
       <ShapePanel />
       <BackdropPanel />
@@ -361,6 +363,115 @@ function PageDoodlesPanel() {
               setPageDoodle(editing, strokes);
               setEditing(null);
             }}
+          />
+        </Animated.View>
+      )}
+    </Panel>
+  );
+}
+
+/* -------------------------------------------------------------- companion */
+
+const MAX_POSES = 4;
+
+/** The margin companion's animation desk: draw him once, then add poses —
+ * each new pad ghosts the previous pose (onion skin) so the movement stays
+ * on-model. Two or more poses and he flips alive on the planner. */
+function CompanionPanel() {
+  const colors = usePalette();
+  const type = useType();
+  const frames = useStyleStore((s) => s.companion);
+  const setCompanion = useStyleStore((s) => s.setCompanion);
+  // Editing an existing pose by index; frames.length means "a new pose".
+  const [editing, setEditing] = useState<number | null>(null);
+
+  const saveFrame = (index: number, strokes: Stroke[]) => {
+    const next = [...frames];
+    next[index] = strokes;
+    setCompanion(next);
+    setEditing(null);
+  };
+  const removeFrame = (index: number) => {
+    setCompanion(frames.filter((_, i) => i !== index));
+    setEditing(null);
+  };
+
+  return (
+    <Panel style={styles.panel}>
+      <Eyebrow>companion</Eyebrow>
+      <Text style={[styles.hint, type.sans, { color: colors.inkMuted }]}>
+        A little creature for the planner's margin. Draw a pose, then add more — each pad shows
+        the last pose as a ghost so the movement lines up. Two or more poses and he comes alive.
+      </Text>
+      <View style={styles.doodleGrid}>
+        {frames.map((strokes, i) => (
+          <View key={i} style={styles.doodleCell}>
+            <PressableScale
+              scaleTo={0.95}
+              accessibilityLabel={`Edit pose ${i + 1}`}
+              onPress={() => setEditing((e) => (e === i ? null : i))}
+              style={[
+                styles.doodleTile,
+                {
+                  backgroundColor: colors.paper,
+                  borderColor: editing === i ? colors.zest : alpha(colors.rule, 0.7),
+                },
+              ]}
+            >
+              <Grain radius={15} />
+              <View style={styles.doodleArt}>
+                <DoodleSvg strokes={strokes} />
+              </View>
+              <Pressable
+                accessibilityLabel={`Remove pose ${i + 1}`}
+                hitSlop={6}
+                onPress={() => removeFrame(i)}
+                style={[styles.poseRemove, { backgroundColor: alpha(colors.paper, 0.9) }]}
+              >
+                <X size={10} color={colors.ink} />
+              </Pressable>
+            </PressableScale>
+            <Text style={[styles.doodleLabel, type.sansMedium, { color: colors.inkMuted }]}>
+              pose {i + 1}
+            </Text>
+          </View>
+        ))}
+        {frames.length < MAX_POSES && (
+          <View style={styles.doodleCell}>
+            <PressableScale
+              scaleTo={0.95}
+              accessibilityLabel="Add a pose"
+              onPress={() => setEditing(frames.length)}
+              style={[
+                styles.doodleTile,
+                styles.poseAdd,
+                {
+                  borderColor:
+                    editing === frames.length ? colors.zest : alpha(colors.rule, 0.9),
+                },
+              ]}
+            >
+              {frames.length === 0 ? (
+                <Pencil size={16} color={alpha(colors.inkMuted, 0.5)} />
+              ) : (
+                <Plus size={16} color={alpha(colors.inkMuted, 0.5)} />
+              )}
+            </PressableScale>
+            <Text style={[styles.doodleLabel, type.sansMedium, { color: colors.inkMuted }]}>
+              {frames.length === 0 ? "draw him" : "add pose"}
+            </Text>
+          </View>
+        )}
+      </View>
+      {editing != null && (
+        <Animated.View key={editing} entering={FadeIn.duration(160)} style={styles.doodleEditor}>
+          <DoodleEditor
+            heading={`pose ${editing + 1}`}
+            initial={frames[editing] ?? []}
+            // The onion skin: the pose before this one, ghosted underneath.
+            underlay={editing > 0 ? frames[editing - 1] : undefined}
+            onClose={() => setEditing(null)}
+            onSave={(strokes) => saveFrame(editing, strokes)}
           />
         </Animated.View>
       )}
@@ -814,6 +925,17 @@ const styles = StyleSheet.create({
   doodleArt: { height: 48, width: 48 },
   doodleLabel: { fontSize: 10, letterSpacing: 1.4, textTransform: "uppercase" },
   doodleEditor: { marginTop: 12, alignItems: "center" },
+  poseAdd: { borderStyle: "dashed" },
+  poseRemove: {
+    position: "absolute",
+    top: 3,
+    right: 3,
+    height: 16,
+    width: 16,
+    alignItems: "center",
+    justifyContent: "center",
+    borderRadius: 999,
+  },
 
   typeStack: { marginTop: 8, gap: 20 },
   fontRow: { marginTop: 8, flexDirection: "row", flexWrap: "wrap", gap: 8 },

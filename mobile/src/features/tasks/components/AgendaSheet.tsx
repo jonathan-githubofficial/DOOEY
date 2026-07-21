@@ -18,9 +18,11 @@ import Animated, {
   FadeOut,
   LinearTransition,
   runOnJS,
+  useAnimatedProps,
   useAnimatedReaction,
   useAnimatedStyle,
   useSharedValue,
+  withDelay,
   withRepeat,
   withSequence,
   withSpring,
@@ -28,6 +30,7 @@ import Animated, {
   type SharedValue,
 } from "react-native-reanimated";
 import { LinearGradient } from "expo-linear-gradient";
+import Svg, { Path } from "react-native-svg";
 import { Check } from "@/components/Check";
 import { DoodleEditor } from "@/components/DoodleEditor";
 import { DoodleSvg } from "@/components/DoodleSvg";
@@ -96,7 +99,7 @@ export function AgendaSheet({ date, height }: { date: string; height?: number })
             </Text>
           )}
 
-          {complete && <DoneStamp date={date} />}
+          {complete && <DayFlourish date={date} />}
 
           {done.length > 0 && (
             <Animated.View layout={settle} style={styles.donePile}>
@@ -125,32 +128,59 @@ export function AgendaSheet({ date, height }: { date: string; height?: number })
   );
 }
 
-// Days already celebrated this session — the stamp only thunks once per day.
+// Days already celebrated this session — the flourish only sounds once a day.
 const celebrated = new Set<string>();
 
-/** The reward: a rubber stamp slammed onto a finished day. */
-function DoneStamp({ date }: { date: string }) {
+const AnimatedPath = Animated.createAnimatedComponent(Path);
+// A hand-drawn swash with a loop and a lift at the end — generous dash length
+// so the whole line hides before it inks on.
+const FLOURISH = "M12 44 C 44 16, 72 60, 104 38 C 124 24, 136 26, 154 34 C 168 40, 186 36, 206 26";
+const FLOURISH_DASH = 360;
+
+/** The reward: a leaf-inked flourish draws itself across the finished day,
+ * pen-stroke by pen-stroke, and signs off with a quiet "day, done." */
+function DayFlourish({ date }: { date: string }) {
   const colors = usePalette();
   const type = useType();
-  const scale = useSharedValue(1.9);
-  const opacity = useSharedValue(0);
+  const progress = useSharedValue(0);
+  const caption = useSharedValue(0);
   useEffect(() => {
-    scale.value = withSpring(1, { stiffness: 520, damping: 26 });
-    opacity.value = withTiming(0.9, { duration: 140 });
+    progress.value = withTiming(1, { duration: 800, easing: Easing.out(Easing.cubic) });
+    caption.value = withDelay(550, withTiming(1, { duration: 300 }));
     if (!celebrated.has(date)) {
       celebrated.add(date);
       hapticSuccess();
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
-  const style = useAnimatedStyle(() => ({
-    opacity: opacity.value,
-    transform: [{ rotate: "-9deg" }, { scale: scale.value }],
+  const inkProps = useAnimatedProps(() => ({
+    strokeDashoffset: FLOURISH_DASH * (1 - progress.value),
+  }));
+  const captionStyle = useAnimatedStyle(() => ({
+    opacity: caption.value,
+    transform: [{ translateY: 4 * (1 - caption.value) }],
   }));
   return (
-    <Animated.View pointerEvents="none" style={[styles.doneStamp, { borderColor: colors.leaf }, style]}>
-      <Text style={[styles.doneStampText, type.displayBlack, { color: colors.leaf }]}>DONE</Text>
-    </Animated.View>
+    <View pointerEvents="none" style={styles.flourish}>
+      <Svg width={200} height={64} viewBox="0 0 220 70">
+        <AnimatedPath
+          d={FLOURISH}
+          animatedProps={inkProps}
+          stroke={colors.leaf}
+          strokeWidth={5}
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          strokeDasharray={FLOURISH_DASH}
+          fill="none"
+          opacity={0.85}
+        />
+      </Svg>
+      <Animated.Text
+        style={[styles.flourishCaption, type.sansMedium, { color: colors.leaf }, captionStyle]}
+      >
+        day, done.
+      </Animated.Text>
+    </View>
   );
 }
 
@@ -212,11 +242,18 @@ function SignDay({ date }: { date: string }) {
   );
 }
 
-/** The margin companion: the little creature you doodled in the Style studio,
- * peeking over the page's bottom corner. It bobs while you work and hops when
- * the day is done. */
+/** The margin companion: the creature animated pose-by-pose in the Style
+ * studio, peeking over the page's bottom corner. One pose bobs; two or more
+ * flip like a flipbook; a finished day makes him hop. */
 function Companion({ celebrate }: { celebrate: boolean }) {
-  const strokes = useStyleStore((s) => s.pageDoodles.companion);
+  const frames = useStyleStore((s) => s.companion);
+  const [frame, setFrame] = useState(0);
+  useEffect(() => {
+    if (frames.length < 2) return;
+    const t = setInterval(() => setFrame((f) => f + 1), 550);
+    return () => clearInterval(t);
+  }, [frames.length]);
+
   const bob = useSharedValue(0);
   const hop = useSharedValue(0);
   useEffect(() => {
@@ -237,7 +274,9 @@ function Companion({ celebrate }: { celebrate: boolean }) {
   const style = useAnimatedStyle(() => ({
     transform: [{ translateY: bob.value * 3 + hop.value }, { rotate: "5deg" }],
   }));
-  if (!strokes?.length) return null;
+
+  if (frames.length === 0) return null;
+  const strokes = frames[frame % frames.length];
   return (
     <Animated.View pointerEvents="none" style={[styles.companion, style]}>
       <DoodleSvg strokes={strokes} strokeWidth={2.8} />
@@ -897,18 +936,17 @@ const styles = StyleSheet.create({
     letterSpacing: 1.2,
     textTransform: "uppercase",
   },
-  doneStamp: {
+  flourish: {
     alignSelf: "center",
-    marginTop: 18,
-    marginBottom: 6,
-    borderWidth: 3,
-    borderRadius: 10,
-    paddingHorizontal: 18,
-    paddingVertical: 4,
+    alignItems: "center",
+    marginTop: 12,
+    transform: [{ rotate: "-2deg" }],
   },
-  doneStampText: {
-    fontSize: 26,
-    letterSpacing: 6,
+  flourishCaption: {
+    marginTop: -6,
+    fontSize: 11,
+    letterSpacing: 2,
+    textTransform: "uppercase",
   },
   signRow: {
     marginTop: 18,

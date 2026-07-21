@@ -28,6 +28,12 @@ SplashScreen.preventAutoHideAsync();
 
 const queryClient = new QueryClient();
 
+// ── TUNING KNOB ─────────────────────────────────────────────────────────────
+// How tall the new-task sheet opens, as fractions of the screen: the first
+// value is its resting height, the second how far it can be dragged up.
+// (The keyboard adds its own height on top of the resting detent.)
+const COMPOSE_DETENTS = [0.35, 0.85];
+
 export default function RootLayout() {
   const theme = useThemeStore((s) => s.theme);
   const colors = usePalette();
@@ -85,11 +91,11 @@ export default function RootLayout() {
             <Stack.Screen
               name="compose"
               options={{
-                // Two detents: opens snug around the form, drags up for room
-                // when notes or the picker unfold. The form fills whichever
-                // band it gets, footer on the bottom edge.
+                // Snug at rest, drags up for room when notes or the picker
+                // unfold. The form fills whichever band it gets, footer on
+                // the bottom edge. Height lives in COMPOSE_DETENTS above.
                 presentation: "formSheet",
-                sheetAllowedDetents: [0.44, 0.85],
+                sheetAllowedDetents: COMPOSE_DETENTS,
                 sheetGrabberVisible: true,
                 sheetCornerRadius: 24,
                 contentStyle: { backgroundColor: colors.surface },

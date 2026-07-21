@@ -232,6 +232,4 @@ export const DOODLE_PAGES = [
   { key: "boards", label: "Boards" },
   { key: "learning", label: "Projects" },
   { key: "account", label: "Account" },
-  // Not a page: the little creature that lives in the planner's margin.
-  { key: "companion", label: "Companion" },
 ] as const;

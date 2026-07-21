@@ -31,6 +31,8 @@ interface StyleStore {
   backdropOpacity: number; // 0..1 — how much of it shows through the paper
   /** Paper sounds: page flips and pencil scratches. Off by default. */
   sounds: boolean;
+  /** The margin companion's poses — a flipbook of doodled frames. */
+  companion: Stroke[][];
   /** Hand-drawn icons worn next to page titles, keyed by page. */
   pageDoodles: Record<string, Stroke[]>;
   /** Whether the dock island uses those doodles (on) or the stock glyphs (off). */
@@ -43,6 +45,7 @@ interface StyleStore {
   setBackdropImage: (uri: string | null) => void;
   setBackdropEffect: (patch: Partial<Pick<StyleStore, "backdropBlur" | "backdropOpacity">>) => void;
   setSounds: (on: boolean) => void;
+  setCompanion: (frames: Stroke[][]) => void;
   setPageDoodle: (page: string, strokes: Stroke[]) => void;
   setDockDoodles: (on: boolean) => void;
   applyPreset: (key: string) => void;
@@ -59,8 +62,10 @@ export const useStyleStore = create<StyleStore>()(
       backdropBlur: 12,
       backdropOpacity: 0.2,
       sounds: false,
+      companion: [],
       pageDoodles: {},
       dockDoodles: true,
+      setCompanion: (frames) => set({ companion: frames.filter((f) => f.length > 0) }),
       setBackdrop: (key) => set({ backdrop: key }),
       setBackdropImage: (uri) => set({ backdropImage: uri }),
       setBackdropEffect: (patch) => set(patch),
@@ -116,6 +121,7 @@ export const useStyleStore = create<StyleStore>()(
         backdropBlur,
         backdropOpacity,
         sounds,
+        companion,
         dockDoodles,
       }) => ({
         colors,
@@ -129,6 +135,7 @@ export const useStyleStore = create<StyleStore>()(
         backdropBlur,
         backdropOpacity,
         sounds,
+        companion,
         dockDoodles,
       }),
     },

@@ -36,15 +36,18 @@ function eraseNear(strokes: Stroke[], x: number, y: number, radius: number): Str
 }
 
 /** The little drawing card: pad, four inks, pen/eraser/undo, save. The parent
- * decides where it lives (typically inside a Modal). */
+ * decides where it lives (typically inside a Modal). `underlay` ghosts a
+ * previous drawing beneath the pad — onion skin for animating poses. */
 export function DoodleEditor({
   heading,
   initial,
+  underlay,
   onSave,
   onClose,
 }: {
   heading: string;
   initial: Stroke[];
+  underlay?: Stroke[];
   onSave: (strokes: Stroke[]) => void | Promise<void>;
   onClose: () => void;
 }) {
@@ -150,6 +153,11 @@ export function DoodleEditor({
           ]}
           onLayout={(e) => setPadSize(e.nativeEvent.layout.width)}
         >
+          {!!underlay?.length && (
+            <View pointerEvents="none" style={[StyleSheet.absoluteFill, styles.onionSkin]}>
+              <DoodleSvg strokes={underlay} />
+            </View>
+          )}
           <DoodleSvg strokes={live && live.length > 1 ? [...strokes, { color: ink, points: live }] : strokes} />
           {tool === "erase" && eraserAt && padSize > 0 && (
             <View
@@ -280,6 +288,9 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     borderWidth: 1,
     overflow: "hidden",
+  },
+  onionSkin: {
+    opacity: 0.16,
   },
   eraserDot: {
     position: "absolute",

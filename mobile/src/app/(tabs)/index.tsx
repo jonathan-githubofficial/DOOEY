@@ -25,6 +25,12 @@ import { usePalette, useType } from "@/stores/theme";
 
 const settle = LinearTransition.springify().stiffness(380).damping(34);
 
+// ── TUNING KNOB ─────────────────────────────────────────────────────────────
+// How far the notebook's bottom edge sits ABOVE the tab bar / dock island
+// (safe-area inset is added on top of this). Bigger = higher notebook, more
+// room for the companion peeking over the page edge.
+const PAGE_BOTTOM_CLEARANCE = Platform.OS === "web" ? 116 : 108;
+
 /** How the day's work is laid out: the agenda list, the timeboxed day grid,
  * or the whole week in time. The month is not a mode — it unfolds out of the
  * date shelf. */
@@ -132,9 +138,7 @@ export default function Planner() {
           collapsable={false}
           style={[
             styles.body,
-            // Enough clearance that the page (and its pad edges) ends above
-            // the tab bar / dock island, never under it.
-            { paddingBottom: Math.max(16, insets.bottom) + (Platform.OS === "web" ? 96 : 76) },
+            { paddingBottom: Math.max(16, insets.bottom) + PAGE_BOTTOM_CLEARANCE },
           ]}
           onLayout={(e) => setVh(e.nativeEvent.layout.height)}
         >
