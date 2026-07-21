@@ -27,6 +27,14 @@ import { LIGHT_PALETTE, usePalette, useThemeStore } from "@/stores/theme";
 
 SplashScreen.preventAutoHideAsync();
 
+// The tab navigator is the root's anchor: every modal/detail route (compose,
+// a workout, a task…) is pushed ON TOP of it, so there is always a screen to
+// go back to — even when the app cold-starts or reloads straight onto one.
+// Without this, restoring such a route leaves it rootless and "GO_BACK was not
+// handled by any navigator" fires on the first dismiss.
+// eslint-disable-next-line react-refresh/only-export-components
+export const unstable_settings = { initialRouteName: "(tabs)" };
+
 const queryClient = new QueryClient();
 
 // The sheet OPENS at these detents (small — the title autofocuses, so the
