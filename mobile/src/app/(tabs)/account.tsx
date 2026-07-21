@@ -4,6 +4,7 @@ import { useEffect, useRef } from "react";
 import { Animated, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { AvatarDoodle } from "@/components/AvatarDoodle";
+import { DoodleSvg } from "@/components/DoodleSvg";
 import { Grain } from "@/components/grain";
 import { Masthead } from "@/components/Masthead";
 import { PressableScale } from "@/components/pressable-scale";
@@ -12,6 +13,7 @@ import { signOut } from "@/features/auth/api";
 import { PageDoodle } from "@/features/style/components/PageDoodle";
 import { alpha } from "@/lib/theme";
 import { useAuthStore } from "@/stores/auth";
+import { useGardenStore } from "@/stores/garden";
 import { usePalette, useThemeStore, useType } from "@/stores/theme";
 
 /** The account space: your doodled self, email, appearance, the door to the
@@ -74,6 +76,8 @@ export default function Account() {
           </Panel>
         </PressableScale>
 
+        <GardenPanel />
+
         {/* The way out, at the very bottom — one wide stamp across the page. */}
         <StampButton onPress={signOut} style={styles.signOut}>
           <LogOut size={16} color={colors.inkMuted} />
@@ -83,6 +87,32 @@ export default function Account() {
         </StampButton>
       </ScrollView>
     </View>
+  );
+}
+
+/** The garden: every signed-off day planted a little drawing here. */
+function GardenPanel() {
+  const colors = usePalette();
+  const type = useType();
+  const signatures = useGardenStore((s) => s.signatures);
+  const days = Object.keys(signatures).sort();
+  if (days.length === 0) return null;
+
+  return (
+    <Panel style={styles.gardenPanel}>
+      <Eyebrow>your garden</Eyebrow>
+      <View style={styles.garden}>
+        {days.map((d) => (
+          <View key={d} style={styles.gardenCell} accessibilityLabel={d}>
+            <DoodleSvg strokes={signatures[d]} strokeWidth={5} />
+          </View>
+        ))}
+      </View>
+      <Text style={[styles.gardenCount, type.sans, { color: colors.inkMuted }]}>
+        <Text style={{ color: colors.zest }}>{days.length}</Text>
+        {days.length === 1 ? " day" : " days"} of growth
+      </Text>
+    </Panel>
   );
 }
 
@@ -173,6 +203,25 @@ const styles = StyleSheet.create({
   },
   appearanceLabel: {
     fontSize: 14,
+  },
+  gardenPanel: {
+    marginTop: 16,
+    padding: 20,
+  },
+  garden: {
+    marginTop: 12,
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 6,
+  },
+  gardenCell: {
+    height: 30,
+    width: 30,
+  },
+  gardenCount: {
+    marginTop: 12,
+    fontSize: 12,
+    fontVariant: ["tabular-nums"],
   },
   signOut: {
     marginTop: 28,

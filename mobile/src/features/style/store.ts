@@ -25,6 +25,12 @@ interface StyleStore {
   shadow: number;
   /** A soft colour wash breathed over the paper — a BACKDROPS key, or null. */
   backdrop: string | null;
+  /** Your own photo under the paper (a copied-local uri), softened to blend. */
+  backdropImage: string | null;
+  backdropBlur: number; // px of blur over the photo
+  backdropOpacity: number; // 0..1 — how much of it shows through the paper
+  /** Paper sounds: page flips and pencil scratches. Off by default. */
+  sounds: boolean;
   /** Hand-drawn icons worn next to page titles, keyed by page. */
   pageDoodles: Record<string, Stroke[]>;
   /** Whether the dock island uses those doodles (on) or the stock glyphs (off). */
@@ -34,6 +40,9 @@ interface StyleStore {
   setFont: (slot: "sans" | "display", font: FontKey) => void;
   setShape: (patch: Partial<Pick<StyleStore, "radius" | "grain" | "shadow">>) => void;
   setBackdrop: (key: string | null) => void;
+  setBackdropImage: (uri: string | null) => void;
+  setBackdropEffect: (patch: Partial<Pick<StyleStore, "backdropBlur" | "backdropOpacity">>) => void;
+  setSounds: (on: boolean) => void;
   setPageDoodle: (page: string, strokes: Stroke[]) => void;
   setDockDoodles: (on: boolean) => void;
   applyPreset: (key: string) => void;
@@ -46,9 +55,16 @@ export const useStyleStore = create<StyleStore>()(
       colors: { light: {}, dark: {} },
       ...BASE,
       backdrop: null,
+      backdropImage: null,
+      backdropBlur: 12,
+      backdropOpacity: 0.2,
+      sounds: false,
       pageDoodles: {},
       dockDoodles: true,
       setBackdrop: (key) => set({ backdrop: key }),
+      setBackdropImage: (uri) => set({ backdropImage: uri }),
+      setBackdropEffect: (patch) => set(patch),
+      setSounds: (on) => set({ sounds: on }),
       setDockDoodles: (on) => set({ dockDoodles: on }),
       setPageDoodle: (page, strokes) => {
         const pageDoodles = { ...get().pageDoodles, [page]: strokes };
@@ -69,7 +85,15 @@ export const useStyleStore = create<StyleStore>()(
         if (!preset) return;
         set({ colors: { light: { ...preset.colors.light }, dark: { ...preset.colors.dark } } });
       },
-      resetAll: () => set({ colors: { light: {}, dark: {} }, ...BASE, backdrop: null }),
+      resetAll: () =>
+        set({
+          colors: { light: {}, dark: {} },
+          ...BASE,
+          backdrop: null,
+          backdropImage: null,
+          backdropBlur: 12,
+          backdropOpacity: 0.2,
+        }),
     }),
     {
       name: "dooey-style",
@@ -80,7 +104,7 @@ export const useStyleStore = create<StyleStore>()(
       migrate: () => ({}),
       // pageDoodles are intentionally NOT persisted locally — they live on the
       // user record so they follow the account across devices (and the web app).
-      partialize: ({ colors, fontSans, fontDisplay, radius, grain, shadow, backdrop, dockDoodles }) => ({
+      partialize: ({
         colors,
         fontSans,
         fontDisplay,
@@ -88,6 +112,23 @@ export const useStyleStore = create<StyleStore>()(
         grain,
         shadow,
         backdrop,
+        backdropImage,
+        backdropBlur,
+        backdropOpacity,
+        sounds,
+        dockDoodles,
+      }) => ({
+        colors,
+        fontSans,
+        fontDisplay,
+        radius,
+        grain,
+        shadow,
+        backdrop,
+        backdropImage,
+        backdropBlur,
+        backdropOpacity,
+        sounds,
         dockDoodles,
       }),
     },

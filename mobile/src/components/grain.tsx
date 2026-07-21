@@ -9,25 +9,41 @@ import { usePalette, useThemeStore } from "@/stores/theme";
 
 const TILE = 160; // the noise PNGs' intrinsic size
 
-/** The chosen backdrop as a whisper-quiet diagonal wash under the grain —
- * only full-bleed page grain carries it, never cards. */
+/** The chosen backdrop under the grain — only full-bleed page grain carries
+ * it, never cards. A photo (blurred and faded into the paper) sits lowest,
+ * then the whisper-quiet colour wash. */
 function BackdropWash() {
   const colors = usePalette();
   const key = useStyleStore((s) => s.backdrop);
+  const image = useStyleStore((s) => s.backdropImage);
+  const blur = useStyleStore((s) => s.backdropBlur);
+  const imgOpacity = useStyleStore((s) => s.backdropOpacity);
   const preset = BACKDROPS.find((b) => b.key === key);
-  if (!preset) return null;
+  if (!preset && !image) return null;
   return (
-    <LinearGradient
-      pointerEvents="none"
-      colors={[
-        alpha(colors[preset.from as keyof Palette], 0.1),
-        "transparent",
-        alpha(colors[preset.to as keyof Palette], 0.09),
-      ]}
-      start={{ x: 0, y: 0 }}
-      end={{ x: 1, y: 1 }}
-      style={StyleSheet.absoluteFill}
-    />
+    <>
+      {image && (
+        <Image
+          source={{ uri: image }}
+          resizeMode="cover"
+          blurRadius={blur}
+          style={[StyleSheet.absoluteFill, { opacity: imgOpacity }]}
+        />
+      )}
+      {preset && (
+        <LinearGradient
+          pointerEvents="none"
+          colors={[
+            alpha(colors[preset.from as keyof Palette], 0.1),
+            "transparent",
+            alpha(colors[preset.to as keyof Palette], 0.09),
+          ]}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 1 }}
+          style={StyleSheet.absoluteFill}
+        />
+      )}
+    </>
   );
 }
 

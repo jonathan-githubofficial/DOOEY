@@ -3,6 +3,7 @@ import { useEffect } from "react";
 import Animated, { useAnimatedStyle, useSharedValue, withSpring } from "react-native-reanimated";
 import { PressableScale } from "@/components/pressable-scale";
 import { hapticTap } from "@/lib/haptics";
+import { playScratch } from "@/lib/sounds";
 import { alpha } from "@/lib/theme";
 import { usePalette } from "@/stores/theme";
 
@@ -36,6 +37,7 @@ export function Check({
       accessibilityLabel={label}
       onPress={() => {
         hapticTap();
+        playScratch();
         onToggle();
       }}
       hitSlop={8}

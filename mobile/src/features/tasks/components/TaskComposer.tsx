@@ -207,6 +207,9 @@ export function ComposerForm({
   const openClock = () => {
     hapticTap();
     const show = () => {
+      // The from–to row appears immediately with a sensible default — the
+      // picker then refines it, rather than gating it.
+      if (start == null) pickStart(minsOf(pickValue));
       if (Platform.OS === "android") {
         // Android has no combined picker — date dialog, then time dialog.
         DateTimePickerAndroid.open({

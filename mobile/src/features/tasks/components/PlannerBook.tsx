@@ -11,6 +11,7 @@ import Animated, {
   withTiming,
 } from "react-native-reanimated";
 import { useCardRadius } from "@/features/style/store";
+import { playFlip } from "@/lib/sounds";
 import { alpha } from "@/lib/theme";
 import { usePalette, useThemeStore } from "@/stores/theme";
 
@@ -59,6 +60,7 @@ export function PlannerBook({
 
   useEffect(() => {
     if (!flip) return;
+    playFlip();
     dirSv.value = flip.dir;
     progress.value = 0;
     progress.value =

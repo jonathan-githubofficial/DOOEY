@@ -85,10 +85,11 @@ export default function RootLayout() {
             <Stack.Screen
               name="compose"
               options={{
-                // A fixed detent (not fitToContents): the sheet owns a solid
-                // band of the screen and the form fills it to the bottom edge.
+                // Two detents: opens snug around the form, drags up for room
+                // when notes or the picker unfold. The form fills whichever
+                // band it gets, footer on the bottom edge.
                 presentation: "formSheet",
-                sheetAllowedDetents: [0.62],
+                sheetAllowedDetents: [0.44, 0.85],
                 sheetGrabberVisible: true,
                 sheetCornerRadius: 24,
                 contentStyle: { backgroundColor: colors.surface },

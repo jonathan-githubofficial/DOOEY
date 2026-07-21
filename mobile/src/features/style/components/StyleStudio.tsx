@@ -1,8 +1,10 @@
 import Slider from "@react-native-community/slider";
+import * as FileSystem from "expo-file-system/legacy";
+import * as ImagePicker from "expo-image-picker";
 import { LinearGradient } from "expo-linear-gradient";
-import { Pencil, RotateCcw } from "lucide-react-native";
+import { ImagePlus, Pencil, RotateCcw, X } from "lucide-react-native";
 import { useState } from "react";
-import { Pressable, StyleSheet, Text, View } from "react-native";
+import { Image, Pressable, StyleSheet, Text, View } from "react-native";
 import Animated, { FadeIn, FadeOut, LinearTransition } from "react-native-reanimated";
 import { DoodleEditor } from "@/components/DoodleEditor";
 import { DoodleSvg } from "@/components/DoodleSvg";
@@ -440,13 +442,45 @@ function FontPicker({
 /* ------------------------------------------------------------------ shape */
 
 function ShapePanel() {
+  const colors = usePalette();
+  const type = useType();
   const radius = useStyleStore((s) => s.radius);
   const grain = useStyleStore((s) => s.grain);
   const shadow = useStyleStore((s) => s.shadow);
   const setShape = useStyleStore((s) => s.setShape);
+  const sounds = useStyleStore((s) => s.sounds);
+  const setSounds = useStyleStore((s) => s.setSounds);
   return (
     <Panel style={styles.panel}>
-      <Eyebrow>shape & feel</Eyebrow>
+      <View style={styles.panelHead}>
+        <Eyebrow>shape & feel</Eyebrow>
+        <Pressable
+          accessibilityRole="switch"
+          accessibilityState={{ checked: sounds }}
+          accessibilityLabel="Paper sounds — page flips and pencil scratches"
+          onPress={() => setSounds(!sounds)}
+          style={styles.dockSwitchRow}
+        >
+          <Text style={[styles.dockSwitchLabel, type.sans, { color: colors.inkMuted }]}>
+            paper sounds
+          </Text>
+          <View
+            style={[
+              styles.dockSwitch,
+              { backgroundColor: sounds ? alpha(colors.zest, 0.3) : alpha(colors.ink, 0.1) },
+            ]}
+          >
+            <Animated.View
+              layout={settle}
+              style={[
+                styles.dockKnob,
+                { backgroundColor: colors.surface },
+                sounds && { alignSelf: "flex-end" },
+              ]}
+            />
+          </View>
+        </Pressable>
+      </View>
       <View style={styles.shapeStack}>
         <SliderRow
           label="Corners"
@@ -543,6 +577,28 @@ function BackdropPanel() {
   const type = useType();
   const backdrop = useStyleStore((s) => s.backdrop);
   const setBackdrop = useStyleStore((s) => s.setBackdrop);
+  const image = useStyleStore((s) => s.backdropImage);
+  const setImage = useStyleStore((s) => s.setBackdropImage);
+  const blur = useStyleStore((s) => s.backdropBlur);
+  const opacity = useStyleStore((s) => s.backdropOpacity);
+  const setEffect = useStyleStore((s) => s.setBackdropEffect);
+
+  const pickPhoto = async () => {
+    const res = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ["images"],
+      quality: 0.8,
+    });
+    const asset = res.canceled ? null : res.assets[0];
+    if (!asset) return;
+    // The picker's uri lives in a cache that gets swept — keep our own copy.
+    try {
+      const to = `${FileSystem.documentDirectory}backdrop-${Date.now()}.jpg`;
+      await FileSystem.copyAsync({ from: asset.uri, to });
+      setImage(to);
+    } catch {
+      setImage(asset.uri); // web has no document directory — use it in place
+    }
+  };
 
   return (
     <Panel style={styles.panel}>
@@ -602,7 +658,60 @@ function BackdropPanel() {
             </PressableScale>
           );
         })}
+        {/* Your own photo — softened until it belongs to the paper. */}
+        {image ? (
+          <View
+            style={[styles.backdropPill, styles.photoPill, { borderColor: alpha(colors.rule, 0.7) }]}
+          >
+            <Image source={{ uri: image }} blurRadius={4} style={StyleSheet.absoluteFill} />
+            <Pressable
+              accessibilityLabel="Remove the photo backdrop"
+              hitSlop={8}
+              onPress={() => setImage(null)}
+              style={[styles.photoRemove, { backgroundColor: alpha(colors.paper, 0.85) }]}
+            >
+              <X size={12} color={colors.ink} />
+            </Pressable>
+          </View>
+        ) : (
+          <PressableScale
+            scaleTo={0.95}
+            accessibilityLabel="Use a photo as the backdrop"
+            onPress={pickPhoto}
+            style={[styles.backdropPill, styles.photoAdd, { borderColor: alpha(colors.rule, 0.9) }]}
+          >
+            <ImagePlus size={16} color={alpha(colors.inkMuted, 0.7)} />
+            <Text style={[styles.backdropLabel, type.sansMedium, { color: colors.inkMuted }]}>
+              photo
+            </Text>
+          </PressableScale>
+        )}
       </View>
+
+      {image && (
+        <Animated.View entering={FadeIn.duration(180)} style={styles.photoTuners}>
+          <SliderRow
+            label="Soften"
+            display={`${Math.round(blur)}px`}
+            value={blur}
+            max={30}
+            step={1}
+            isDefault={blur === 12}
+            onChange={(v) => setEffect({ backdropBlur: v })}
+            onReset={() => setEffect({ backdropBlur: 12 })}
+          />
+          <SliderRow
+            label="Presence"
+            display={`${Math.round(opacity * 100)}%`}
+            value={opacity}
+            max={0.5}
+            step={0.05}
+            isDefault={opacity === 0.2}
+            onChange={(v) => setEffect({ backdropOpacity: v })}
+            onReset={() => setEffect({ backdropOpacity: 0.2 })}
+          />
+        </Animated.View>
+      )}
     </Panel>
   );
 }
@@ -714,6 +823,19 @@ const styles = StyleSheet.create({
   shapeStack: { marginTop: 12, gap: 16 },
 
   backdropRow: { marginTop: 12, flexDirection: "row", flexWrap: "wrap", gap: 8 },
+  photoPill: { padding: 0 },
+  photoAdd: { flexDirection: "row", gap: 6, borderStyle: "dashed" },
+  photoRemove: {
+    position: "absolute",
+    top: 4,
+    right: 4,
+    height: 20,
+    width: 20,
+    alignItems: "center",
+    justifyContent: "center",
+    borderRadius: 999,
+  },
+  photoTuners: { marginTop: 12, gap: 12 },
   backdropPill: {
     height: 44,
     minWidth: 76,

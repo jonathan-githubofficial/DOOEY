@@ -1,7 +1,8 @@
 import { useRouter } from "expo-router";
-import { Trash2 } from "lucide-react-native";
+import { Pencil, Send, Trash2 } from "lucide-react-native";
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
+  Modal,
   Platform,
   Pressable,
   ScrollView,
@@ -10,8 +11,9 @@ import {
   View,
   type ViewStyle,
 } from "react-native";
-import { Gesture, GestureDetector } from "react-native-gesture-handler";
+import { Gesture, GestureDetector, GestureHandlerRootView } from "react-native-gesture-handler";
 import Animated, {
+  Easing,
   FadeIn,
   FadeOut,
   LinearTransition,
@@ -20,16 +22,22 @@ import Animated, {
   useAnimatedStyle,
   useSharedValue,
   withRepeat,
+  withSequence,
   withSpring,
   withTiming,
   type SharedValue,
 } from "react-native-reanimated";
 import { LinearGradient } from "expo-linear-gradient";
 import { Check } from "@/components/Check";
+import { DoodleEditor } from "@/components/DoodleEditor";
+import { DoodleSvg } from "@/components/DoodleSvg";
+import { PressableScale } from "@/components/pressable-scale";
 import { Eyebrow, Panel, Stamp } from "@/components/surface";
-import { dayTitle, dueInfo, localDate, toLocalNoon } from "@/lib/dates";
-import { hapticLift, hapticTap, hapticWarn } from "@/lib/haptics";
+import { useStyleStore } from "@/features/style/store";
+import { addDays, dayTitle, dueInfo, localDate, toLocalNoon, toPbDate } from "@/lib/dates";
+import { hapticLift, hapticSuccess, hapticTap, hapticWarn } from "@/lib/haptics";
 import { alpha } from "@/lib/theme";
+import { useGardenStore } from "@/stores/garden";
 import { usePalette, useType } from "@/stores/theme";
 import { useDayTasks, useDeleteTask, useUpdateTask } from "../api";
 import type { Task } from "../types";
@@ -38,7 +46,9 @@ import { BINDING_INSET, RING_COUNT } from "./PlannerBook";
 const settle = LinearTransition.springify().stiffness(420).damping(32);
 const ROW_H = 56;
 const CHECK_LINE_H = 26; // one checklist line tucked under the title
-const REVEAL_W = 72; // how far a row swipes right to bare its delete
+const REVEAL_W = 72; // how far a row swipes left to bare its delete
+const FLY_T = 96; // rightward pull past this and the row flies to tomorrow
+const FLY_X = 400; // how far off the page the paper plane sails
 const DAY_MS = 86_400_000;
 const LIFT = { stiffness: 420, damping: 34 };
 
@@ -56,6 +66,9 @@ export function AgendaSheet({ date, height }: { date: string; height?: number })
 
   const open = useMemo(() => (tasks ?? []).filter((t) => !t.done_at), [tasks]);
   const done = (tasks ?? []).filter((t) => t.done_at);
+  // A day with work behind it and nothing left: it earns the stamp,
+  // the signature line, and the companion's little jump.
+  const complete = !!tasks && open.length === 0 && done.length > 0;
 
   const body = (
     <>
@@ -83,6 +96,8 @@ export function AgendaSheet({ date, height }: { date: string; height?: number })
             </Text>
           )}
 
+          {complete && <DoneStamp date={date} />}
+
           {done.length > 0 && (
             <Animated.View layout={settle} style={styles.donePile}>
               <Eyebrow>done</Eyebrow>
@@ -91,15 +106,142 @@ export function AgendaSheet({ date, height }: { date: string; height?: number })
               ))}
             </Animated.View>
           )}
+
+          {complete && <SignDay date={date} />}
         </>
       )}
     </>
   );
 
   return (
-    <PageSheet date={date} count={open.length} height={height}>
+    <PageSheet
+      date={date}
+      count={open.length}
+      height={height}
+      overlay={<Companion celebrate={complete} />}
+    >
       {body}
     </PageSheet>
+  );
+}
+
+// Days already celebrated this session — the stamp only thunks once per day.
+const celebrated = new Set<string>();
+
+/** The reward: a rubber stamp slammed onto a finished day. */
+function DoneStamp({ date }: { date: string }) {
+  const colors = usePalette();
+  const type = useType();
+  const scale = useSharedValue(1.9);
+  const opacity = useSharedValue(0);
+  useEffect(() => {
+    scale.value = withSpring(1, { stiffness: 520, damping: 26 });
+    opacity.value = withTiming(0.9, { duration: 140 });
+    if (!celebrated.has(date)) {
+      celebrated.add(date);
+      hapticSuccess();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+  const style = useAnimatedStyle(() => ({
+    opacity: opacity.value,
+    transform: [{ rotate: "-9deg" }, { scale: scale.value }],
+  }));
+  return (
+    <Animated.View pointerEvents="none" style={[styles.doneStamp, { borderColor: colors.leaf }, style]}>
+      <Text style={[styles.doneStampText, type.displayBlack, { color: colors.leaf }]}>DONE</Text>
+    </Animated.View>
+  );
+}
+
+/** Sign the finished day with a little drawing — it joins the garden on the
+ * Account page. Tap an existing signature to redraw it. */
+function SignDay({ date }: { date: string }) {
+  const colors = usePalette();
+  const type = useType();
+  const strokes = useGardenStore((s) => s.signatures[date]);
+  const sign = useGardenStore((s) => s.sign);
+  const [open, setOpen] = useState(false);
+
+  return (
+    <View style={styles.signRow}>
+      {strokes?.length ? (
+        <Pressable
+          accessibilityLabel="Redraw the day's signature"
+          onPress={() => setOpen(true)}
+          style={styles.signature}
+        >
+          <DoodleSvg strokes={strokes} strokeWidth={3} />
+        </Pressable>
+      ) : (
+        <PressableScale
+          scaleTo={0.95}
+          accessibilityLabel="Sign the day"
+          onPress={() => {
+            hapticTap();
+            setOpen(true);
+          }}
+          style={[styles.signKey, { borderColor: alpha(colors.rule, 0.9) }]}
+        >
+          <Pencil size={13} color={alpha(colors.inkMuted, 0.7)} />
+          <Text style={[styles.signKeyText, type.sansMedium, { color: colors.inkMuted }]}>
+            sign the day
+          </Text>
+        </PressableScale>
+      )}
+
+      <Modal visible={open} transparent animationType="fade" onRequestClose={() => setOpen(false)}>
+        <GestureHandlerRootView style={styles.signRoot}>
+          <Pressable style={styles.signBackdrop} onPress={() => setOpen(false)}>
+            <Pressable onPress={() => {}}>
+              <DoodleEditor
+                heading={`sign ${dayTitle(date).toLowerCase()}`}
+                initial={strokes ?? []}
+                onClose={() => setOpen(false)}
+                onSave={(next) => {
+                  sign(date, next);
+                  hapticSuccess();
+                  setOpen(false);
+                }}
+              />
+            </Pressable>
+          </Pressable>
+        </GestureHandlerRootView>
+      </Modal>
+    </View>
+  );
+}
+
+/** The margin companion: the little creature you doodled in the Style studio,
+ * peeking over the page's bottom corner. It bobs while you work and hops when
+ * the day is done. */
+function Companion({ celebrate }: { celebrate: boolean }) {
+  const strokes = useStyleStore((s) => s.pageDoodles.companion);
+  const bob = useSharedValue(0);
+  const hop = useSharedValue(0);
+  useEffect(() => {
+    bob.value = withRepeat(
+      withTiming(1, { duration: 2400, easing: Easing.inOut(Easing.quad) }),
+      -1,
+      true,
+    );
+  }, [bob]);
+  useEffect(() => {
+    if (celebrate) {
+      hop.value = withSequence(
+        withTiming(-12, { duration: 150, easing: Easing.out(Easing.quad) }),
+        withSpring(0, { stiffness: 320, damping: 11 }),
+      );
+    }
+  }, [celebrate, hop]);
+  const style = useAnimatedStyle(() => ({
+    transform: [{ translateY: bob.value * 3 + hop.value }, { rotate: "5deg" }],
+  }));
+  if (!strokes?.length) return null;
+  return (
+    <Animated.View pointerEvents="none" style={[styles.companion, style]}>
+      <DoodleSvg strokes={strokes} strokeWidth={2.8} />
+    </Animated.View>
   );
 }
 
@@ -109,11 +251,14 @@ export function PageSheet({
   date,
   count,
   height,
+  overlay,
   children,
 }: {
   date: string;
   count: number;
   height?: number;
+  /** Pinned over the paper (doesn't scroll) — stamps, companions. */
+  overlay?: React.ReactNode;
   children: React.ReactNode;
 }) {
   const colors = usePalette();
@@ -153,6 +298,8 @@ export function PageSheet({
           </View>
         ))}
       </View>
+
+      {overlay}
     </View>
   );
 }
@@ -283,8 +430,10 @@ function DraggableRow({
   const dragging = useSharedValue(false);
   const y = useSharedValue(0);
   const startY = useSharedValue(0);
-  const reveal = useSharedValue(0);
-  const revealStart = useSharedValue(0);
+  // Signed swipe: negative bares the delete on the right; positive pulls the
+  // row toward its paper-plane flight to tomorrow.
+  const shift = useSharedValue(0);
+  const shiftStart = useSharedValue(0);
   // On the web the click fires AFTER the drag releases — swallow it, or every
   // drop also opens the task's page.
   const justDragged = useRef(false);
@@ -294,6 +443,10 @@ function DraggableRow({
     setTimeout(() => {
       justDragged.current = false;
     }, 250);
+  };
+  const sendTomorrow = () => {
+    hapticSuccess();
+    update.mutate({ id, patch: { due_date: toPbDate(addDays(localDate(), 1)) } });
   };
 
   const lift = Gesture.Pan()
@@ -344,38 +497,48 @@ function DraggableRow({
       dragging.value = false;
     });
 
-  // Swipe the row LEFT to bare its delete on the right, iOS-style (native
-  // only — the web shows the trash on hover instead). Horizontal-only: any
-  // vertical drift fails it so scrolling and the long-press lift keep working.
+  // Swipe LEFT to bare the delete on the right, iOS-style; pull RIGHT past
+  // the threshold and the row folds off as a paper plane, landing on
+  // tomorrow's page. (Native only — the web shows the hover trash instead.)
+  // Horizontal-only: vertical drift fails it so scroll and lift keep working.
   const swipe = Gesture.Pan()
     .enabled(!web)
     .activeOffsetX([-16, 16])
     .failOffsetY([-12, 12])
     .onStart(() => {
-      revealStart.value = reveal.value;
+      shiftStart.value = shift.value;
       revealed.value = id;
     })
     .onUpdate((e) => {
-      reveal.value = Math.max(0, Math.min(REVEAL_W, revealStart.value - e.translationX));
+      shift.value = Math.max(-REVEAL_W, Math.min(FLY_T * 1.35, shiftStart.value + e.translationX));
     })
     .onEnd(() => {
-      const open = reveal.value > REVEAL_W / 2;
-      reveal.value = withSpring(open ? REVEAL_W : 0, LIFT);
-      if (open) runOnJS(hapticTap)();
-      else revealed.value = null;
+      if (shift.value > FLY_T) {
+        // Off it sails — commit once it has left the page.
+        shift.value = withTiming(FLY_X, { duration: 340, easing: Easing.in(Easing.quad) }, (f) => {
+          if (f) runOnJS(sendTomorrow)();
+        });
+        revealed.value = null;
+      } else if (shift.value < -REVEAL_W / 2) {
+        shift.value = withSpring(-REVEAL_W, LIFT);
+        runOnJS(hapticTap)();
+      } else {
+        shift.value = withSpring(0, LIFT);
+        revealed.value = null;
+      }
     });
 
   // Another row swiping (or this one lifting) tucks this delete back in.
   useAnimatedReaction(
     () => revealed.value,
     (open) => {
-      if (open !== id && reveal.value > 0) reveal.value = withSpring(0, LIFT);
+      if (open !== id && shift.value < 0) shift.value = withSpring(0, LIFT);
     },
   );
 
   const closeReveal = () => {
     revealed.value = null;
-    reveal.value = withSpring(0, LIFT);
+    shift.value = withSpring(0, LIFT);
   };
 
   // The row is bare paper until it's lifted — only a live drag earns the
@@ -410,11 +573,20 @@ function DraggableRow({
           borderTopColor: idx === 0 ? "transparent" : rule,
         };
   });
+  // The card banks and fades as it flies; plain slide for the delete reveal.
   const cardStyle = useAnimatedStyle(() => ({
-    transform: [{ translateX: -reveal.value }],
+    transform: [
+      { translateX: shift.value },
+      { rotate: shift.value > 0 ? `${(-shift.value / FLY_X) * 14}deg` : "0deg" },
+    ],
+    opacity: shift.value > FLY_T ? Math.max(0, 1 - (shift.value - FLY_T) / (FLY_X * 0.7 - FLY_T)) : 1,
   }));
   const underStyle = useAnimatedStyle(() => ({
-    opacity: reveal.value / REVEAL_W,
+    opacity: Math.min(1, Math.max(0, -shift.value) / REVEAL_W),
+  }));
+  const planeStyle = useAnimatedStyle(() => ({
+    opacity: Math.min(1, Math.max(0, shift.value) / FLY_T),
+    transform: [{ scale: 0.8 + 0.3 * Math.min(1, Math.max(0, shift.value) / FLY_T) }],
   }));
 
   const due = date === localDate() && task.due_date ? dueInfo(task.due_date) : null;
@@ -448,6 +620,16 @@ function DraggableRow({
               </Pressable>
             </Animated.View>
           )}
+          {!web && (
+            <Animated.View pointerEvents="none" style={[styles.planeUnder, planeStyle]}>
+              <View style={[styles.deleteBtn, { backgroundColor: alpha(colors.zest, 0.14) }]}>
+                <Send size={16} color={colors.zest} />
+              </View>
+              <Text style={[styles.planeLabel, type.sansMedium, { color: colors.zest }]}>
+                tomorrow
+              </Text>
+            </Animated.View>
+          )}
           <Animated.View style={[styles.rowCard, cardStyle]}>
             {/* The WHOLE row opens the task's page; the check, the checklist
                 lines and the trash are nested pressables, so they win their
@@ -461,7 +643,7 @@ function DraggableRow({
               ]}
               onPress={() => {
                 if (justDragged.current) return;
-                if (!web && reveal.value > 0) closeReveal();
+                if (!web && shift.value !== 0) closeReveal();
                 else router.push(`/task/${id}`);
               }}
               onHoverIn={web ? () => setHovered(true) : undefined}
@@ -698,6 +880,76 @@ const styles = StyleSheet.create({
     width: REVEAL_W,
     alignItems: "center",
     justifyContent: "center",
+  },
+  planeUnder: {
+    position: "absolute",
+    left: 0,
+    top: 0,
+    bottom: 0,
+    width: FLY_T,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 6,
+  },
+  planeLabel: {
+    fontSize: 10,
+    letterSpacing: 1.2,
+    textTransform: "uppercase",
+  },
+  doneStamp: {
+    alignSelf: "center",
+    marginTop: 18,
+    marginBottom: 6,
+    borderWidth: 3,
+    borderRadius: 10,
+    paddingHorizontal: 18,
+    paddingVertical: 4,
+  },
+  doneStampText: {
+    fontSize: 26,
+    letterSpacing: 6,
+  },
+  signRow: {
+    marginTop: 18,
+    alignItems: "center",
+  },
+  signature: {
+    height: 76,
+    width: 76,
+    transform: [{ rotate: "-3deg" }],
+  },
+  signKey: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    borderWidth: 1,
+    borderStyle: "dashed",
+    borderRadius: 999,
+    paddingHorizontal: 14,
+    paddingVertical: 7,
+  },
+  signKeyText: {
+    fontSize: 11,
+    letterSpacing: 1.2,
+    textTransform: "uppercase",
+  },
+  signRoot: {
+    flex: 1,
+  },
+  signBackdrop: {
+    flex: 1,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "rgba(20, 16, 12, 0.35)",
+  },
+  companion: {
+    position: "absolute",
+    right: 16,
+    bottom: -10,
+    height: 46,
+    width: 46,
+    zIndex: 5,
   },
   deleteBtn: {
     height: 36,
