@@ -113,13 +113,17 @@ export default function Calendar() {
 
         {view === "day" && (
           <View style={styles.dayBook}>
-            <PlannerBook page={selected} direction={direction}>
-              <TimeboxSheet
-                date={selected}
-                pxPerMin={px}
-                onAddSlot={(date, start) => setSlot({ date, start })}
-              />
-            </PlannerBook>
+            <PlannerBook
+              page={selected}
+              direction={direction}
+              renderPage={(d) => (
+                <TimeboxSheet
+                  date={d}
+                  pxPerMin={px}
+                  onAddSlot={(date, start) => setSlot({ date, start })}
+                />
+              )}
+            />
           </View>
         )}
 

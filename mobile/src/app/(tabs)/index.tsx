@@ -42,9 +42,11 @@ export default function Planner() {
         ]}
         keyboardShouldPersistTaps="handled"
       >
-        <PlannerBook page={selected} direction={direction}>
-          <AgendaSheet date={selected} />
-        </PlannerBook>
+        <PlannerBook
+          page={selected}
+          direction={direction}
+          renderPage={(d) => <AgendaSheet date={d} />}
+        />
       </ScrollView>
 
       <TaskComposer date={selected} />

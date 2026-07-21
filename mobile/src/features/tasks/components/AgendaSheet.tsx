@@ -27,7 +27,7 @@ import { BINDING_INSET, RING_COUNT } from "./PlannerBook";
 const settle = LinearTransition.springify().stiffness(420).damping(32);
 const ROW_H = 56;
 const DAY_MS = 86_400_000;
-const LIFT = { stiffness: 420, damping: 30 };
+const LIFT = { stiffness: 420, damping: 34 };
 
 /** One planner page: the day's open tasks in a hold-to-drag reorderable list,
  * and the day's done pile. Rows open the task's page. */
@@ -123,6 +123,7 @@ export function SheetHeading({ date, count }: { date: string; count: number }) {
  * drop the new slot persists as a midpoint sort (dense reindex on collision),
  * exactly like the web planner. */
 function ReorderableRows({ rows, date }: { rows: Task[]; date: string }) {
+  const colors = usePalette();
   const update = useUpdateTask();
   const positions = useSharedValue<Record<string, number>>(
     Object.fromEntries(rows.map((r, i) => [r.id, i])),
@@ -155,6 +156,19 @@ function ReorderableRows({ rows, date }: { rows: Task[]; date: string }) {
 
   return (
     <View style={[styles.list, { height: rows.length * ROW_H }]}>
+      {/* Hairlines live at the slot boundaries, not on the rows — they hold
+          still while rows glide between slots. */}
+      {rows.length > 1 &&
+        Array.from({ length: rows.length - 1 }).map((_, i) => (
+          <View
+            key={i}
+            pointerEvents="none"
+            style={[
+              styles.separator,
+              { top: (i + 1) * ROW_H, backgroundColor: alpha(colors.rule, 0.5) },
+            ]}
+          />
+        ))}
       {rows.map((t, i) => (
         <DraggableRow
           key={t.id}
@@ -219,13 +233,24 @@ function DraggableRow({
       runOnJS(onDrop)(id);
     });
 
+  // The row is bare paper until it's lifted — only a live drag earns the
+  // card treatment (surface fill, shadow, slight grow), like the web.
+  const surface = colors.surface;
   const rowStyle = useAnimatedStyle(() => {
     const idx = positions.value[id] ?? index;
     return dragging.value
-      ? { top: y.value, zIndex: 20, shadowOpacity: 0.18, elevation: 6, transform: [{ scale: 1.02 }] }
+      ? {
+          top: y.value,
+          zIndex: 20,
+          backgroundColor: surface,
+          shadowOpacity: 0.18,
+          elevation: 6,
+          transform: [{ scale: 1.02 }],
+        }
       : {
           top: withSpring(idx * ROW_H, LIFT),
           zIndex: 0,
+          backgroundColor: "transparent",
           shadowOpacity: 0,
           elevation: 0,
           transform: [{ scale: withSpring(1, LIFT) }],
@@ -239,7 +264,7 @@ function DraggableRow({
       <Animated.View
         entering={FadeIn.duration(180)}
         exiting={FadeOut.duration(150)}
-        style={[styles.row, rowStyle, { backgroundColor: colors.surface, shadowColor: "#282018" }]}
+        style={[styles.row, rowStyle, { shadowColor: "#282018" }]}
       >
         <Check
           done={false}
@@ -274,7 +299,7 @@ function DraggableRow({
             ])
           }
         >
-          <Trash2 size={14} color={alpha(colors.inkMuted, 0.5)} />
+          <Trash2 size={14} color={alpha(colors.inkMuted, 0.35)} />
         </Pressable>
       </Animated.View>
     </GestureDetector>
@@ -395,7 +420,13 @@ const styles = StyleSheet.create({
     fontVariant: ["tabular-nums"],
   },
   list: {
-    marginTop: 8,
+    marginTop: 4,
+  },
+  separator: {
+    position: "absolute",
+    left: -8,
+    right: -8,
+    height: StyleSheet.hairlineWidth,
   },
   row: {
     position: "absolute",
@@ -405,7 +436,8 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     gap: 10,
-    paddingHorizontal: 12,
+    paddingLeft: 12,
+    paddingRight: 10,
     borderRadius: 14,
     shadowRadius: 12,
     shadowOffset: { width: 0, height: 6 },

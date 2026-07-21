@@ -4,9 +4,10 @@ import Animated, { useAnimatedStyle, useSharedValue, withSpring } from "react-na
 const AnimatedPressable = Animated.createAnimatedComponent(Pressable);
 
 /** A Pressable that depresses on a spring — things settle, they don't snap.
- * The DOOEY press state, shared by chips, buttons and rows. */
+ * The DOOEY press state, shared by chips, buttons and rows. Damping is high
+ * on purpose: a quick, controlled dip, not a wobble. */
 export function PressableScale({
-  scaleTo = 0.93,
+  scaleTo = 0.95,
   style,
   onPressIn,
   onPressOut,
@@ -19,11 +20,11 @@ export function PressableScale({
       {...props}
       style={[style, animated]}
       onPressIn={(e) => {
-        scale.value = withSpring(scaleTo, { stiffness: 600, damping: 32 });
+        scale.value = withSpring(scaleTo, { stiffness: 650, damping: 40 });
         onPressIn?.(e);
       }}
       onPressOut={(e) => {
-        scale.value = withSpring(1, { stiffness: 420, damping: 20 });
+        scale.value = withSpring(1, { stiffness: 450, damping: 30 });
         onPressOut?.(e);
       }}
     />

@@ -1,13 +1,22 @@
 import { useRouter } from "expo-router";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Alert, Pressable, StyleSheet, Text, View, type GestureResponderEvent } from "react-native";
-import Animated, { FadeIn, FadeOut, LinearTransition } from "react-native-reanimated";
+import { Pressable, StyleSheet, Text, View, type GestureResponderEvent } from "react-native";
+import { Gesture, GestureDetector } from "react-native-gesture-handler";
+import Animated, {
+  FadeIn,
+  FadeOut,
+  LinearTransition,
+  runOnJS,
+  useAnimatedStyle,
+  useSharedValue,
+  withSpring,
+} from "react-native-reanimated";
 import { Check } from "@/components/Check";
 import { Eyebrow, Panel } from "@/components/surface";
 import { localDate } from "@/lib/dates";
 import { alpha } from "@/lib/theme";
 import { usePalette, useType } from "@/stores/theme";
-import { useDayTasks, useDeleteTask, useUpdateTask } from "../api";
+import { useDayTasks, useUpdateTask } from "../api";
 import { DAY_END, DAY_START, GUTTER, SNAP, clamp, fmtMin, layoutLanes, snap } from "../timeGrid";
 import type { Task } from "../types";
 import { SheetHeading } from "./AgendaSheet";
@@ -32,7 +41,6 @@ export function TimeboxSheet({
   const type = useType();
   const { data: tasks, isPending, error } = useDayTasks(date);
   const update = useUpdateTask();
-  const del = useDeleteTask();
   const [placing, setPlacing] = useState<string | null>(null);
   const gridRef = useRef<View>(null);
 
@@ -133,8 +141,9 @@ export function TimeboxSheet({
                   onDone={() =>
                     update.mutate({ id: t.id, patch: { done_at: new Date().toISOString() } })
                   }
+                  onSchedule={(start_min) => update.mutate({ id: t.id, patch: { start_min } })}
+                  onResize={(dur_min) => update.mutate({ id: t.id, patch: { dur_min } })}
                   onUnschedule={() => update.mutate({ id: t.id, patch: { start_min: 0 } })}
-                  onDelete={() => del.mutate(t.id)}
                 />
               ))}
             </View>
@@ -224,22 +233,25 @@ function useNowMinutes(enabled: boolean): number | null {
   return enabled ? now.getHours() * 60 + now.getMinutes() : null;
 }
 
-/** One boxed task: a grained paper slip pinned to its slot. Long-press for
- * back-to-shelf / delete. */
+/** One boxed task: a grained paper slip pinned to its slot. Hold it a beat to
+ * lift, drag to a new slot (15-min snap) or up past the top to send it back
+ * to the shelf; pull the bottom hem to restretch its length. */
 function TimeBlock({
   task,
   pxPerMin,
   lane,
   onDone,
+  onSchedule,
+  onResize,
   onUnschedule,
-  onDelete,
 }: {
   task: Task;
   pxPerMin: number;
   lane: { lane: number; lanes: number };
   onDone: () => void;
+  onSchedule: (startMin: number) => void;
+  onResize: (durMin: number) => void;
   onUnschedule: () => void;
-  onDelete: () => void;
 }) {
   const colors = usePalette();
   const type = useType();
@@ -247,51 +259,120 @@ function TimeBlock({
   const height = task.dur_min * pxPerMin;
   const compact = height < 46;
 
+  const lifted = useSharedValue(false);
+  const offSheet = useSharedValue(false);
+  const offset = useSharedValue(0); // snapped px offset while dragging
+  const liveH = useSharedValue(height);
+  const resizing = useSharedValue(false);
+  useEffect(() => {
+    liveH.value = height;
+  }, [height, liveH]);
+
+  const start = task.start_min;
+  const dur = task.dur_min;
+
+  const movePan = Gesture.Pan()
+    .activateAfterLongPress(180)
+    .onStart(() => {
+      lifted.value = true;
+    })
+    .onUpdate((e) => {
+      const raw = start + e.translationY / pxPerMin;
+      offSheet.value = raw < DAY_START - 20;
+      const snapped = Math.min(DAY_END - SNAP, Math.max(DAY_START, Math.round(raw / SNAP) * SNAP));
+      offset.value = withSpring((snapped - start) * pxPerMin, { stiffness: 500, damping: 40 });
+    })
+    .onEnd((e) => {
+      const raw = start + e.translationY / pxPerMin;
+      if (raw < DAY_START - 20) {
+        runOnJS(onUnschedule)();
+      } else {
+        const snapped = Math.min(DAY_END - SNAP, Math.max(DAY_START, Math.round(raw / SNAP) * SNAP));
+        if (snapped !== start) runOnJS(onSchedule)(snapped);
+      }
+    })
+    .onFinalize(() => {
+      lifted.value = false;
+      offSheet.value = false;
+      offset.value = 0;
+    });
+
+  const hemPan = Gesture.Pan()
+    .onStart(() => {
+      resizing.value = true;
+    })
+    .onUpdate((e) => {
+      const rawDur = dur + e.translationY / pxPerMin;
+      const snapped = Math.min(DAY_END - start, Math.max(SNAP, Math.round(rawDur / SNAP) * SNAP));
+      liveH.value = snapped * pxPerMin;
+    })
+    .onEnd(() => {
+      const finalDur = Math.round(liveH.value / pxPerMin / SNAP) * SNAP;
+      if (finalDur !== dur) runOnJS(onResize)(finalDur);
+    })
+    .onFinalize(() => {
+      resizing.value = false;
+    });
+
+  const blockStyle = useAnimatedStyle(() => ({
+    height: liveH.value,
+    opacity: offSheet.value ? 0.5 : 1,
+    zIndex: lifted.value || resizing.value ? 30 : 1,
+    shadowOpacity: lifted.value ? 0.25 : 0.08,
+    elevation: lifted.value ? 6 : 1,
+    transform: [
+      { translateY: offset.value },
+      { scale: withSpring(lifted.value ? 1.02 : 1, { stiffness: 420, damping: 32 }) },
+      { rotate: lifted.value ? "-0.4deg" : "0deg" },
+    ],
+  }));
+
   return (
-    <Animated.View
-      entering={FadeIn.duration(160)}
-      exiting={FadeOut.duration(140)}
-      layout={settle}
-      style={[
-        styles.block,
-        {
-          top: (task.start_min - DAY_START) * pxPerMin,
-          height,
-          left: `${(lane.lane / lane.lanes) * 100}%`,
-          width: `${100 / lane.lanes}%`,
-          backgroundColor: colors.surface,
-          borderColor: alpha(colors.rule, 0.7),
-        },
-      ]}
-    >
-      <View style={[styles.blockAccent, { backgroundColor: alpha(colors.zest, 0.7) }]} />
-      <Pressable
-        onPress={() => router.push(`/task/${task.id}`)}
-        onLongPress={() =>
-          Alert.alert(task.title, undefined, [
-            { text: "Back to the shelf", onPress: onUnschedule },
-            { text: "Delete", style: "destructive", onPress: onDelete },
-            { text: "Cancel", style: "cancel" },
-          ])
-        }
-        style={[styles.blockBody, compact ? styles.blockBodyCompact : null]}
+    <GestureDetector gesture={movePan}>
+      <Animated.View
+        entering={FadeIn.duration(160)}
+        exiting={FadeOut.duration(140)}
+        layout={settle}
+        style={[
+          styles.block,
+          blockStyle,
+          {
+            top: (start - DAY_START) * pxPerMin,
+            left: `${(lane.lane / lane.lanes) * 100}%`,
+            width: `${100 / lane.lanes}%`,
+            backgroundColor: colors.surface,
+            borderColor: alpha(colors.rule, 0.7),
+          },
+        ]}
       >
-        <Check done={false} label={`Mark "${task.title}" done`} size={18} onToggle={onDone} />
-        <View style={styles.blockText}>
-          <Text
-            numberOfLines={1}
-            style={[type.sansMedium, { fontSize: compact ? 12 : 13, color: colors.ink }]}
-          >
-            {task.title}
-          </Text>
-          {!compact && (
-            <Text style={[styles.blockTime, type.sans, { color: colors.inkMuted }]}>
-              {fmtMin(task.start_min)} – {fmtMin(task.start_min + task.dur_min)}
+        <View style={[styles.blockAccent, { backgroundColor: alpha(colors.zest, 0.7) }]} />
+        <Pressable
+          onPress={() => router.push(`/task/${task.id}`)}
+          style={[styles.blockBody, compact ? styles.blockBodyCompact : null]}
+        >
+          <Check done={false} label={`Mark "${task.title}" done`} size={18} onToggle={onDone} />
+          <View style={styles.blockText}>
+            <Text
+              numberOfLines={1}
+              style={[type.sansMedium, { fontSize: compact ? 12 : 13, color: colors.ink }]}
+            >
+              {task.title}
             </Text>
-          )}
-        </View>
-      </Pressable>
-    </Animated.View>
+            {!compact && (
+              <Text style={[styles.blockTime, type.sans, { color: colors.inkMuted }]}>
+                {fmtMin(start)} – {fmtMin(start + dur)}
+              </Text>
+            )}
+          </View>
+        </Pressable>
+        {/* The hem: pinch and pull to restretch the slot. */}
+        <GestureDetector gesture={hemPan}>
+          <Animated.View style={styles.hem}>
+            <View style={[styles.hemBar, { backgroundColor: alpha(colors.ink, 0.15) }]} />
+          </Animated.View>
+        </GestureDetector>
+      </Animated.View>
+    </GestureDetector>
   );
 }
 
@@ -478,6 +559,21 @@ const styles = StyleSheet.create({
   blockTime: {
     fontSize: 10,
     fontVariant: ["tabular-nums"],
+  },
+  hem: {
+    position: "absolute",
+    left: 0,
+    right: 0,
+    bottom: 0,
+    height: 14,
+    alignItems: "center",
+    justifyContent: "flex-end",
+    paddingBottom: 4,
+  },
+  hemBar: {
+    height: 3,
+    width: 28,
+    borderRadius: 999,
   },
   emptyHint: {
     marginTop: 12,

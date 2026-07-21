@@ -122,7 +122,7 @@ export function DoodleEditor({
 
   return (
     <Animated.View
-      entering={ZoomIn.springify().stiffness(480).damping(24)}
+      entering={ZoomIn.springify().stiffness(480).damping(32)}
       style={[
         styles.card,
         { backgroundColor: colors.surface, borderColor: alpha(colors.rule, 0.7) },

@@ -1,7 +1,14 @@
 import { LinearGradient } from "expo-linear-gradient";
-import type { PropsWithChildren } from "react";
-import { Platform, StyleSheet, View } from "react-native";
-import Animated, { FadeIn, FadeOut, Keyframe, LinearTransition } from "react-native-reanimated";
+import { useEffect, useState, type ReactNode } from "react";
+import { StyleSheet, View } from "react-native";
+import Animated, {
+  Easing,
+  runOnJS,
+  useAnimatedStyle,
+  useSharedValue,
+  withSpring,
+  withTiming,
+} from "react-native-reanimated";
 import { useCardRadius } from "@/features/style/store";
 import { alpha } from "@/lib/theme";
 import { usePalette, useThemeStore } from "@/stores/theme";
@@ -11,61 +18,88 @@ import { usePalette, useThemeStore } from "@/stores/theme";
 export const RING_COUNT = 3;
 export const BINDING_INSET = "16%";
 
-// Forward: the top page peels up and over the rings, revealing the next page
-// beneath it. Back: the previous page flaps down from over the top and lands
-// with a small paper settle. Keyframes don't run on the web build — there the
-// pages crossfade instead.
-const web = Platform.OS === "web";
-const flipAwayExit = web
-  ? FadeOut.duration(180)
-  : new Keyframe({
-      0: { opacity: 1, transform: [{ perspective: 1400 }, { rotateX: "0deg" }] },
-      85: { opacity: 1, transform: [{ perspective: 1400 }, { rotateX: "120deg" }] },
-      100: { opacity: 0, transform: [{ perspective: 1400 }, { rotateX: "140deg" }] },
-    }).duration(420);
-const revealEnter = web
-  ? FadeIn.duration(220)
-  : new Keyframe({
-      0: { opacity: 0.85, transform: [{ scale: 0.988 }] },
-      100: { opacity: 1, transform: [{ scale: 1 }] },
-    }).duration(420);
-const flapDownEnter = web
-  ? FadeIn.duration(220)
-  : new Keyframe({
-      0: { opacity: 1, transform: [{ perspective: 1400 }, { rotateX: "140deg" }] },
-      70: { opacity: 1, transform: [{ perspective: 1400 }, { rotateX: "-4deg" }] },
-      100: { opacity: 1, transform: [{ perspective: 1400 }, { rotateX: "0deg" }] },
-    }).duration(380);
-const coverExit = web
-  ? FadeOut.duration(180)
-  : new Keyframe({
-      0: { opacity: 1, transform: [{ scale: 1 }] },
-      100: { opacity: 0, transform: [{ scale: 0.988 }] },
-    }).duration(340);
+interface Flip {
+  from: string;
+  dir: number;
+}
 
 /** The top-bound planner pad: static wire rings, pages that flip up over the
  * binding (desk-calendar style), and the rest of the pad peeking out below.
- * The under-pad edges live in normal flow (negative margins) so they always
- * hug the page bottom, whatever the container's height does. */
+ * The flip is hand-driven on shared values (not Keyframes) so it runs on web
+ * too: forward peels the old page up over the rings, accelerating like a
+ * released flap; back flaps the previous page down and lands on a spring. */
 export function PlannerBook({
   page,
   direction,
-  children,
-}: PropsWithChildren<{ page: string; direction: number }>) {
+  renderPage,
+}: {
+  page: string;
+  direction: number;
+  renderPage: (page: string) => ReactNode;
+}) {
   const colors = usePalette();
   const radius = useCardRadius();
+
+  const [cur, setCur] = useState(page);
+  const [flip, setFlip] = useState<Flip | null>(null);
+  // Render-time adjust: a new page starts a flip from the old one.
+  if (page !== cur) {
+    setFlip({ from: cur, dir: direction });
+    setCur(page);
+  }
+
+  const progress = useSharedValue(1);
+  const dirSv = useSharedValue(1);
+  const endFlip = () => setFlip(null);
+
+  useEffect(() => {
+    if (!flip) return;
+    dirSv.value = flip.dir;
+    progress.value = 0;
+    progress.value =
+      flip.dir > 0
+        ? withTiming(1, { duration: 420, easing: Easing.bezier(0.5, 0.05, 0.75, 0.55) }, (done) => {
+            if (done) runOnJS(endFlip)();
+          })
+        : withSpring(1, { stiffness: 260, damping: 22, mass: 0.9 }, (done) => {
+            if (done) runOnJS(endFlip)();
+          });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [flip]);
+
+  // The rotating page: forward → the old page peels 0→140°; back → the new
+  // page flaps 140→0°. It darkens-out only at the very end of a peel.
+  const topStyle = useAnimatedStyle(() => {
+    const p = progress.value;
+    const deg = dirSv.value > 0 ? 140 * p : 140 * (1 - p);
+    return {
+      opacity: dirSv.value > 0 && p > 0.85 ? 1 - (p - 0.85) / 0.15 : 1,
+      transform: [{ perspective: 1400 }, { rotateX: `${-deg}deg` }],
+    };
+  });
+  // The page underneath: sits in the pad's shadow until uncovered (forward),
+  // or dims as it's covered (back).
+  const underStyle = useAnimatedStyle(() => {
+    const p = progress.value;
+    return dirSv.value > 0
+      ? { opacity: 0.9 + 0.1 * p, transform: [{ scale: 0.988 + 0.012 * p }] }
+      : { opacity: 1 - 0.25 * p, transform: [{ scale: 1 - 0.012 * p }] };
+  });
+
+  const topPage = flip ? (flip.dir > 0 ? flip.from : cur) : null;
+  const underPage = flip ? (flip.dir > 0 ? cur : flip.from) : cur;
+
   return (
     <View style={styles.book}>
       <Rings />
-      <Animated.View
-        key={page}
-        entering={direction > 0 ? revealEnter : flapDownEnter}
-        exiting={direction > 0 ? flipAwayExit : coverExit}
-        layout={LinearTransition.springify().stiffness(380).damping(34)}
-        style={styles.page}
-      >
-        {children}
+      <Animated.View style={[styles.page, flip ? underStyle : null]}>
+        {renderPage(underPage)}
       </Animated.View>
+      {flip && topPage && (
+        <Animated.View pointerEvents="none" style={[styles.topPage, topStyle]}>
+          {renderPage(topPage)}
+        </Animated.View>
+      )}
       <View
         pointerEvents="none"
         style={[
@@ -132,6 +166,14 @@ const styles = StyleSheet.create({
   },
   page: {
     zIndex: 1,
+    transformOrigin: "top",
+  },
+  topPage: {
+    position: "absolute",
+    left: 0,
+    right: 0,
+    top: 0,
+    zIndex: 5,
     transformOrigin: "top",
   },
   padEdge: {
