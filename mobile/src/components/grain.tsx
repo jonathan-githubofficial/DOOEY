@@ -38,8 +38,12 @@ function BackdropWash() {
             "transparent",
             alpha(colors[preset.to as keyof Palette], 0.09),
           ]}
+          // Vertical, not diagonal: the colour at any screen row is the same
+          // whatever the box width, so the wash lines up across the web
+          // tablet-frame gutters and the centre column instead of only the
+          // middle reading as "covered".
           start={{ x: 0, y: 0 }}
-          end={{ x: 1, y: 1 }}
+          end={{ x: 0, y: 1 }}
           style={StyleSheet.absoluteFill}
         />
       )}
