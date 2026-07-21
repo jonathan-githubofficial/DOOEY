@@ -1,6 +1,6 @@
 import DateTimePicker, { DateTimePickerAndroid } from "@react-native-community/datetimepicker";
 import { useRouter } from "expo-router";
-import { CalendarClock, Plus, StickyNote, X } from "lucide-react-native";
+import { CalendarDays, Clock, Plus, StickyNote, X } from "lucide-react-native";
 import { createElement, useState } from "react";
 import {
   Keyboard,
@@ -42,6 +42,7 @@ const dateAtMin = (m: number) => {
   return d;
 };
 const hhmm = (m: number) => `${pad2(Math.floor(m / 60))}:${pad2(m % 60)}`;
+const ymd = (d: Date) => `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`;
 
 /** The new-task button: a postage stamp pinned above the tab bar — a fresh
  * slip waiting to be stuck onto the day. On native it opens the system form
@@ -170,7 +171,7 @@ export function ComposerForm({
   // Where the task lands: null = the viewed day's default; the chips and the
   // native picker override it.
   const [due, setDue] = useState<string | null>(null);
-  const [showPicker, setShowPicker] = useState(false);
+  const [showDate, setShowDate] = useState(false);
 
   const today = localDate();
   const effDate = due ?? date;
@@ -188,56 +189,50 @@ export function ComposerForm({
   const pickEnd = (m: number) => {
     if (start != null) setEnd(Math.max(start + 15, m));
   };
-  const applyPick = (d: Date) => {
-    setDue(`${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`);
-    pickStart(minsOf(d));
-  };
-  // The picker starts from what's chosen, or the next round hour today.
-  const pickValue = (() => {
-    const v = toLocalNoon(effDate);
-    if (start != null) v.setHours(Math.floor(start / 60), start % 60, 0, 0);
-    else v.setHours(new Date().getHours() + 1, 0, 0, 0);
-    return v;
-  })();
 
   const pickDay = (d: string) => {
     hapticTap();
     setDue((cur) => (cur === d ? null : d));
   };
-  const openClock = () => {
+  // The keyboard must clear the stage before a system control appears, or
+  // the control lands where the keyboard was and then jumps.
+  const dismissThen = (fn: () => void) => {
+    if (Keyboard.isVisible()) {
+      Keyboard.dismiss();
+      setTimeout(fn, 300);
+    } else {
+      fn();
+    }
+  };
+  // The calendar chip: just the day.
+  const openDate = () => {
     hapticTap();
-    const show = () => {
-      // The from–to row appears immediately with a sensible default — the
-      // picker then refines it, rather than gating it.
-      if (start == null) pickStart(minsOf(pickValue));
+    dismissThen(() => {
       if (Platform.OS === "android") {
-        // Android has no combined picker — date dialog, then time dialog.
         DateTimePickerAndroid.open({
-          value: pickValue,
+          value: toLocalNoon(effDate),
           mode: "date",
-          onChange: (e, day) => {
-            if (e.type !== "set" || !day) return;
-            DateTimePickerAndroid.open({
-              value: day,
-              mode: "time",
-              onChange: (e2, when) => {
-                if (e2.type === "set" && when) applyPick(when);
-              },
-            });
+          onChange: (e, d) => {
+            if (e.type === "set" && d) setDue(ymd(d));
           },
         });
       } else {
-        setShowPicker((s) => !s);
+        setShowDate((s) => !s);
       }
-    };
-    // The keyboard must clear the stage first, or the system control lands
-    // where the keyboard was and then jumps.
-    if (Keyboard.isVisible()) {
-      Keyboard.dismiss();
-      setTimeout(show, 300);
-    } else {
-      show();
-    }
+    });
+  };
+  // The clock chip: just the times — toggles the from–to row on a sensible
+  // default (the next round hour), off again to unschedule.
+  const toggleTimes = () => {
+    hapticTap();
+    dismissThen(() => {
+      if (start != null) {
+        setStart(null);
+        setEnd(null);
+      } else {
+        pickStart(Math.min((new Date().getHours() + 1) * 60, 23 * 60));
+      }
+    });
   };
 
   const submit = () => {
@@ -326,17 +321,31 @@ export function ComposerForm({
         />
         <PressableScale
           scaleTo={0.95}
-          accessibilityLabel="Pick a date and time"
-          accessibilityState={{ selected: showPicker }}
-          onPress={openClock}
+          accessibilityLabel="Pick a day"
+          accessibilityState={{ selected: showDate }}
+          onPress={openDate}
           style={[
             styles.chip,
-            showPicker
+            showDate
               ? { borderColor: alpha(colors.sky, 0.5), backgroundColor: alpha(colors.sky, 0.1) }
               : { borderColor: colors.rule },
           ]}
         >
-          <CalendarClock size={14} color={showPicker ? colors.ink : colors.inkMuted} />
+          <CalendarDays size={14} color={showDate ? colors.ink : colors.inkMuted} />
+        </PressableScale>
+        <PressableScale
+          scaleTo={0.95}
+          accessibilityLabel="Give it a time"
+          accessibilityState={{ selected: start != null }}
+          onPress={toggleTimes}
+          style={[
+            styles.chip,
+            start != null
+              ? { borderColor: alpha(colors.sky, 0.5), backgroundColor: alpha(colors.sky, 0.1) }
+              : { borderColor: colors.rule },
+          ]}
+        >
+          <Clock size={14} color={start != null ? colors.ink : colors.inkMuted} />
         </PressableScale>
         <PressableScale
           scaleTo={0.95}
@@ -356,28 +365,25 @@ export function ComposerForm({
         </PressableScale>
       </View>
 
-      {/* The system's own date + time control — it knows its locale, its
-          calendar, and its dark mode better than we do. */}
-      {showPicker && Platform.OS === "ios" && (
+      {/* The system's own calendar — it knows its locale better than we do. */}
+      {showDate && Platform.OS === "ios" && (
         <Animated.View entering={FadeIn.duration(180)} style={styles.pickerRow}>
           <DateTimePicker
-            value={pickValue}
-            mode="datetime"
+            value={toLocalNoon(effDate)}
+            mode="date"
             display="compact"
-            minuteInterval={5}
             accentColor={colors.zest}
-            onChange={(_e, d) => d && applyPick(d)}
+            onChange={(_e, d) => d && setDue(ymd(d))}
           />
         </Animated.View>
       )}
-      {showPicker && Platform.OS === "web" && (
+      {showDate && Platform.OS === "web" && (
         <Animated.View entering={FadeIn.duration(180)} style={styles.pickerRow}>
           {createElement("input", {
-            type: "datetime-local",
-            defaultValue: `${effDate}T${hhmm(start ?? pickValue.getHours() * 60)}`,
+            type: "date",
+            value: effDate,
             onChange: (e: { target: { value: string } }) => {
-              const d = new Date(e.target.value);
-              if (!Number.isNaN(d.getTime())) applyPick(d);
+              if (e.target.value) setDue(e.target.value);
             },
             style: domInputStyle(colors.ink, alpha(colors.rule, 0.9)),
           })}

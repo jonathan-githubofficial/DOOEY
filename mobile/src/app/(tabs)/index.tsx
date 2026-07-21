@@ -25,11 +25,14 @@ import { usePalette, useType } from "@/stores/theme";
 
 const settle = LinearTransition.springify().stiffness(380).damping(34);
 
-// ── TUNING KNOB ─────────────────────────────────────────────────────────────
+// ── TUNING KNOBS ────────────────────────────────────────────────────────────
 // How far the notebook's bottom edge sits ABOVE the tab bar / dock island
 // (safe-area inset is added on top of this). Bigger = higher notebook, more
 // room for the companion peeking over the page edge.
 const PAGE_BOTTOM_CLEARANCE = Platform.OS === "web" ? 116 : 108;
+// How much of the remaining planner area the notebook page fills (1 = all of
+// it). Shrink it and the page gets shorter, leaving air beneath.
+const PAGE_HEIGHT_SCALE = 0.94;
 
 /** How the day's work is laid out: the agenda list, the timeboxed day grid,
  * or the whole week in time. The month is not a mode — it unfolds out of the
@@ -87,8 +90,9 @@ export default function Planner() {
     })
     .onUpdate((e) => setPx(clampPx(pinchBase.current * e.scale)));
 
-  // Room for the binder above the page and the pad edges below it.
-  const pageH = Math.max(240, vh - 34);
+  // Room for the binder above the page and the pad edges below it, scaled by
+  // the height knob.
+  const pageH = Math.max(240, Math.round((vh - 34) * PAGE_HEIGHT_SCALE));
 
   return (
     <View style={[styles.screen, { backgroundColor: colors.paper, paddingTop: insets.top + 20 }]}>
@@ -157,7 +161,7 @@ export default function Planner() {
           )}
           {vh > 0 && mode === "week" && (
             <Animated.View key={selected} entering={FadeIn.duration(200)}>
-              <Panel style={[styles.gridPanel, { height: vh }]}>
+              <Panel style={[styles.gridPanel, { height: Math.round(vh * PAGE_HEIGHT_SCALE) }]}>
                 <ScrollView
                   nestedScrollEnabled
                   showsVerticalScrollIndicator={false}

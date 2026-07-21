@@ -28,11 +28,11 @@ SplashScreen.preventAutoHideAsync();
 
 const queryClient = new QueryClient();
 
-// ── TUNING KNOB ─────────────────────────────────────────────────────────────
-// How tall the new-task sheet opens, as fractions of the screen: the first
-// value is its resting height, the second how far it can be dragged up.
-// (The keyboard adds its own height on top of the resting detent.)
-const COMPOSE_DETENTS = [0.35, 0.85];
+// The sheet OPENS at these detents (small — the title autofocuses, so the
+// keyboard is up from the first frame and stacks its height on top). Once
+// open, compose.tsx swaps detents as the keyboard comes and goes — the
+// tuning knobs live at the top of that file (DETENTS_KEYBOARD/DETENTS_BARE).
+const COMPOSE_DETENTS = [0.15, 0.2];
 
 export default function RootLayout() {
   const theme = useThemeStore((s) => s.theme);
