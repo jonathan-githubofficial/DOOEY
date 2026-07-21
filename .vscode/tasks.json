@@ -23,9 +23,9 @@
     },
     {
       "label": "backend: PocketBase",
-      "detail": "pb/pocketbase.exe serve on :8090 (frees the port first)",
+      "detail": "pb/pocketbase.exe serve on 0.0.0.0:8090 so phones on the LAN can reach it (frees the port first)",
       "type": "shell",
-      "command": "./pb/pocketbase.exe serve",
+      "command": "./pb/pocketbase.exe serve --http 0.0.0.0:8090",
       "dependsOn": ["free port 8090"],
       "isBackground": true,
       "presentation": { "panel": "dedicated", "reveal": "always", "group": "dev", "clear": true },

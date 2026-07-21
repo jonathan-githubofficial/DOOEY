@@ -1,14 +1,15 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import Constants from "expo-constants";
 import PocketBase, { AsyncAuthStore } from "pocketbase";
-import { Platform } from "react-native";
 
-// A device (or emulator) can't reach the dev machine's 127.0.0.1, so the URL
-// must be explicit for real hardware: set EXPO_PUBLIC_PB_URL to the LAN or
-// production host. The fallbacks cover emulators talking to a local
-// `pb/pocketbase.exe serve` — Android's emulator maps the host to 10.0.2.2.
+// A device can't reach the dev machine's 127.0.0.1 — but Expo tells us where
+// Metro is serving from (the dev machine's LAN address), and PocketBase lives
+// on the same box. Deriving the host from there makes phones, emulators and
+// the web all find the API with zero config. Production builds set
+// EXPO_PUBLIC_PB_URL explicitly.
+const devHost = Constants.expoConfig?.hostUri?.split(":")[0];
 const url =
-  process.env.EXPO_PUBLIC_PB_URL ??
-  (Platform.OS === "android" ? "http://10.0.2.2:8090" : "http://127.0.0.1:8090");
+  process.env.EXPO_PUBLIC_PB_URL ?? (devHost ? `http://${devHost}:8090` : "http://127.0.0.1:8090");
 
 // localStorage doesn't exist in React Native — persist the session through an
 // AsyncAuthStore backed by AsyncStorage instead.
