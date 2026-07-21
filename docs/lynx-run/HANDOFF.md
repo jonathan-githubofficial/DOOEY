@@ -5,8 +5,12 @@ at commit dad06a3 on branch lynx/migration.
 
 ## What this is
 
-Full client rewrite of DOOEY (personal life OS) from Capacitor/Vite/React-DOM to
-ReactLynx (Lynx) built by Rspeedy, per docs/lynx-migration.md (the PLAN). The
+Full client rewrite of DOOEY (personal life OS) from the existing WEB APP
+(Vite + React DOM) to ReactLynx (Lynx) built by Rspeedy, per docs/lynx-migration.md
+(the PLAN). Note: the Capacitor shells (android/, ios/) that were committed on main
+were NEVER actually used or tested - they were scaffolding only. The ported behavior
+baseline is the web app, full stop; unit 1.6 deleted the shells on this branch, and
+8.3's doc rewrite should not imply a working Capacitor app ever existed. The
 PocketBase backend, pb_hooks (incl. Google Calendar sync), migrations, Docker and
 GCE deploy are UNCHANGED. Only the client is rewritten. The bar for this effort:
 full feature parity on the WEB target, verified by the Playwright E2E suite in e2e/
