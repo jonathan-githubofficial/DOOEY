@@ -1,4 +1,4 @@
-import { ChevronLeft, Pencil, Plus, X } from "lucide-react-native";
+import { ChevronLeft, Copy, Pencil, Plus, X } from "lucide-react-native";
 import { useRouter } from "expo-router";
 import { useState } from "react";
 import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
@@ -17,7 +17,7 @@ import type { Stroke } from "@/lib/doodle";
 import { alpha } from "@/lib/theme";
 import { usePalette, useType } from "@/stores/theme";
 
-const MAX_FRAMES = 4;
+const MAX_FRAMES = 8;
 
 // The drawing pad and the login page must agree on geometry, or the doodle
 // lands somewhere else than it was drawn: wordmark fontSize = ratio × square.
@@ -52,6 +52,18 @@ export default function Wordmark() {
     next[index] = strokes;
     setLogoDoodle(next);
     setEditing(null);
+  };
+
+  // Append a copy of a frame and open it — the animator's move: duplicate,
+  // then nudge what changes.
+  const duplicateFrame = (index: number) => {
+    if (frames.length >= MAX_FRAMES) return;
+    const copy = frames[index].map((s) => ({
+      color: s.color,
+      points: s.points.map((p) => [...p] as [number, number]),
+    }));
+    setLogoDoodle([...frames, copy]);
+    setEditing(frames.length);
   };
 
   return (
@@ -158,6 +170,16 @@ export default function Wordmark() {
                   >
                     <X size={10} color={colors.ink} />
                   </Pressable>
+                  {frames.length < MAX_FRAMES && (
+                    <Pressable
+                      accessibilityLabel={`Copy frame ${i + 1} as a new frame`}
+                      hitSlop={6}
+                      onPress={() => duplicateFrame(i)}
+                      style={[styles.tileCopy, { backgroundColor: alpha(colors.paper, 0.9) }]}
+                    >
+                      <Copy size={10} color={colors.ink} />
+                    </Pressable>
+                  )}
                 </PressableScale>
                 <Text style={[styles.tileLabel, type.sansMedium, { color: colors.inkMuted }]}>
                   frame {i + 1}
@@ -303,6 +325,16 @@ const styles = StyleSheet.create({
     position: "absolute",
     top: 3,
     right: 3,
+    height: 16,
+    width: 16,
+    borderRadius: 999,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  tileCopy: {
+    position: "absolute",
+    top: 3,
+    left: 3,
     height: 16,
     width: 16,
     borderRadius: 999,
