@@ -1,7 +1,7 @@
 import { Redirect, Tabs } from "expo-router";
 import { Icon, Label, NativeTabs, VectorIcon } from "expo-router/unstable-native-tabs";
 import { useEffect, useRef, useState } from "react";
-import { Platform, StyleSheet, View } from "react-native";
+import { PixelRatio, Platform, StyleSheet, View } from "react-native";
 import Svg, { Path } from "react-native-svg";
 import ViewShot from "react-native-view-shot";
 import { MaterialIcons } from "@expo/vector-icons";
@@ -56,7 +56,7 @@ export default function TabsLayout() {
             return (
               <NativeTabs.Trigger key={space.name} name={space.name}>
                 {uri ? (
-                  <Icon src={{ uri }} />
+                  <Icon src={{ uri, scale: ICON_SCALE }} />
                 ) : Platform.OS === "ios" ? (
                   <Icon sf={space.sf} />
                 ) : (
@@ -88,7 +88,12 @@ export default function TabsLayout() {
   );
 }
 
-const ICON_PX = 96; // captured at ~3× tab-icon size, so strokes stay crisp
+// A tab icon is ~25pt; capture at the device's pixel ratio and declare that
+// `scale` in the image source, or the system reads the bitmap's pixels as
+// points and the doodle sprawls across the whole bar.
+const ICON_PT = 25;
+const ICON_SCALE = PixelRatio.get();
+const ICON_PX = ICON_PT * ICON_SCALE;
 
 /** Off-screen easels: one per doodled space, snapshotted to PNGs whenever the
  * drawings change. Strokes render opaque black — the tab bar reads the alpha
