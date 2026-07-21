@@ -1,4 +1,4 @@
-import { ChevronRight, LogOut, Moon, Palette, Sun } from "lucide-react-native";
+import { ChevronRight, Clapperboard, LogOut, Moon, Palette, Sun } from "lucide-react-native";
 import { useRouter } from "expo-router";
 import { useEffect, useRef } from "react";
 import { Animated, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
@@ -70,6 +70,23 @@ export default function Account() {
               </Text>
               <Text style={[styles.styleSub, type.sans, { color: colors.inkMuted }]}>
                 Colours, fonts, corners & grain — make DOOEY yours.
+              </Text>
+            </View>
+            <ChevronRight size={16} color={colors.inkMuted} />
+          </Panel>
+        </PressableScale>
+
+        <PressableScale scaleTo={0.98} onPress={() => router.push("/wordmark")}>
+          <Panel style={styles.styleCard}>
+            <View style={[styles.styleIcon, { backgroundColor: alpha(colors.sky, 0.15) }]}>
+              <Clapperboard size={20} color={colors.sky} />
+            </View>
+            <View style={styles.styleText}>
+              <Text style={[styles.styleTitle, type.display, { color: colors.ink }]}>
+                Wordmark
+              </Text>
+              <Text style={[styles.styleSub, type.sans, { color: colors.inkMuted }]}>
+                Doodle the little animation that greets you at the door.
               </Text>
             </View>
             <ChevronRight size={16} color={colors.inkMuted} />

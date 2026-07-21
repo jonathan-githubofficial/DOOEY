@@ -21,9 +21,11 @@ import Animated, {
   LinearTransition,
 } from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { DoodleFlipbook } from "@/components/DoodleFlipbook";
 import { Grain } from "@/components/grain";
 import { Plate } from "@/components/plate";
 import { signIn, signUp } from "@/features/auth/api";
+import { useStyleStore } from "@/features/style/store";
 import { fontStyle } from "@/features/style/tokens";
 import { hapticSuccess, hapticTap, hapticWarn } from "@/lib/haptics";
 import { alpha, type Palette } from "@/lib/theme";
@@ -72,6 +74,9 @@ export default function Login() {
   const [error, setError] = useState<string | null>(null);
 
   const strength = useMemo(() => strengthOf(password), [password]);
+  // Doodled in the wordmark studio; persisted locally, so it greets pre-auth.
+  const logo = useStyleStore((s) => s.logoDoodle);
+  const logoInterval = useStyleStore((s) => s.logoInterval);
 
   const { height: screenH } = useWindowDimensions();
   const player = useVideoPlayer(require("../../assets/video/peas.mp4"), (p) => {
@@ -124,9 +129,6 @@ export default function Login() {
     }
   };
 
-  const bevelLight = "rgba(255,255,255,0.75)";
-  const bevelDark = alpha(colors.ink, 0.14);
-
   return (
     <View style={[styles.screen, { backgroundColor: colors.paper }]}>
       <Grain tone="light" />
@@ -177,43 +179,32 @@ export default function Login() {
           entering={FadeInDown.springify().stiffness(200).damping(23)}
           style={styles.hang}
         >
-          {/* The frame moulding. */}
-          <View
-            style={[
-              styles.frame,
-              { backgroundColor: colors.surface, borderColor: alpha(colors.ink, 0.55), shadowColor: "#282018" },
-            ]}
-          >
-            {/* The mat, with a bevelled window cut into it. */}
-            <View style={[styles.mat, { backgroundColor: colors.surface }]}>
-              <Grain radius={4} tone="light" />
-              <View
-                style={[
-                  styles.window,
-                  {
-                    backgroundColor: colors.paper,
-                    borderTopColor: bevelLight,
-                    borderLeftColor: bevelLight,
-                    borderRightColor: bevelDark,
-                    borderBottomColor: bevelDark,
-                  },
-                ]}
-              >
-                <Grain radius={2} tone="light" />
+          {/* One quiet card on the wall — no moulding, just soft paper. */}
+          <View style={[styles.card, { backgroundColor: colors.surface, shadowColor: "#282018" }]}>
+            <Grain radius={24} tone="light" />
 
-                {/* The exhibited piece. */}
-                <Text style={[styles.accession, type.sansMedium, { color: colors.inkMuted }]}>
-                  {mode === "in" ? "NO. 001 · ADMISSION" : "NO. 001 · ACQUISITION"}
-                </Text>
+            {/* The wordmark — with the studio-doodled animation playing on
+                and around it. Same square geometry as the drawing pad, so
+                every stroke lands exactly where it was drawn. */}
+            {logo.length > 0 ? (
+              <View style={styles.stage}>
                 <Text style={[styles.wordmark, fontStyle("fraunces", "900"), { color: colors.ink }]}>
                   DOOEY<Text style={{ color: colors.zest }}>.</Text>
                 </Text>
-                <View style={[styles.hairline, { backgroundColor: alpha(colors.ink, 0.2) }]} />
-                <Text style={[styles.medium, type.sans, { color: colors.inkMuted }]}>
-                  a personal life OS · mixed media on paper
-                </Text>
+                <View pointerEvents="none" style={StyleSheet.absoluteFill}>
+                  <DoodleFlipbook frames={logo} interval={logoInterval} />
+                </View>
+              </View>
+            ) : (
+              <Text style={[styles.wordmark, fontStyle("fraunces", "900"), { color: colors.ink }]}>
+                DOOEY<Text style={{ color: colors.zest }}>.</Text>
+              </Text>
+            )}
+            <Text style={[styles.greeting, type.sans, { color: colors.inkMuted }]}>
+              {mode === "in" ? "hey friend — good to see you." : "hey friend — lovely to meet you."}
+            </Text>
 
-                <View style={styles.fields}>
+            <View style={styles.fields}>
                   <Field label="Email">
                     <TextInput
                       value={email}
@@ -305,16 +296,15 @@ export default function Login() {
                   </Animated.Text>
                 )}
 
-                <Animated.View layout={settle} style={styles.plateRow}>
-                  <Plate
-                    label={busy ? "…" : mode === "in" ? "Enter" : "Register"}
-                    disabled={!canSubmit}
-                    onPress={submit}
-                    palette={colors}
-                  />
-                </Animated.View>
-              </View>
-            </View>
+            <Animated.View layout={settle} style={styles.plateRow}>
+              <Plate
+                label={busy ? "…" : mode === "in" ? "Enter" : "Register"}
+                disabled={!canSubmit}
+                onPress={submit}
+                palette={colors}
+                style={styles.wide}
+              />
+            </Animated.View>
           </View>
 
           {/* The wall label beside the piece — and the way in the other door. */}
@@ -397,51 +387,36 @@ const styles = StyleSheet.create({
     alignSelf: "center",
     alignItems: "center",
   },
-  frame: {
+  card: {
     alignSelf: "stretch",
-    borderWidth: 1.5,
-    borderRadius: 6,
-    padding: 9,
-    shadowOpacity: 0.2,
+    borderRadius: 24,
+    paddingHorizontal: 26,
+    paddingTop: 32,
+    paddingBottom: 26,
+    shadowOpacity: 0.16,
     shadowRadius: 24,
-    shadowOffset: { width: 0, height: 16 },
-    elevation: 10,
+    shadowOffset: { width: 0, height: 14 },
+    elevation: 9,
   },
-  mat: {
-    borderRadius: 3,
-    padding: 22,
-    overflow: "hidden",
-  },
-  window: {
-    borderWidth: 2,
-    borderRadius: 2,
-    paddingHorizontal: 24,
-    paddingTop: 30,
-    paddingBottom: 28,
-    overflow: "hidden",
-  },
-  accession: {
-    textAlign: "center",
-    fontSize: 9.5,
-    letterSpacing: 2.6,
+  // 200 square with the 40pt wordmark centered — the studio's WORDMARK_RATIO
+  // (0.2), so the animation overlays exactly as drawn.
+  stage: {
+    alignSelf: "center",
+    height: 200,
+    width: 200,
+    alignItems: "center",
+    justifyContent: "center",
+    marginVertical: -42,
   },
   wordmark: {
-    marginTop: 10,
     textAlign: "center",
     fontSize: 40,
     letterSpacing: 1,
   },
-  hairline: {
-    alignSelf: "center",
-    marginTop: 14,
-    height: 1,
-    width: 44,
-  },
-  medium: {
-    marginTop: 12,
+  greeting: {
+    marginTop: 8,
     textAlign: "center",
-    fontSize: 12,
-    fontStyle: "italic",
+    fontSize: 13,
   },
   fields: {
     marginTop: 26,
@@ -502,7 +477,12 @@ const styles = StyleSheet.create({
   },
   plateRow: {
     marginTop: 26,
-    alignItems: "center",
+    alignItems: "stretch",
+  },
+  wide: {
+    alignSelf: "stretch",
+    borderRadius: 14,
+    paddingVertical: 15,
   },
   label: {
     marginTop: 20,

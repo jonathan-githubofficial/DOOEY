@@ -33,6 +33,12 @@ interface StyleStore {
   sounds: boolean;
   /** The margin companion's poses — a flipbook of doodled frames. */
   companion: Stroke[][];
+  /** The wordmark's doodled animation frames — drawn on and around the
+   * wordmark itself, played over it on the login page. Persisted locally on
+   * purpose: login renders before any session exists. */
+  logoDoodle: Stroke[][];
+  /** How fast the wordmark animation flips, in ms per frame. */
+  logoInterval: number;
   /** Hand-drawn icons worn next to page titles, keyed by page. */
   pageDoodles: Record<string, Stroke[]>;
   /** Whether the dock island uses those doodles (on) or the stock glyphs (off). */
@@ -46,6 +52,8 @@ interface StyleStore {
   setBackdropEffect: (patch: Partial<Pick<StyleStore, "backdropBlur" | "backdropOpacity">>) => void;
   setSounds: (on: boolean) => void;
   setCompanion: (frames: Stroke[][]) => void;
+  setLogoDoodle: (frames: Stroke[][]) => void;
+  setLogoInterval: (ms: number) => void;
   setPageDoodle: (page: string, strokes: Stroke[]) => void;
   setDockDoodles: (on: boolean) => void;
   applyPreset: (key: string) => void;
@@ -63,12 +71,23 @@ export const useStyleStore = create<StyleStore>()(
       backdropOpacity: 0.2,
       sounds: false,
       companion: [],
+      logoDoodle: [],
+      logoInterval: 550,
       pageDoodles: {},
       dockDoodles: true,
       setCompanion: (frames) => {
         const companion = frames.filter((f) => f.length > 0);
         set({ companion });
         saveCompanion(companion);
+      },
+      setLogoDoodle: (frames) => {
+        const logoDoodle = frames.filter((f) => f.length > 0);
+        set({ logoDoodle });
+        saveLogo(logoDoodle, get().logoInterval);
+      },
+      setLogoInterval: (logoInterval) => {
+        set({ logoInterval });
+        saveLogo(get().logoDoodle, logoInterval);
       },
       setBackdrop: (key) => set({ backdrop: key }),
       setBackdropImage: (uri) => set({ backdropImage: uri }),
@@ -126,6 +145,8 @@ export const useStyleStore = create<StyleStore>()(
         backdropOpacity,
         sounds,
         companion,
+        logoDoodle,
+        logoInterval,
         dockDoodles,
       }) => ({
         colors,
@@ -140,6 +161,8 @@ export const useStyleStore = create<StyleStore>()(
         backdropOpacity,
         sounds,
         companion,
+        logoDoodle,
+        logoInterval,
         dockDoodles,
       }),
     },
@@ -177,6 +200,17 @@ function saveCompanion(companion: Stroke[][]) {
     .catch(() => {}); // a failed sync just leaves the local copy — retried on next edit
 }
 
+/** Persist the wordmark animation onto the user record — same deal as the
+ * companion, so the front door greets you on every device. */
+function saveLogo(frames: Stroke[][], interval: number) {
+  const user = useAuthStore.getState().user;
+  if (!user) return;
+  pb.collection("users")
+    .update(user.id, { logo_doodle: { frames, interval } }, { requestKey: null })
+    .then((rec) => useAuthStore.getState().setUser(rec as RecordModel, pb.authStore.token))
+    .catch(() => {}); // a failed sync just leaves the local copy — retried on next edit
+}
+
 /** Pull the page doodles + companion from a freshly-loaded user record. */
 function syncFromUser(user: RecordModel | null) {
   if (!user) return;
@@ -184,6 +218,10 @@ function syncFromUser(user: RecordModel | null) {
   if (Object.keys(doodles).length > 0) useStyleStore.setState({ pageDoodles: doodles });
   const companion = (user.companion as Stroke[][] | null) ?? [];
   if (companion.length > 0) useStyleStore.setState({ companion });
+  const logo = user.logo_doodle as { frames?: Stroke[][]; interval?: number } | null;
+  if (logo?.frames?.length) {
+    useStyleStore.setState({ logoDoodle: logo.frames, logoInterval: logo.interval ?? 550 });
+  }
 }
 
 // Hydrate on boot (if already signed in) and whenever the user changes.

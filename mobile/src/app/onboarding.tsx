@@ -38,6 +38,8 @@ export default function Onboarding() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const user = useAuthStore((s) => s.user);
+  // The letter comes before the rooms — a welcome, not a form.
+  const [greeted, setGreeted] = useState(false);
   const [step, setStep] = useState(0);
   const [name, setName] = useState("");
 
@@ -81,20 +83,37 @@ export default function Onboarding() {
           { paddingTop: insets.top + 24, paddingBottom: insets.bottom + 24 },
         ]}
       >
-        {/* Room markers — three brass dots along the corridor. */}
-        <View style={styles.dots}>
-          {ROOMS.map((_, i) => (
-            <View
-              key={i}
-              style={[
-                styles.dot,
-                { backgroundColor: i === step ? colors.zest : alpha(colors.ink, 0.18) },
-                i === step && styles.dotActive,
-              ]}
+        {!greeted && (
+          <Animated.View
+            entering={FadeInDown.springify().stiffness(200).damping(23)}
+            style={styles.room}
+          >
+            <WelcomeLetter
+              onStart={() => {
+                hapticTap();
+                setGreeted(true);
+              }}
             />
-          ))}
-        </View>
+          </Animated.View>
+        )}
 
+        {/* Room markers — three brass dots along the corridor. */}
+        {greeted && (
+          <View style={styles.dots}>
+            {ROOMS.map((_, i) => (
+              <View
+                key={i}
+                style={[
+                  styles.dot,
+                  { backgroundColor: i === step ? colors.zest : alpha(colors.ink, 0.18) },
+                  i === step && styles.dotActive,
+                ]}
+              />
+            ))}
+          </View>
+        )}
+
+        {greeted && (
         <Animated.View
           key={step}
           entering={FadeInDown.springify().stiffness(220).damping(24)}
@@ -164,8 +183,39 @@ export default function Onboarding() {
 
           {step === 2 && <LightRoom onDone={finish} />}
         </Animated.View>
+        )}
       </KeyboardAvoidingView>
     </View>
+  );
+}
+
+/** The note tucked inside the front door — a small welcome before the tour,
+ * signed by the house. */
+function WelcomeLetter({ onStart }: { onStart: () => void }) {
+  const colors = usePalette();
+  const type = useType();
+  return (
+    <>
+      <Text style={[styles.letterHey, fontStyle("fraunces", "900"), { color: colors.ink }]}>
+        hey friend
+      </Text>
+      <Text style={[styles.letterBody, type.sans, { color: colors.inkMuted }]}>
+        we made DOOEY as a little home for your days — tasks, habits, plans and doodles, all on
+        one sheet of paper.
+      </Text>
+      <Text style={[styles.letterBody, type.sans, { color: colors.inkMuted }]}>
+        we hope every time you open it, you remember one small thing:
+      </Text>
+      <Text style={[styles.letterAccent, type.sansMedium, { color: colors.zest }]}>
+        every day matters.
+      </Text>
+      <Text style={[styles.letterSign, fontStyle("fraunces", "900"), { color: colors.ink }]}>
+        — DOOEY<Text style={{ color: colors.zest }}>.</Text>
+      </Text>
+      <View style={styles.footer}>
+        <Plate label="Let's start" onPress={onStart} />
+      </View>
+    </>
   );
 }
 
@@ -327,6 +377,26 @@ const styles = StyleSheet.create({
     width: "100%",
     maxWidth: 400,
     alignItems: "center",
+  },
+  letterHey: {
+    fontSize: 30,
+    letterSpacing: -0.3,
+  },
+  letterBody: {
+    marginTop: 16,
+    fontSize: 14,
+    lineHeight: 21,
+    textAlign: "center",
+    maxWidth: 310,
+  },
+  letterAccent: {
+    marginTop: 16,
+    fontSize: 15,
+    letterSpacing: 0.2,
+  },
+  letterSign: {
+    marginTop: 22,
+    fontSize: 19,
   },
   eyebrow: {
     fontSize: 9.5,

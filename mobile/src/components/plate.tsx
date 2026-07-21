@@ -1,5 +1,5 @@
 import { LinearGradient } from "expo-linear-gradient";
-import { StyleSheet, Text } from "react-native";
+import { StyleSheet, Text, type StyleProp, type ViewStyle } from "react-native";
 import { PressableScale } from "@/components/pressable-scale";
 import type { Palette } from "@/lib/theme";
 import { usePalette, useType } from "@/stores/theme";
@@ -12,11 +12,13 @@ export function Plate({
   disabled,
   onPress,
   palette,
+  style,
 }: {
   label: string;
   disabled?: boolean;
   onPress: () => void;
   palette?: Palette;
+  style?: StyleProp<ViewStyle>;
 }) {
   const themed = usePalette();
   const type = useType();
@@ -28,7 +30,7 @@ export function Plate({
       accessibilityLabel={label}
       disabled={disabled}
       onPress={onPress}
-      style={[styles.plate, { backgroundColor: colors.ink }, disabled && { opacity: 0.35 }]}
+      style={[styles.plate, { backgroundColor: colors.ink }, style, disabled && { opacity: 0.35 }]}
     >
       <LinearGradient
         pointerEvents="none"
