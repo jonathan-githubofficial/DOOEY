@@ -1,6 +1,7 @@
+import { useRouter } from "expo-router";
 import { ChevronLeft, ChevronRight, Minus, Plus } from "lucide-react-native";
 import { useState } from "react";
-import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+import { Platform, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import Animated, { FadeIn, FadeInDown } from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Grain } from "@/components/grain";
@@ -30,12 +31,18 @@ export default function Calendar() {
   const insets = useSafeAreaInsets();
   const shadow = useShadow();
 
+  const router = useRouter();
   const [view, setView] = useState<CalView>("week");
   const [selected, setSelected] = useState(localDate);
   const [direction, setDirection] = useState(1);
   const [month, setMonth] = useState(() => localDate().slice(0, 7));
-  // The tapped slot that opens the task drawer, Google-Calendar style.
+  // The tapped slot opens the task form, Google-Calendar style — as the
+  // system sheet on native, as the web drawer on web.
   const [slot, setSlot] = useState<{ date: string; start: number } | null>(null);
+  const openSlot = (date: string, start: number) =>
+    Platform.OS === "web"
+      ? setSlot({ date, start })
+      : router.push({ pathname: "/compose", params: { date, start: String(start) } });
   // Vertical time zoom (day + week grids), in px per minute.
   const [px, setPx] = useState(PX_DEFAULT);
   usePrefetchAdjacentDays(selected);
@@ -122,7 +129,7 @@ export default function Calendar() {
                 <TimeboxSheet
                   date={d}
                   pxPerMin={px}
-                  onAddSlot={(date, start) => setSlot({ date, start })}
+                  onAddSlot={openSlot}
                 />
               )}
             />

@@ -1,3 +1,4 @@
+import { useRouter } from "expo-router";
 import { Plus, StickyNote, X } from "lucide-react-native";
 import { useState } from "react";
 import {
@@ -40,13 +41,14 @@ const DURATIONS = [
   { min: 180, label: "3h" },
 ];
 
-/** The new-task button: a postage stamp pinned above the dock — a fresh slip
- * waiting to be stuck onto the day. Tapping it slides the task drawer up from
- * the bottom edge. */
+/** The new-task button: a postage stamp pinned above the tab bar — a fresh
+ * slip waiting to be stuck onto the day. On native it opens the system form
+ * sheet (/compose); the web build slides up its own drawer. */
 export function TaskComposer({ date }: { date: string }) {
   const colors = usePalette();
   const shadow = useShadow();
   const insets = useSafeAreaInsets();
+  const router = useRouter();
   const [open, setOpen] = useState(false);
   const isToday = date === localDate();
   const dayLabel = toLocalNoon(date).toLocaleDateString("en", {
@@ -60,7 +62,11 @@ export function TaskComposer({ date }: { date: string }) {
       <PressableScale
         scaleTo={0.9}
         accessibilityLabel={isToday ? "New task" : `New task for ${dayLabel}`}
-        onPress={() => setOpen(true)}
+        onPress={() =>
+          Platform.OS === "web"
+            ? setOpen(true)
+            : router.push({ pathname: "/compose", params: { date } })
+        }
         style={[
           styles.stampFab,
           {
@@ -79,9 +85,9 @@ export function TaskComposer({ date }: { date: string }) {
   );
 }
 
-/** The task drawer: slides up from the bottom edge with everything you need to
- * shape a task — title, details, notes, and (when opened from a calendar slot)
- * the time box. */
+/** The web task drawer: slides up from the bottom edge and hosts the form.
+ * Native never mounts this — /compose presents the same form as a real
+ * system sheet, which handles the keyboard itself. */
 export function ComposerSheet({
   date,
   initialStart,
@@ -92,38 +98,7 @@ export function ComposerSheet({
   onClose: () => void;
 }) {
   const colors = usePalette();
-  const type = useType();
   const insets = useSafeAreaInsets();
-  const create = useCreateTask();
-  const isToday = date === localDate();
-
-  const [title, setTitle] = useState("");
-  const [description, setDescription] = useState("");
-  const [notes, setNotes] = useState("");
-  const [showNotes, setShowNotes] = useState(false);
-  const [start, setStart] = useState<number | null>(initialStart ?? null);
-  const [dur, setDur] = useState(60);
-
-  const dayLabel = toLocalNoon(date).toLocaleDateString("en", {
-    weekday: "short",
-    month: "short",
-    day: "numeric",
-  });
-
-  const submit = () => {
-    if (!title.trim()) return;
-    create.mutate({
-      title: title.trim(),
-      description: description.trim() || undefined,
-      notes: notes.trim() || undefined,
-      // A timed task must belong to a day; otherwise the viewed day is the
-      // default due date and plain "today" needs none.
-      due_date: start != null ? toPbDate(date) : isToday ? undefined : toPbDate(date),
-      start_min: start ?? 0,
-      dur_min: dur,
-    });
-    onClose();
-  };
 
   return (
     <Modal visible transparent animationType="none" onRequestClose={onClose}>
@@ -153,125 +128,176 @@ export function ComposerSheet({
           <View style={styles.handleRow}>
             <View style={[styles.handle, { backgroundColor: alpha(colors.ink, 0.15) }]} />
           </View>
-
-          <Eyebrow>new task{start != null || !isToday ? ` · ${dayLabel}` : ""}</Eyebrow>
-          <TextInput
-            autoFocus
-            value={title}
-            onChangeText={setTitle}
-            onSubmitEditing={submit}
-            placeholder="What needs doing?"
-            placeholderTextColor={alpha(colors.inkMuted, 0.5)}
-            returnKeyType="done"
-            style={[styles.titleInput, type.display, { color: colors.ink }]}
-          />
-          <TextInput
-            value={description}
-            onChangeText={setDescription}
-            placeholder="Details (optional)"
-            placeholderTextColor={alpha(colors.inkMuted, 0.5)}
-            multiline
-            style={[styles.detailsInput, type.sans, { color: colors.ink }]}
-          />
-
-          {start != null && (
-            <View
-              style={[
-                styles.timedRow,
-                { borderColor: alpha(colors.rule, 0.6), backgroundColor: alpha(colors.paper, 0.5) },
-              ]}
-            >
-              <Text style={[styles.timedStart, type.sansMedium, { color: colors.ink }]}>
-                {fmtMin(start)}
-              </Text>
-              <Text style={[styles.timedFor, type.sans, { color: colors.inkMuted }]}>for</Text>
-              <View style={styles.durations}>
-                {DURATIONS.map((d) => (
-                  <Pressable
-                    key={d.min}
-                    onPress={() => setDur(d.min)}
-                    style={[styles.durChip, dur === d.min && { backgroundColor: colors.zest }]}
-                  >
-                    <Text
-                      style={[
-                        styles.durChipText,
-                        type.sansMedium,
-                        { color: dur === d.min ? colors.paper : colors.inkMuted },
-                      ]}
-                    >
-                      {d.label}
-                    </Text>
-                  </Pressable>
-                ))}
-              </View>
-              <Pressable accessibilityLabel="Remove time" onPress={() => setStart(null)} hitSlop={8}>
-                <X size={14} color={alpha(colors.inkMuted, 0.6)} />
-              </Pressable>
-            </View>
-          )}
-
-          <View style={styles.chips}>
-            <PressableScale
-              scaleTo={0.95}
-              accessibilityState={{ selected: showNotes }}
-              onPress={() => setShowNotes((s) => !s)}
-              style={[
-                styles.chip,
-                showNotes
-                  ? { borderColor: alpha(colors.honey, 0.5), backgroundColor: alpha(colors.honey, 0.1) }
-                  : { borderColor: colors.rule },
-              ]}
-            >
-              <StickyNote size={14} color={showNotes ? colors.ink : colors.inkMuted} />
-              <Text style={[styles.chipText, type.sansMedium, { color: showNotes ? colors.ink : colors.inkMuted }]}>
-                notes
-              </Text>
-            </PressableScale>
-          </View>
-
-          {showNotes && (
-            <Animated.View entering={FadeIn.duration(180)} layout={LinearTransition.springify().stiffness(400).damping(34)}>
-              <TextInput
-                value={notes}
-                onChangeText={setNotes}
-                placeholder="Notes for the task's page…"
-                placeholderTextColor={alpha(colors.inkMuted, 0.5)}
-                multiline
-                style={[
-                  styles.notesInput,
-                  type.sans,
-                  {
-                    color: colors.ink,
-                    borderColor: alpha(colors.rule, 0.6),
-                    backgroundColor: alpha(colors.paper, 0.6),
-                  },
-                ]}
-              />
-            </Animated.View>
-          )}
-
-          <View style={styles.footer}>
-            <Pressable onPress={onClose} hitSlop={8}>
-              <Text style={[styles.cancel, type.sansMedium, { color: colors.inkMuted }]}>Cancel</Text>
-            </Pressable>
-            <PressableScale
-              scaleTo={0.94}
-              onPress={submit}
-              disabled={!title.trim() || create.isPending}
-              style={[
-                styles.addBtn,
-                { backgroundColor: colors.zest },
-                (!title.trim() || create.isPending) && { opacity: 0.4 },
-              ]}
-            >
-              <Text style={[styles.addBtnText, type.sansSemiBold, { color: colors.paper }]}>
-                Add task
-              </Text>
-            </PressableScale>
-          </View>
+          <ComposerForm date={date} initialStart={initialStart} onDone={onClose} />
         </Animated.View>
       </KeyboardAvoidingView>
     </Modal>
+  );
+}
+
+/** Everything you need to shape a task — title, details, notes, and (when
+ * opened from a calendar slot) the time box. The host decides how it's
+ * presented: native form sheet or web drawer. */
+export function ComposerForm({
+  date,
+  initialStart,
+  onDone,
+}: {
+  date: string;
+  initialStart?: number;
+  onDone: () => void;
+}) {
+  const colors = usePalette();
+  const type = useType();
+  const create = useCreateTask();
+  const isToday = date === localDate();
+
+  const [title, setTitle] = useState("");
+  const [description, setDescription] = useState("");
+  const [notes, setNotes] = useState("");
+  const [showNotes, setShowNotes] = useState(false);
+  const [start, setStart] = useState<number | null>(initialStart ?? null);
+  const [dur, setDur] = useState(60);
+
+  const dayLabel = toLocalNoon(date).toLocaleDateString("en", {
+    weekday: "short",
+    month: "short",
+    day: "numeric",
+  });
+
+  const submit = () => {
+    if (!title.trim()) return;
+    create.mutate({
+      title: title.trim(),
+      description: description.trim() || undefined,
+      notes: notes.trim() || undefined,
+      // A timed task must belong to a day; otherwise the viewed day is the
+      // default due date and plain "today" needs none.
+      due_date: start != null ? toPbDate(date) : isToday ? undefined : toPbDate(date),
+      start_min: start ?? 0,
+      dur_min: dur,
+    });
+    onDone();
+  };
+
+  return (
+    <View>
+      <Eyebrow>new task{start != null || !isToday ? ` · ${dayLabel}` : ""}</Eyebrow>
+      <TextInput
+        autoFocus
+        value={title}
+        onChangeText={setTitle}
+        onSubmitEditing={submit}
+        placeholder="What needs doing?"
+        placeholderTextColor={alpha(colors.inkMuted, 0.5)}
+        returnKeyType="done"
+        style={[styles.titleInput, type.display, { color: colors.ink }]}
+      />
+      <TextInput
+        value={description}
+        onChangeText={setDescription}
+        placeholder="Details (optional)"
+        placeholderTextColor={alpha(colors.inkMuted, 0.5)}
+        multiline
+        style={[styles.detailsInput, type.sans, { color: colors.ink }]}
+      />
+
+      {start != null && (
+        <View
+          style={[
+            styles.timedRow,
+            { borderColor: alpha(colors.rule, 0.6), backgroundColor: alpha(colors.paper, 0.5) },
+          ]}
+        >
+          <Text style={[styles.timedStart, type.sansMedium, { color: colors.ink }]}>
+            {fmtMin(start)}
+          </Text>
+          <Text style={[styles.timedFor, type.sans, { color: colors.inkMuted }]}>for</Text>
+          <View style={styles.durations}>
+            {DURATIONS.map((d) => (
+              <Pressable
+                key={d.min}
+                onPress={() => setDur(d.min)}
+                style={[styles.durChip, dur === d.min && { backgroundColor: colors.zest }]}
+              >
+                <Text
+                  style={[
+                    styles.durChipText,
+                    type.sansMedium,
+                    { color: dur === d.min ? colors.paper : colors.inkMuted },
+                  ]}
+                >
+                  {d.label}
+                </Text>
+              </Pressable>
+            ))}
+          </View>
+          <Pressable accessibilityLabel="Remove time" onPress={() => setStart(null)} hitSlop={8}>
+            <X size={14} color={alpha(colors.inkMuted, 0.6)} />
+          </Pressable>
+        </View>
+      )}
+
+      <View style={styles.chips}>
+        <PressableScale
+          scaleTo={0.95}
+          accessibilityState={{ selected: showNotes }}
+          onPress={() => setShowNotes((s) => !s)}
+          style={[
+            styles.chip,
+            showNotes
+              ? { borderColor: alpha(colors.honey, 0.5), backgroundColor: alpha(colors.honey, 0.1) }
+              : { borderColor: colors.rule },
+          ]}
+        >
+          <StickyNote size={14} color={showNotes ? colors.ink : colors.inkMuted} />
+          <Text style={[styles.chipText, type.sansMedium, { color: showNotes ? colors.ink : colors.inkMuted }]}>
+            notes
+          </Text>
+        </PressableScale>
+      </View>
+
+      {showNotes && (
+        <Animated.View entering={FadeIn.duration(180)} layout={LinearTransition.springify().stiffness(400).damping(34)}>
+          <TextInput
+            value={notes}
+            onChangeText={setNotes}
+            placeholder="Notes for the task's page…"
+            placeholderTextColor={alpha(colors.inkMuted, 0.5)}
+            multiline
+            style={[
+              styles.notesInput,
+              type.sans,
+              {
+                color: colors.ink,
+                borderColor: alpha(colors.rule, 0.6),
+                backgroundColor: alpha(colors.paper, 0.6),
+              },
+            ]}
+          />
+        </Animated.View>
+      )}
+
+      <View style={styles.footer}>
+        <Pressable onPress={onDone} hitSlop={8}>
+          <Text style={[styles.cancel, type.sansMedium, { color: colors.inkMuted }]}>Cancel</Text>
+        </Pressable>
+        <PressableScale
+          scaleTo={0.94}
+          onPress={submit}
+          disabled={!title.trim() || create.isPending}
+          style={[
+            styles.addBtn,
+            { backgroundColor: colors.zest },
+            (!title.trim() || create.isPending) && { opacity: 0.4 },
+          ]}
+        >
+          <Text style={[styles.addBtnText, type.sansSemiBold, { color: colors.paper }]}>
+            Add task
+          </Text>
+        </PressableScale>
+      </View>
+    </View>
   );
 }
 

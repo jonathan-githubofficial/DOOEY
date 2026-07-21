@@ -64,7 +64,20 @@ export default function RootLayout() {
             headerShown: false,
             contentStyle: { backgroundColor: colors.paper },
           }}
-        />
+        >
+          {/* The new-task drawer is a real native sheet: the system slides it
+              up, rounds it, grabs it, and keeps it above the keyboard. */}
+          <Stack.Screen
+            name="compose"
+            options={{
+              presentation: "formSheet",
+              sheetAllowedDetents: "fitToContents",
+              sheetGrabberVisible: true,
+              sheetCornerRadius: 24,
+              contentStyle: { backgroundColor: colors.surface },
+            }}
+          />
+        </Stack>
         <StatusBar style={theme === "dark" ? "light" : "dark"} />
       </QueryClientProvider>
     </GestureHandlerRootView>
