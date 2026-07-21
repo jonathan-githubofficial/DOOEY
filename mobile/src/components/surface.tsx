@@ -1,19 +1,30 @@
 import type { PropsWithChildren } from "react";
 import { StyleSheet, Text, View, type StyleProp, type TextStyle, type ViewStyle } from "react-native";
+import { Grain } from "@/components/grain";
+import { useCardRadius } from "@/features/style/store";
 import { alpha, fonts } from "@/lib/theme";
 import { usePalette } from "@/stores/theme";
 
-/** A soft paper card — the RN counterpart of the web app's Panel. */
+/** A soft paper card — the RN counterpart of the web app's Panel. Wears the
+ * paper grain and the Style page's corner radius. */
 export function Panel({ style, children }: PropsWithChildren<{ style?: StyleProp<ViewStyle> }>) {
   const colors = usePalette();
+  const radius = useCardRadius();
   return (
     <View
       style={[
         styles.panel,
-        { backgroundColor: colors.surface, borderColor: alpha(colors.rule, 0.7) },
+        {
+          borderRadius: radius,
+          backgroundColor: colors.surface,
+          borderColor: alpha(colors.rule, 0.7),
+        },
         style,
       ]}
     >
+      {/* The grain clips itself to the card's corners — an overflow:hidden on
+          the panel would clip the iOS shadow instead. */}
+      <Grain radius={radius - 1} />
       {children}
     </View>
   );
@@ -29,7 +40,6 @@ export function Eyebrow({ style, children }: PropsWithChildren<{ style?: StylePr
 
 const styles = StyleSheet.create({
   panel: {
-    borderRadius: 24,
     borderWidth: 1,
     // Soft two-layer web shadow approximated with one gentle native shadow.
     shadowColor: "#282018",

@@ -1,22 +1,63 @@
 {
-  // One task runs the whole stack: Ctrl+Shift+B (or Terminal → Run Build Task).
-  // scripts/dev.mjs frees ports 5173 / 8090 if a stale process is holding them,
-  // then starts Vite + PocketBase together. Ctrl+C in the terminal stops both.
+  // Ctrl+Shift+B runs "dev: mobile" — it frees stale ports, then opens the
+  // backend (PocketBase) and the frontend (Expo) each in its own terminal.
+  // Stop either with Ctrl+C in its terminal; re-running frees the ports again.
   "version": "2.0.0",
   "tasks": [
     {
-      "label": "dev",
-      "detail": "Free ports, then run frontend (Vite) + backend (PocketBase)",
+      "label": "free port 8090",
+      "type": "shell",
+      // Explicit PowerShell: a bash default terminal would mangle `$_`.
+      "options": { "shell": { "executable": "powershell.exe", "args": ["-NoProfile", "-Command"] } },
+      "command": "Get-NetTCPConnection -LocalPort 8090 -State Listen -ErrorAction SilentlyContinue | Select-Object -ExpandProperty OwningProcess -Unique | ForEach-Object { Stop-Process -Id $_ -Force -ErrorAction SilentlyContinue }; exit 0",
+      "presentation": { "reveal": "silent", "panel": "shared", "close": true },
+      "problemMatcher": []
+    },
+    {
+      "label": "free port 8081",
+      "type": "shell",
+      "options": { "shell": { "executable": "powershell.exe", "args": ["-NoProfile", "-Command"] } },
+      "command": "Get-NetTCPConnection -LocalPort 8081 -State Listen -ErrorAction SilentlyContinue | Select-Object -ExpandProperty OwningProcess -Unique | ForEach-Object { Stop-Process -Id $_ -Force -ErrorAction SilentlyContinue }; exit 0",
+      "presentation": { "reveal": "silent", "panel": "shared", "close": true },
+      "problemMatcher": []
+    },
+    {
+      "label": "backend: PocketBase",
+      "detail": "pb/pocketbase.exe serve on :8090 (frees the port first)",
+      "type": "shell",
+      "command": "./pb/pocketbase.exe serve",
+      "dependsOn": ["free port 8090"],
+      "isBackground": true,
+      "presentation": { "panel": "dedicated", "reveal": "always", "group": "dev", "clear": true },
+      "problemMatcher": []
+    },
+    {
+      "label": "frontend: Expo",
+      "detail": "expo start in mobile/ on :8081 (frees the port first)",
+      "type": "shell",
+      "command": "npm start",
+      "options": { "cwd": "${workspaceFolder}/mobile" },
+      "dependsOn": ["free port 8081"],
+      "isBackground": true,
+      "presentation": { "panel": "dedicated", "reveal": "always", "group": "dev", "clear": true },
+      "problemMatcher": []
+    },
+    {
+      "label": "dev: mobile",
+      "detail": "Backend + Expo, each in its own terminal, ports freed first",
+      "dependsOn": ["backend: PocketBase", "frontend: Expo"],
+      "dependsOrder": "parallel",
+      "group": { "kind": "build", "isDefault": true },
+      "problemMatcher": []
+    },
+    {
+      "label": "dev: web",
+      "detail": "Legacy web stack — free ports, then Vite + PocketBase together",
       "type": "npm",
       "script": "dev:all",
       "isBackground": true,
-      "group": { "kind": "build", "isDefault": true },
-      "problemMatcher": [],
-      "presentation": {
-        "panel": "dedicated",
-        "reveal": "always",
-        "clear": true
-      }
+      "presentation": { "panel": "dedicated", "reveal": "always", "clear": true },
+      "problemMatcher": []
     }
   ]
 }

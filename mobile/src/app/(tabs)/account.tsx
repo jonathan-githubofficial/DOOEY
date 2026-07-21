@@ -1,23 +1,28 @@
-import { LogOut, Moon, Sun } from "lucide-react-native";
+import { ChevronRight, LogOut, Moon, Palette, Sun } from "lucide-react-native";
+import { useRouter } from "expo-router";
 import { useEffect, useRef } from "react";
 import { Animated, Pressable, StyleSheet, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { AvatarDoodle } from "@/components/AvatarDoodle";
+import { Grain } from "@/components/grain";
+import { PressableScale } from "@/components/pressable-scale";
 import { Eyebrow, Panel } from "@/components/surface";
 import { signOut } from "@/features/auth/api";
 import { alpha, fonts } from "@/lib/theme";
 import { useAuthStore } from "@/stores/auth";
 import { usePalette, useThemeStore } from "@/stores/theme";
 
-/** The account space: your doodled self, email, appearance and sign-out.
- * The tab guard guarantees a session, so there's no signed-out branch. */
+/** The account space: your doodled self, email, appearance, the door to the
+ * Style studio, and sign-out. The tab guard guarantees a session. */
 export default function Account() {
   const colors = usePalette();
   const insets = useSafeAreaInsets();
+  const router = useRouter();
   const user = useAuthStore((s) => s.user);
 
   return (
     <View style={[styles.screen, { backgroundColor: colors.paper, paddingTop: insets.top + 12 }]}>
+      <Grain />
       <Text style={[styles.title, { color: colors.ink }]}>Account</Text>
 
       <Panel style={styles.panel}>
@@ -39,14 +44,26 @@ export default function Account() {
           <ThemeToggle />
         </View>
 
-        <Pressable
-          onPress={signOut}
-          style={({ pressed }) => [styles.signOut, pressed && { opacity: 0.6 }]}
-        >
+        <PressableScale onPress={signOut} style={styles.signOut}>
           <LogOut size={16} color={colors.inkMuted} />
           <Text style={[styles.signOutLabel, { color: colors.inkMuted }]}>Sign out</Text>
-        </Pressable>
+        </PressableScale>
       </Panel>
+
+      <PressableScale scaleTo={0.98} onPress={() => router.push("/style")}>
+        <Panel style={styles.styleCard}>
+          <View style={[styles.styleIcon, { backgroundColor: alpha(colors.zest, 0.15) }]}>
+            <Palette size={20} color={colors.zest} />
+          </View>
+          <View style={styles.styleText}>
+            <Text style={[styles.styleTitle, { color: colors.ink }]}>Style studio</Text>
+            <Text style={[styles.styleSub, { color: colors.inkMuted }]}>
+              Colours, corners & grain — make DOOEY yours.
+            </Text>
+          </View>
+          <ChevronRight size={16} color={colors.inkMuted} />
+        </Panel>
+      </PressableScale>
     </View>
   );
 }
@@ -153,6 +170,34 @@ const styles = StyleSheet.create({
   },
   signOutLabel: {
     fontFamily: fonts.sansMedium,
+    fontSize: 13,
+  },
+  styleCard: {
+    marginTop: 16,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 16,
+    padding: 20,
+  },
+  styleIcon: {
+    height: 44,
+    width: 44,
+    alignItems: "center",
+    justifyContent: "center",
+    borderRadius: 999,
+  },
+  styleText: {
+    flex: 1,
+    minWidth: 0,
+  },
+  styleTitle: {
+    fontFamily: fonts.display,
+    fontSize: 18,
+    letterSpacing: -0.3,
+  },
+  styleSub: {
+    marginTop: 1,
+    fontFamily: fonts.sans,
     fontSize: 13,
   },
   toggle: {

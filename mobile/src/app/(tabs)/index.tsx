@@ -11,7 +11,16 @@ import {
   TextInput,
   View,
 } from "react-native";
+import Animated, {
+  FadeInLeft,
+  FadeInRight,
+  FadeOut,
+  LinearTransition,
+  ZoomIn,
+} from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { Grain } from "@/components/grain";
+import { PressableScale } from "@/components/pressable-scale";
 import { Eyebrow, Panel } from "@/components/surface";
 import { useCreateTask, useDayTasks, useDeleteTask, useUpdateTask } from "@/features/tasks/api";
 import { WeekStrip } from "@/features/tasks/components/WeekStrip";
@@ -20,13 +29,23 @@ import { dayTitle, dueInfo, localDate, toLocalNoon, toPbDate } from "@/lib/dates
 import { alpha, fonts } from "@/lib/theme";
 import { usePalette } from "@/stores/theme";
 
+const settle = LinearTransition.springify().stiffness(380).damping(32);
+
 /** The planner: one day at a glance — pick a day on the week ribbon, check
- * things off, add the next one at the bottom. */
+ * things off, add the next one at the bottom. Switching days slides the sheet
+ * in from the side you're paging toward, desk-calendar style. */
 export default function Planner() {
   const colors = usePalette();
   const insets = useSafeAreaInsets();
   const [selected, setSelected] = useState(localDate);
+  const [direction, setDirection] = useState(1);
   const { data: tasks } = useDayTasks(selected);
+
+  const select = (date: string) => {
+    if (date === selected) return;
+    setDirection(date > selected ? 1 : -1);
+    setSelected(date);
+  };
 
   const open = (tasks ?? []).filter((t) => !t.done_at);
   const done = (tasks ?? []).filter((t) => t.done_at);
@@ -40,9 +59,10 @@ export default function Planner() {
       behavior={Platform.OS === "ios" ? "padding" : undefined}
       style={[styles.screen, { backgroundColor: colors.paper, paddingTop: insets.top + 12 }]}
     >
+      <Grain />
       <View style={styles.strip}>
         <Panel style={styles.stripPanel}>
-          <WeekStrip selected={selected} onSelect={setSelected} />
+          <WeekStrip selected={selected} onSelect={select} />
         </Panel>
       </View>
 
@@ -51,29 +71,34 @@ export default function Planner() {
         contentContainerStyle={styles.scrollContent}
         keyboardShouldPersistTaps="handled"
       >
-        <View style={styles.dayHead}>
-          <Text style={[styles.dayTitle, { color: colors.ink }]}>{dayTitle(selected)}</Text>
-          <Text style={[styles.dayStamp, { color: colors.inkMuted }]}>{dateStamp}</Text>
-        </View>
+        <Animated.View
+          key={selected}
+          entering={(direction === 1 ? FadeInRight : FadeInLeft).duration(220)}
+        >
+          <View style={styles.dayHead}>
+            <Text style={[styles.dayTitle, { color: colors.ink }]}>{dayTitle(selected)}</Text>
+            <Text style={[styles.dayStamp, { color: colors.inkMuted }]}>{dateStamp}</Text>
+          </View>
 
-        {open.length === 0 && done.length === 0 && (
-          <Text style={[styles.empty, { color: colors.inkMuted }]}>
-            Nothing here yet — add the first thing below.
-          </Text>
-        )}
+          {open.length === 0 && done.length === 0 && (
+            <Text style={[styles.empty, { color: colors.inkMuted }]}>
+              Nothing here yet — add the first thing below.
+            </Text>
+          )}
 
-        {open.map((t) => (
-          <TaskRow key={t.id} task={t} selectedDate={selected} />
-        ))}
+          {open.map((t) => (
+            <TaskRow key={t.id} task={t} selectedDate={selected} />
+          ))}
 
-        {done.length > 0 && (
-          <>
-            <Eyebrow style={styles.doneLabel}>done</Eyebrow>
-            {done.map((t) => (
-              <TaskRow key={t.id} task={t} selectedDate={selected} />
-            ))}
-          </>
-        )}
+          {done.length > 0 && (
+            <Animated.View layout={settle}>
+              <Eyebrow style={styles.doneLabel}>done</Eyebrow>
+            </Animated.View>
+          )}
+          {done.map((t) => (
+            <TaskRow key={t.id} task={t} selectedDate={selected} />
+          ))}
+        </Animated.View>
       </ScrollView>
 
       <Composer date={selected} bottomInset={insets.bottom} />
@@ -90,51 +115,58 @@ function TaskRow({ task, selectedDate }: { task: Task; selectedDate: string }) {
   const due = !isDone && selectedDate === localDate() && task.due_date ? dueInfo(task.due_date) : null;
 
   return (
-    <Pressable
-      onLongPress={() =>
-        Alert.alert("Delete task", `Delete "${task.title}"?`, [
-          { text: "Cancel", style: "cancel" },
-          { text: "Delete", style: "destructive", onPress: () => del.mutate(task.id) },
-        ])
-      }
-      style={styles.row}
-    >
+    <Animated.View layout={settle} exiting={FadeOut.duration(150)}>
       <Pressable
-        accessibilityLabel={isDone ? `Mark "${task.title}" not done` : `Mark "${task.title}" done`}
-        onPress={() =>
-          update.mutate({
-            id: task.id,
-            patch: { done_at: isDone ? "" : new Date().toISOString() },
-          })
+        onLongPress={() =>
+          Alert.alert("Delete task", `Delete "${task.title}"?`, [
+            { text: "Cancel", style: "cancel" },
+            { text: "Delete", style: "destructive", onPress: () => del.mutate(task.id) },
+          ])
         }
-        hitSlop={8}
+        style={styles.row}
       >
-        {isDone ? (
-          <CircleCheck size={22} color={colors.leaf} />
-        ) : (
-          <Circle size={22} color={alpha(colors.inkMuted, 0.5)} />
+        <PressableScale
+          scaleTo={0.85}
+          accessibilityLabel={isDone ? `Mark "${task.title}" not done` : `Mark "${task.title}" done`}
+          onPress={() =>
+            update.mutate({
+              id: task.id,
+              patch: { done_at: isDone ? "" : new Date().toISOString() },
+            })
+          }
+          hitSlop={8}
+        >
+          {/* Re-keying on state pops the tick in on a spring — the completion
+              celebrates small. */}
+          <Animated.View key={String(isDone)} entering={ZoomIn.springify().stiffness(420).damping(18)}>
+            {isDone ? (
+              <CircleCheck size={22} color={colors.leaf} />
+            ) : (
+              <Circle size={22} color={alpha(colors.inkMuted, 0.5)} />
+            )}
+          </Animated.View>
+        </PressableScale>
+        <View style={styles.rowBody}>
+          <Text
+            style={[
+              styles.rowTitle,
+              { color: isDone ? colors.inkMuted : colors.ink },
+              isDone && styles.rowTitleDone,
+            ]}
+          >
+            {task.title}
+          </Text>
+          {!!task.description && (
+            <Text style={[styles.rowSub, { color: colors.inkMuted }]} numberOfLines={1}>
+              {task.description}
+            </Text>
+          )}
+        </View>
+        {due && due.tone === "overdue" && (
+          <Text style={[styles.dueChip, { color: colors.clay }]}>{due.text}</Text>
         )}
       </Pressable>
-      <View style={styles.rowBody}>
-        <Text
-          style={[
-            styles.rowTitle,
-            { color: isDone ? colors.inkMuted : colors.ink },
-            isDone && styles.rowTitleDone,
-          ]}
-        >
-          {task.title}
-        </Text>
-        {!!task.description && (
-          <Text style={[styles.rowSub, { color: colors.inkMuted }]} numberOfLines={1}>
-            {task.description}
-          </Text>
-        )}
-      </View>
-      {due && due.tone === "overdue" && (
-        <Text style={[styles.dueChip, { color: colors.clay }]}>{due.text}</Text>
-      )}
-    </Pressable>
+    </Animated.View>
   );
 }
 
@@ -164,19 +196,19 @@ function Composer({ date, bottomInset }: { date: string; bottomInset: number }) 
           submitBehavior="submit"
           style={[styles.composerInput, { color: colors.ink }]}
         />
-        <Pressable
+        <PressableScale
+          scaleTo={0.85}
           accessibilityLabel="Add task"
           onPress={submit}
           disabled={!title.trim()}
-          style={({ pressed }) => [
+          style={[
             styles.composerAdd,
             { backgroundColor: alpha(colors.zest, 0.15) },
-            pressed && { transform: [{ scale: 0.9 }] },
             !title.trim() && { opacity: 0.4 },
           ]}
         >
           <Plus size={18} color={colors.zest} />
-        </Pressable>
+        </PressableScale>
       </Panel>
     </View>
   );

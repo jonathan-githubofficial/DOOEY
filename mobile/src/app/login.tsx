@@ -10,6 +10,8 @@ import {
   View,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { Grain } from "@/components/grain";
+import { PressableScale } from "@/components/pressable-scale";
 import { Eyebrow, Panel } from "@/components/surface";
 import { signIn, signUp } from "@/features/auth/api";
 import { alpha, fonts } from "@/lib/theme";
@@ -55,6 +57,7 @@ export default function Login() {
         { backgroundColor: colors.paper, paddingTop: insets.top, paddingBottom: insets.bottom },
       ]}
     >
+      <Grain />
       <Text style={[styles.wordmark, { color: colors.ink }]}>
         DOOEY
         <Text style={{ color: colors.zest }}>.</Text>
@@ -98,20 +101,20 @@ export default function Login() {
 
         {error && <Text style={[styles.error, { color: colors.clay }]}>{error}</Text>}
 
-        <Pressable
+        <PressableScale
+          scaleTo={0.96}
           onPress={submit}
           disabled={!canSubmit}
-          style={({ pressed }) => [
+          style={[
             styles.submit,
             { backgroundColor: colors.ink },
-            pressed && { transform: [{ scale: 0.97 }] },
             !canSubmit && { opacity: 0.4 },
           ]}
         >
           <Text style={[styles.submitLabel, { color: colors.paper }]}>
             {busy ? "…" : mode === "in" ? "sign in" : "sign up"}
           </Text>
-        </Pressable>
+        </PressableScale>
       </Panel>
     </KeyboardAvoidingView>
   );

@@ -1,7 +1,10 @@
 import { Check, Eraser, Pencil, Undo2, X } from "lucide-react-native";
 import { useEffect, useRef, useState } from "react";
-import { Pressable, StyleSheet, Text, View, type GestureResponderEvent } from "react-native";
+import { StyleSheet, Text, View, type GestureResponderEvent } from "react-native";
+import Animated, { ZoomIn } from "react-native-reanimated";
 import { DoodleSvg } from "@/components/DoodleSvg";
+import { Grain } from "@/components/grain";
+import { PressableScale } from "@/components/pressable-scale";
 import { Eyebrow } from "@/components/surface";
 import { INK_COLORS, touchPct, type InkColor, type Stroke } from "@/lib/doodle";
 import { alpha, fonts, type Palette } from "@/lib/theme";
@@ -117,12 +120,14 @@ export function DoodleEditor({
   };
 
   return (
-    <View
+    <Animated.View
+      entering={ZoomIn.springify().stiffness(480).damping(24)}
       style={[
         styles.card,
         { backgroundColor: colors.surface, borderColor: alpha(colors.rule, 0.7) },
       ]}
     >
+      <Grain radius={15} />
       <Eyebrow>{heading}</Eyebrow>
 
       <View
@@ -159,8 +164,9 @@ export function DoodleEditor({
         <View style={styles.inks}>
           {tool === "pen" ? (
             INK_COLORS.map((c) => (
-              <Pressable
+              <PressableScale
                 key={c}
+                scaleTo={0.8}
                 accessibilityLabel={`${c} ink`}
                 onPress={() => setInk(c)}
                 style={[
@@ -204,7 +210,7 @@ export function DoodleEditor({
           </MiniTool>
         </View>
       </View>
-    </View>
+    </Animated.View>
   );
 }
 
@@ -225,21 +231,21 @@ function MiniTool({
 }) {
   const colors = usePalette();
   return (
-    <Pressable
+    <PressableScale
+      scaleTo={0.85}
       accessibilityLabel={label}
       accessibilityRole="button"
       disabled={disabled}
       onPress={onPress}
-      style={({ pressed }) => [
+      style={[
         styles.miniTool,
         active && { backgroundColor: alpha(colors.zest, 0.15) },
         accent && { backgroundColor: alpha(colors.leaf, 0.15) },
-        pressed && { transform: [{ scale: 0.9 }] },
         disabled && { opacity: 0.4 },
       ]}
     >
       {children}
-    </Pressable>
+    </PressableScale>
   );
 }
 

@@ -1,6 +1,7 @@
 import { ChevronLeft, ChevronRight } from "lucide-react-native";
 import { useState } from "react";
 import { Pressable, StyleSheet, Text, View } from "react-native";
+import { PressableScale } from "@/components/pressable-scale";
 import { addDays, localDate, mondayOf, toLocalNoon, weekOf } from "@/lib/dates";
 import { alpha, fonts } from "@/lib/theme";
 import { usePalette } from "@/stores/theme";
@@ -51,7 +52,7 @@ export function WeekStrip({
             const isToday = d === today;
             const noon = toLocalNoon(d);
             return (
-              <Pressable
+              <PressableScale
                 key={d}
                 onPress={() => onSelect(d)}
                 accessibilityLabel={noon.toLocaleDateString("en", {
@@ -59,14 +60,13 @@ export function WeekStrip({
                   month: "long",
                   day: "numeric",
                 })}
-                style={({ pressed }) => [
+                style={[
                   styles.chip,
                   isSelected && {
                     backgroundColor: colors.surface,
                     borderColor: alpha(colors.rule, 0.7),
                     borderWidth: 1,
                   },
-                  pressed && { transform: [{ scale: 0.92 }] },
                 ]}
               >
                 <Text
@@ -96,7 +96,7 @@ export function WeekStrip({
                     { backgroundColor: isToday ? colors.zest : "transparent" },
                   ]}
                 />
-              </Pressable>
+              </PressableScale>
             );
           })}
         </View>
@@ -110,13 +110,14 @@ function Pager({ dir, onPress }: { dir: -1 | 1; onPress: () => void }) {
   const colors = usePalette();
   const Icon = dir === -1 ? ChevronLeft : ChevronRight;
   return (
-    <Pressable
+    <PressableScale
+      scaleTo={0.85}
       onPress={onPress}
       accessibilityLabel={dir === -1 ? "Previous week" : "Next week"}
-      style={({ pressed }) => [styles.pager, pressed && { transform: [{ scale: 0.9 }] }]}
+      style={styles.pager}
     >
       <Icon size={16} color={alpha(colors.inkMuted, 0.6)} />
-    </Pressable>
+    </PressableScale>
   );
 }
 

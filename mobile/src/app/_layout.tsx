@@ -7,8 +7,7 @@ import * as SplashScreen from "expo-splash-screen";
 import { StatusBar } from "expo-status-bar";
 import { useEffect, useState } from "react";
 import { initSession } from "@/features/auth/api";
-import { palettes } from "@/lib/theme";
-import { useThemeStore } from "@/stores/theme";
+import { usePalette, useThemeStore } from "@/stores/theme";
 
 SplashScreen.preventAutoHideAsync();
 
@@ -16,7 +15,7 @@ const queryClient = new QueryClient();
 
 export default function RootLayout() {
   const theme = useThemeStore((s) => s.theme);
-  const colors = palettes[theme];
+  const colors = usePalette();
 
   const [fontsLoaded] = useFonts({
     Outfit_400Regular,

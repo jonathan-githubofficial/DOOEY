@@ -1,8 +1,9 @@
 import { Pencil } from "lucide-react-native";
 import type { RecordModel } from "pocketbase";
 import { useState } from "react";
-import { Modal, Pressable, StyleSheet, View } from "react-native";
+import { Modal, Pressable, StyleSheet } from "react-native";
 import { DoodleEditor } from "@/components/DoodleEditor";
+import { PressableScale } from "@/components/pressable-scale";
 import { DoodleSvg } from "@/components/DoodleSvg";
 import type { Stroke } from "@/lib/doodle";
 import { pb } from "@/lib/pb";
@@ -24,17 +25,18 @@ export function AvatarDoodle() {
   return (
     <>
       {/* No frame, no fill — the doodle stands on the paper itself. */}
-      <Pressable
+      <PressableScale
+        scaleTo={0.9}
         accessibilityLabel={strokes.length ? "Edit your doodled avatar" : "Doodle your avatar"}
         onPress={() => setOpen(true)}
-        style={({ pressed }) => [styles.avatar, pressed && { transform: [{ scale: 0.92 }] }]}
+        style={styles.avatar}
       >
         {strokes.length ? (
           <DoodleSvg strokes={strokes} />
         ) : (
           <Pencil size={20} color={alpha(colors.inkMuted, 0.4)} />
         )}
-      </Pressable>
+      </PressableScale>
 
       <Modal visible={open} transparent animationType="fade" onRequestClose={() => setOpen(false)}>
         <Pressable style={styles.backdrop} onPress={() => setOpen(false)}>
