@@ -18,7 +18,9 @@ import { strokePath, type Stroke } from "@/lib/doodle";
 // cause: the XSvg blob sandbox) recorded alongside the 2.4 icon-recolour gap for a later web
 // recolour pass / native `current-color` (8.5). This does not affect 3.3's gate (the test user
 // has no avatar_doodle; the dock/avatar fall back to the glyph).
-const DOODLE_HSL: Record<string, string> = {
+// Exported for the editor half (doodle-editor.tsx): the live in-progress stroke renders through
+// the same blob-URL <img> sandbox, so it needs the same resolved colours.
+export const DOODLE_HSL: Record<string, string> = {
   ink: "hsl(28 12% 14%)",
   zest: "hsl(20 82% 54%)",
   sky: "hsl(208 66% 52%)",

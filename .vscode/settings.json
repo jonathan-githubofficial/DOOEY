@@ -1,0 +1,48 @@
+{
+  // ── TypeScript ─────────────────────────────────────────────────────────────
+  // Use the workspace compiler so the editor agrees with `npm run typecheck`.
+  "typescript.tsdk": "node_modules/typescript/lib",
+  "typescript.enablePromptUseWorkspaceTsdk": true,
+
+  // ReactLynx rule: hooks/types import from @lynx-js/react, never react/react-dom
+  // (those resolve to a build-time compat shim — see lynx.config.ts `react$` alias —
+  // and carry the wrong types in the editor). Keeps auto-import honest.
+  "typescript.preferences.autoImportSpecifierExcludeRegexes": [
+    "^react$",
+    "^react-dom(/.*)?$"
+  ],
+  // verbatimModuleSyntax is on — auto-imports of types must be `import type`.
+  "typescript.preferences.preferTypeOnlyAutoImports": true,
+
+  // ── ESLint (flat config, eslint.config.js) ─────────────────────────────────
+  "eslint.useFlatConfig": true,
+  "eslint.validate": ["typescript", "typescriptreact"],
+
+  // ── Tailwind IntelliSense inside cn() / cva() / clsx() ─────────────────────
+  "tailwindCSS.experimental.classRegex": [
+    ["cva\\(((?:[^()]|\\([^()]*\\))*)\\)", "[\"'`]([^\"'`]*).*?[\"'`]"],
+    ["cn\\(((?:[^()]|\\([^()]*\\))*)\\)", "[\"'`]([^\"'`]*).*?[\"'`]"],
+    ["clsx\\(((?:[^()]|\\([^()]*\\))*)\\)", "[\"'`]([^\"'`]*).*?[\"'`]"]
+  ],
+
+  // ── src-legacy is READ-ONLY reference (Vite/React-DOM, not Lynx) ──────────
+  // Still searchable for porting work, but not editable by accident.
+  "files.readonlyInclude": {
+    "src-legacy/**": true
+  },
+
+  // Keep search and file watching out of build output, PB's SQLite churn, and scratch.
+  "search.exclude": {
+    "**/node_modules": true,
+    "dist": true,
+    "pb/pb_data": true,
+    ".scratch": true,
+    "package-lock.json": true
+  },
+  "files.watcherExclude": {
+    "**/node_modules/**": true,
+    "dist/**": true,
+    "pb/pb_data/**": true,
+    ".scratch/**": true
+  }
+}

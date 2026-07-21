@@ -21,10 +21,9 @@ export function AccountPanel() {
           <text className="truncate font-display text-2xl font-bold tracking-tight text-ink">
             {user?.email ?? ""}
           </text>
-          {/* Neutral copy: the old "Tap the doodle to redraw yourself." promised an action that is
-              disabled here (avatar editing defers to 7.3), so it is replaced per the story +
-              CLAUDE.md ("no placeholder / coming-soon"). 7.3 restores the tap-to-edit + old copy. */}
-          <text className="mt-0.5 text-sm text-ink-muted font-sans">Your doodled self.</text>
+          <text className="mt-0.5 text-sm text-ink-muted font-sans">
+            Tap the doodle to redraw yourself.
+          </text>
         </view>
       </view>
       <view className="mt-8 flex items-center justify-between border-t border-rule/50 pt-5">

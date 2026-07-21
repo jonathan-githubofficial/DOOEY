@@ -1,7 +1,7 @@
 {
-  // One task runs the whole stack: Ctrl+Shift+B (or Terminal → Run Build Task).
-  // scripts/dev.mjs frees ports 3000 / 8090 if a stale process is holding them,
-  // then starts rspeedy (Lynx) + PocketBase together. Ctrl+C in the terminal stops both.
+  // Ctrl+Shift+B runs "dev" — the whole stack. scripts/dev.mjs frees ports
+  // 3000 / 8090 if a stale process holds them, then starts rspeedy (Lynx) +
+  // PocketBase together. Ctrl+C in the terminal stops both.
   "version": "2.0.0",
   "tasks": [
     {
@@ -17,6 +17,60 @@
         "reveal": "always",
         "clear": true
       }
+    },
+    {
+      "label": "dev (LAN — LynxExplorer QR)",
+      "detail": "Same stack, bound to the LAN IP: scan the terminal QR with LynxExplorer on a phone",
+      "type": "shell",
+      "command": "npm run dev:all -- --lan",
+      "isBackground": true,
+      "problemMatcher": [],
+      "presentation": {
+        "panel": "dedicated",
+        "reveal": "always",
+        "clear": true
+      }
+    },
+    {
+      "label": "typecheck",
+      "type": "npm",
+      "script": "typecheck",
+      "problemMatcher": "$tsc",
+      "presentation": { "panel": "shared", "clear": true }
+    },
+    {
+      "label": "typecheck (watch)",
+      "detail": "Live tsc --noEmit — feeds the Problems panel as you type",
+      "type": "shell",
+      "command": "npx tsc --noEmit --watch --preserveWatchOutput",
+      "isBackground": true,
+      "problemMatcher": "$tsc-watch",
+      "presentation": { "panel": "dedicated", "reveal": "silent" }
+    },
+    {
+      "label": "lint",
+      "type": "npm",
+      "script": "lint",
+      "problemMatcher": "$eslint-stylish",
+      "presentation": { "panel": "shared", "clear": true }
+    },
+    {
+      "label": "build",
+      "detail": "rspeedy build (web + lynx bundles into dist/)",
+      "type": "npm",
+      "script": "build",
+      "group": "build",
+      "problemMatcher": [],
+      "presentation": { "panel": "shared", "clear": true }
+    },
+    {
+      "label": "e2e",
+      "detail": "Playwright suite — builds the bundle, spins up disposable PB (8091) + web host (4173)",
+      "type": "npm",
+      "script": "test:e2e",
+      "group": { "kind": "test", "isDefault": true },
+      "problemMatcher": [],
+      "presentation": { "panel": "dedicated", "reveal": "always", "clear": true }
     }
   ]
 }
