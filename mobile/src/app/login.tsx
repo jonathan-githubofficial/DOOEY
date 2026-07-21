@@ -1,5 +1,6 @@
 import { Redirect, useRouter } from "expo-router";
-import { Eye, EyeOff } from "lucide-react-native";
+import { LinearGradient } from "expo-linear-gradient";
+import { Eye, EyeOff, PenLine } from "lucide-react-native";
 import { useMemo, useState } from "react";
 import {
   KeyboardAvoidingView,
@@ -10,22 +11,27 @@ import {
   TextInput,
   View,
 } from "react-native";
-import Animated, { FadeIn, FadeOut, LinearTransition } from "react-native-reanimated";
+import Animated, {
+  FadeIn,
+  FadeInDown,
+  FadeOut,
+  LinearTransition,
+} from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Grain } from "@/components/grain";
 import { PressableScale } from "@/components/pressable-scale";
-import { Panel } from "@/components/surface";
+import { StampEdge } from "@/components/stamp-edge";
 import { signIn, signUp } from "@/features/auth/api";
 import { fontStyle } from "@/features/style/tokens";
 import { hapticSuccess, hapticTap, hapticWarn } from "@/lib/haptics";
 import { alpha, type Palette } from "@/lib/theme";
 import { useAuthStore } from "@/stores/auth";
-import { usePalette, useType } from "@/stores/theme";
+import { usePalette, useThemeStore, useType } from "@/stores/theme";
 
 const settle = LinearTransition.springify().stiffness(400).damping(32);
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+const LINE = 48; // ruled-line spacing; inputs sit one line tall
 
-/** Password strength, 0–3: length carries it, variety nudges it. */
 function strengthOf(pw: string): { score: number; label: string } {
   if (!pw) return { score: 0, label: "" };
   let s = 0;
@@ -35,13 +41,15 @@ function strengthOf(pw: string): { score: number; label: string } {
   return { score: Math.min(3, s), label: ["too short", "okay", "good", "strong"][Math.min(3, s)] };
 }
 
-/** The front door: the wordmark, a segmented sign-in / create-account card
- * with live validation, a password reveal, and a strength read on sign-up. */
+/** The front door as a tactile object: a manila file folder (its tabs switch
+ * sign-in / sign-up) holding a ruled index card. You write your details on
+ * the lines and press a wax seal to enter. */
 export default function Login() {
   const colors = usePalette();
   const type = useType();
   const insets = useSafeAreaInsets();
   const router = useRouter();
+  const dark = useThemeStore((s) => s.theme) === "dark";
   const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
 
   const [mode, setMode] = useState<"in" | "up">("in");
@@ -61,9 +69,10 @@ export default function Login() {
   const confirmOk = mode === "in" || confirm === password;
   const canSubmit = !busy && emailOk && pwOk && confirmOk;
 
-  const swap = () => {
+  const switchTo = (m: "in" | "up") => {
+    if (m === mode) return;
     hapticTap();
-    setMode((m) => (m === "in" ? "up" : "in"));
+    setMode(m);
     setError(null);
     setConfirm("");
   };
@@ -84,6 +93,10 @@ export default function Login() {
     }
   };
 
+  // Manila warms the paper a touch; the folder reads as card stock, not page.
+  const manila = dark ? alpha(colors.honey, 0.16) : alpha(colors.honey, 0.28);
+  const rule = alpha(colors.sky, dark ? 0.35 : 0.28); // ruled lines, faint blue
+
   return (
     <KeyboardAvoidingView
       behavior={Platform.OS === "ios" ? "padding" : undefined}
@@ -97,13 +110,10 @@ export default function Login() {
         DOOEY
         <Text style={{ color: colors.zest }}>.</Text>
       </Text>
-      <Text style={[styles.tagline, type.sans, { color: colors.inkMuted }]}>
-        your day, kept — tasks, habits, and a life you can doodle on.
-      </Text>
 
-      <Panel style={styles.card}>
-        {/* Segmented mode switch — a raised paper key glides between sides. */}
-        <View style={[styles.segment, { backgroundColor: alpha(colors.ink, 0.05) }]}>
+      <Animated.View entering={FadeInDown.springify().stiffness(220).damping(24)} style={styles.deskArea}>
+        {/* The folder tabs — the active one merges into the folder below it. */}
+        <View style={styles.tabs}>
           {(["in", "up"] as const).map((m) => {
             const active = mode === m;
             return (
@@ -111,153 +121,244 @@ export default function Login() {
                 key={m}
                 accessibilityRole="tab"
                 accessibilityState={{ selected: active }}
-                onPress={() => mode !== m && swap()}
-                style={styles.segmentKey}
+                onPress={() => switchTo(m)}
+                style={[
+                  styles.tab,
+                  {
+                    backgroundColor: active ? manila : alpha(manila, 0.5),
+                    borderColor: alpha(colors.honey, 0.4),
+                    zIndex: active ? 2 : 1,
+                    marginBottom: active ? -1 : 2,
+                  },
+                ]}
               >
-                {active && (
-                  <Animated.View
-                    layout={settle}
-                    style={[
-                      StyleSheet.absoluteFill,
-                      styles.segmentActive,
-                      { backgroundColor: colors.surface, borderColor: alpha(colors.rule, 0.7) },
-                    ]}
-                  />
-                )}
                 <Text
                   style={[
-                    styles.segmentText,
-                    type.sansMedium,
+                    styles.tabText,
+                    type.sansSemiBold,
                     { color: active ? colors.ink : colors.inkMuted },
                   ]}
                 >
-                  {m === "in" ? "Sign in" : "Create account"}
+                  {m === "in" ? "Sign in" : "Sign up"}
                 </Text>
               </Pressable>
             );
           })}
         </View>
 
-        <Text style={[styles.heading, type.display, { color: colors.ink }]}>
-          {mode === "in" ? "Welcome back." : "Make it yours."}
-        </Text>
-
-        <View style={styles.fields}>
-          <TextInput
-            value={email}
-            onChangeText={setEmail}
-            placeholder="email"
-            placeholderTextColor={alpha(colors.inkMuted, 0.7)}
-            autoCapitalize="none"
-            autoCorrect={false}
-            autoComplete="email"
-            keyboardType="email-address"
-            textContentType="emailAddress"
-            style={[styles.input, type.sans, inputColors(colors)]}
-          />
-
-          <View style={styles.pwWrap}>
-            <TextInput
-              value={password}
-              onChangeText={setPassword}
-              onSubmitEditing={submit}
-              placeholder="password"
-              placeholderTextColor={alpha(colors.inkMuted, 0.7)}
-              secureTextEntry={!reveal}
-              autoCapitalize="none"
-              autoComplete={mode === "in" ? "current-password" : "new-password"}
-              textContentType={mode === "in" ? "password" : "newPassword"}
-              style={[styles.input, styles.pwInput, type.sans, inputColors(colors)]}
-            />
-            <Pressable
-              accessibilityLabel={reveal ? "Hide password" : "Show password"}
-              hitSlop={8}
-              onPress={() => setReveal((r) => !r)}
-              style={styles.eye}
-            >
-              {reveal ? (
-                <EyeOff size={18} color={colors.inkMuted} />
-              ) : (
-                <Eye size={18} color={colors.inkMuted} />
-              )}
-            </Pressable>
-          </View>
-
-          {mode === "up" && (
-            <Animated.View entering={FadeIn.duration(160)} exiting={FadeOut.duration(120)} layout={settle}>
-              <TextInput
-                value={confirm}
-                onChangeText={setConfirm}
-                onSubmitEditing={submit}
-                placeholder="confirm password"
-                placeholderTextColor={alpha(colors.inkMuted, 0.7)}
-                secureTextEntry={!reveal}
-                autoCapitalize="none"
-                autoComplete="new-password"
-                style={[styles.input, type.sans, inputColors(colors)]}
-              />
-            </Animated.View>
-          )}
-
-          {/* Sign-up: a quiet strength read. Three pips fill as it hardens. */}
-          {mode === "up" && password.length > 0 && (
-            <Animated.View entering={FadeIn.duration(160)} style={styles.strengthRow}>
-              <View style={styles.pips}>
-                {[0, 1, 2].map((i) => (
-                  <View
-                    key={i}
-                    style={[
-                      styles.pip,
-                      {
-                        backgroundColor:
-                          i < strength.score
-                            ? strength.score >= 3
-                              ? colors.leaf
-                              : colors.honey
-                            : alpha(colors.ink, 0.12),
-                      },
-                    ]}
-                  />
-                ))}
-              </View>
-              <Text style={[styles.strengthLabel, type.sans, { color: colors.inkMuted }]}>
-                {strength.label}
-              </Text>
-            </Animated.View>
-          )}
-        </View>
-
-        {error && (
-          <Animated.Text
-            entering={FadeIn.duration(160)}
-            style={[styles.error, type.sans, { color: colors.clay }]}
-          >
-            {error}
-          </Animated.Text>
-        )}
-
-        <PressableScale
-          scaleTo={0.96}
-          onPress={submit}
-          disabled={!canSubmit}
-          style={[styles.submit, { backgroundColor: colors.ink }, !canSubmit && { opacity: 0.35 }]}
+        {/* The folder itself, holding the index card. */}
+        <View
+          style={[
+            styles.folder,
+            {
+              backgroundColor: manila,
+              borderColor: alpha(colors.honey, 0.4),
+              shadowColor: "#282018",
+            },
+          ]}
         >
-          <Text style={[styles.submitLabel, type.sansSemiBold, { color: colors.paper }]}>
-            {busy ? "one sec…" : mode === "in" ? "Sign in" : "Create account"}
-          </Text>
-        </PressableScale>
+          <View
+            style={[
+              styles.cardStock,
+              { backgroundColor: colors.surface, borderColor: alpha(colors.rule, 0.6) },
+            ]}
+          >
+            <Grain radius={13} />
 
-        {mode === "up" && (
-          <Text style={[styles.fine, type.sans, { color: alpha(colors.inkMuted, 0.8) }]}>
-            8 characters or more. Longer is stronger.
-          </Text>
-        )}
-      </Panel>
+            {/* A postage stamp, franked into the corner. */}
+            <View style={styles.postage}>
+              <StampEdge color={alpha(colors.zest, 0.9)} />
+              <PenLine size={20} color={colors.paper} />
+            </View>
+
+            <Text style={[styles.eyebrow, type.sansMedium, { color: colors.inkMuted }]}>
+              {mode === "in" ? "member card" : "new member"}
+            </Text>
+            <Text style={[styles.heading, type.display, { color: colors.ink }]}>
+              {mode === "in" ? "Welcome back." : "Make it yours."}
+            </Text>
+
+            {/* The writing area: red margin down the left, faint ruled lines,
+                and the fields written straight onto them. */}
+            <View style={styles.ruled}>
+              <View style={[styles.margin, { backgroundColor: alpha(colors.clay, 0.4) }]} />
+              {[0, 1, 2, 3].map((i) => (
+                <View
+                  key={i}
+                  pointerEvents="none"
+                  style={[styles.ruleLine, { top: (i + 1) * LINE - 1, backgroundColor: rule }]}
+                />
+              ))}
+
+              <LineInput
+                value={email}
+                onChangeText={setEmail}
+                placeholder="email"
+                autoCapitalize="none"
+                autoCorrect={false}
+                autoComplete="email"
+                keyboardType="email-address"
+                textContentType="emailAddress"
+                colors={colors}
+                type={type}
+              />
+              <View style={styles.pwRow}>
+                <LineInput
+                  value={password}
+                  onChangeText={setPassword}
+                  onSubmitEditing={submit}
+                  placeholder="password"
+                  secureTextEntry={!reveal}
+                  autoCapitalize="none"
+                  autoComplete={mode === "in" ? "current-password" : "new-password"}
+                  textContentType={mode === "in" ? "password" : "newPassword"}
+                  colors={colors}
+                  type={type}
+                  style={styles.flex}
+                />
+                <Pressable
+                  accessibilityLabel={reveal ? "Hide password" : "Show password"}
+                  hitSlop={8}
+                  onPress={() => setReveal((r) => !r)}
+                  style={styles.eye}
+                >
+                  {reveal ? (
+                    <EyeOff size={18} color={colors.inkMuted} />
+                  ) : (
+                    <Eye size={18} color={colors.inkMuted} />
+                  )}
+                </Pressable>
+              </View>
+              {mode === "up" && (
+                <Animated.View entering={FadeIn.duration(160)} exiting={FadeOut.duration(120)} layout={settle}>
+                  <LineInput
+                    value={confirm}
+                    onChangeText={setConfirm}
+                    onSubmitEditing={submit}
+                    placeholder="confirm password"
+                    secureTextEntry={!reveal}
+                    autoCapitalize="none"
+                    autoComplete="new-password"
+                    colors={colors}
+                    type={type}
+                  />
+                </Animated.View>
+              )}
+            </View>
+
+            {mode === "up" && password.length > 0 && (
+              <Animated.View entering={FadeIn.duration(160)} style={styles.strengthRow}>
+                <View style={styles.pips}>
+                  {[0, 1, 2].map((i) => (
+                    <View
+                      key={i}
+                      style={[
+                        styles.pip,
+                        {
+                          backgroundColor:
+                            i < strength.score
+                              ? strength.score >= 3
+                                ? colors.leaf
+                                : colors.honey
+                              : alpha(colors.ink, 0.12),
+                        },
+                      ]}
+                    />
+                  ))}
+                </View>
+                <Text style={[styles.strengthLabel, type.sans, { color: colors.inkMuted }]}>
+                  {strength.label}
+                </Text>
+              </Animated.View>
+            )}
+
+            {error && (
+              <Animated.Text
+                entering={FadeIn.duration(160)}
+                style={[styles.error, type.sans, { color: colors.clay }]}
+              >
+                {error}
+              </Animated.Text>
+            )}
+
+            {/* The submit: a wax seal you press to enter. */}
+            <View style={styles.sealRow}>
+              <WaxSeal
+                label={mode === "in" ? "press to sign in" : "press to seal it"}
+                disabled={!canSubmit}
+                busy={busy}
+                onPress={submit}
+              />
+            </View>
+          </View>
+        </View>
+      </Animated.View>
     </KeyboardAvoidingView>
   );
 }
 
-/** Turn PocketBase's terse auth errors into something human. */
+/** An input written on a ruled line: no box, just ink on the line. */
+function LineInput({
+  colors,
+  type,
+  style,
+  ...props
+}: React.ComponentProps<typeof TextInput> & {
+  colors: Palette;
+  type: ReturnType<typeof useType>;
+}) {
+  return (
+    <TextInput
+      placeholderTextColor={alpha(colors.inkMuted, 0.55)}
+      style={[styles.lineInput, type.sans, { color: colors.ink }, style]}
+      {...props}
+    />
+  );
+}
+
+/** A blob of sealing wax with the DOOEY monogram embossed — presses in on
+ * tap. The gloss is a diagonal sheen; the emboss is a light top edge over a
+ * darker face. */
+function WaxSeal({
+  label,
+  disabled,
+  busy,
+  onPress,
+}: {
+  label: string;
+  disabled: boolean;
+  busy: boolean;
+  onPress: () => void;
+}) {
+  const colors = usePalette();
+  const type = useType();
+  return (
+    <PressableScale
+      scaleTo={0.9}
+      rotate={-6}
+      accessibilityRole="button"
+      accessibilityLabel={label}
+      disabled={disabled}
+      onPress={onPress}
+      style={styles.sealPress}
+    >
+      <View style={[styles.seal, disabled && { opacity: 0.4 }]}>
+        <LinearGradient
+          colors={[alpha("#ffffff", 0.5), alpha(colors.clay, 0), alpha("#000000", 0.28)]}
+          start={{ x: 0.15, y: 0.1 }}
+          end={{ x: 0.9, y: 0.95 }}
+          style={StyleSheet.absoluteFill}
+        />
+        <View style={[styles.sealRim, { borderColor: alpha("#000000", 0.18) }]} />
+        <Text style={[styles.sealMark, fontStyle("fraunces", "900"), { color: alpha("#000000", 0.28) }]}>
+          {busy ? "…" : "D"}
+        </Text>
+      </View>
+      <Text style={[styles.sealLabel, type.sansMedium, { color: colors.inkMuted }]}>{label}</Text>
+    </PressableScale>
+  );
+}
+
 function friendlyError(e: unknown, mode: "in" | "up"): string {
   const msg = e instanceof Error ? e.message : "";
   if (/failed to authenticate|invalid/i.test(msg) && mode === "in")
@@ -266,14 +367,6 @@ function friendlyError(e: unknown, mode: "in" | "up"): string {
     return "There's already an account with that email.";
   if (/network|fetch/i.test(msg)) return "Can't reach the server — check your connection.";
   return msg || "Something went wrong. Try again.";
-}
-
-function inputColors(colors: Palette) {
-  return {
-    color: colors.ink,
-    backgroundColor: colors.paper,
-    borderColor: alpha(colors.rule, 0.7),
-  };
 }
 
 const styles = StyleSheet.create({
@@ -286,71 +379,106 @@ const styles = StyleSheet.create({
     fontSize: 40,
     letterSpacing: -0.8,
     textAlign: "center",
+    marginBottom: 22,
   },
-  tagline: {
-    marginTop: 8,
-    marginBottom: 24,
-    textAlign: "center",
-    fontSize: 13,
-    lineHeight: 18,
-    paddingHorizontal: 24,
+  deskArea: {
+    alignSelf: "stretch",
   },
-  card: {
-    padding: 28,
-  },
-  segment: {
+  tabs: {
     flexDirection: "row",
-    borderRadius: 999,
-    padding: 4,
+    gap: 6,
+    paddingLeft: 18,
   },
-  segmentKey: {
-    flex: 1,
-    height: 34,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  segmentActive: {
-    borderRadius: 999,
+  tab: {
     borderWidth: 1,
+    borderBottomWidth: 0,
+    borderTopLeftRadius: 12,
+    borderTopRightRadius: 12,
+    paddingHorizontal: 18,
+    paddingTop: 8,
+    paddingBottom: 9,
   },
-  segmentText: {
+  tabText: {
     fontSize: 12.5,
   },
+  folder: {
+    borderWidth: 1,
+    borderRadius: 18,
+    borderTopLeftRadius: 4,
+    padding: 10,
+    shadowOpacity: 0.16,
+    shadowRadius: 16,
+    shadowOffset: { width: 0, height: 8 },
+    elevation: 6,
+  },
+  cardStock: {
+    borderWidth: 1,
+    borderRadius: 13,
+    padding: 22,
+    overflow: "hidden",
+  },
+  postage: {
+    position: "absolute",
+    top: 16,
+    right: 16,
+    height: 40,
+    width: 34,
+    alignItems: "center",
+    justifyContent: "center",
+    transform: [{ rotate: "6deg" }],
+  },
+  eyebrow: {
+    fontSize: 10,
+    letterSpacing: 1.8,
+    textTransform: "uppercase",
+  },
   heading: {
-    marginTop: 20,
-    fontSize: 28,
+    marginTop: 6,
+    fontSize: 27,
     letterSpacing: -0.6,
   },
-  fields: {
-    marginTop: 18,
-    gap: 10,
+  ruled: {
+    marginTop: 16,
+    position: "relative",
   },
-  input: {
-    height: 46,
-    borderRadius: 12,
-    borderWidth: 1,
-    paddingHorizontal: 14,
-    fontSize: 15,
+  margin: {
+    position: "absolute",
+    left: 22,
+    top: 0,
+    bottom: 0,
+    width: 1.5,
   },
-  pwWrap: {
-    justifyContent: "center",
+  ruleLine: {
+    position: "absolute",
+    left: 0,
+    right: 0,
+    height: StyleSheet.hairlineWidth,
   },
-  pwInput: {
-    paddingRight: 44,
+  lineInput: {
+    height: LINE,
+    paddingLeft: 34,
+    paddingRight: 4,
+    fontSize: 16,
+  },
+  pwRow: {
+    flexDirection: "row",
+    alignItems: "center",
+  },
+  flex: {
+    flex: 1,
   },
   eye: {
-    position: "absolute",
-    right: 12,
     height: 32,
     width: 32,
     alignItems: "center",
     justifyContent: "center",
   },
   strengthRow: {
+    marginTop: 14,
     flexDirection: "row",
     alignItems: "center",
     gap: 10,
-    paddingHorizontal: 2,
+    paddingLeft: 34,
   },
   pips: {
     flexDirection: "row",
@@ -368,21 +496,43 @@ const styles = StyleSheet.create({
     marginTop: 14,
     fontSize: 12.5,
     lineHeight: 17,
+    paddingLeft: 34,
   },
-  submit: {
-    marginTop: 20,
-    alignSelf: "stretch",
+  sealRow: {
+    marginTop: 22,
     alignItems: "center",
+  },
+  sealPress: {
+    alignItems: "center",
+    gap: 10,
+  },
+  seal: {
+    height: 68,
+    width: 68,
     borderRadius: 999,
-    paddingVertical: 13,
+    backgroundColor: "#a8412c",
+    alignItems: "center",
+    justifyContent: "center",
+    overflow: "hidden",
+    shadowColor: "#282018",
+    shadowOpacity: 0.3,
+    shadowRadius: 5,
+    shadowOffset: { width: 0, height: 3 },
+    elevation: 4,
   },
-  submitLabel: {
-    fontSize: 14,
-    letterSpacing: 0.3,
+  sealRim: {
+    ...StyleSheet.absoluteFillObject,
+    margin: 5,
+    borderRadius: 999,
+    borderWidth: 1.5,
   },
-  fine: {
-    marginTop: 12,
-    textAlign: "center",
+  sealMark: {
+    fontSize: 30,
+    lineHeight: 34,
+  },
+  sealLabel: {
     fontSize: 11,
+    letterSpacing: 1.4,
+    textTransform: "uppercase",
   },
 });
