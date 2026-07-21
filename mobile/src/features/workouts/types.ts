@@ -17,12 +17,14 @@ export interface Routine {
   id: string;
   name: string;
   position: number;
-  /** The plan this routine belongs to — "Push", "Legs"… — or "" for loose. */
-  group: string;
   /** A line about what the routine is for — shown on its card. */
   description: string;
   items: RoutineItem[];
 }
+
+/** A routine you can start a workout from — a saved Routine, or a template
+ * straight out of a program in the catalog. */
+export type RoutineTemplate = { id?: string; name: string; items: RoutineItem[] };
 
 /** One logged set. `weight` is reps-seconds for duration exercises; values
  * are what the user typed, in their display unit. */

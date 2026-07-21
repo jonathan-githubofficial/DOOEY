@@ -2,7 +2,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import type { RecordModel } from "pocketbase";
 import { pb } from "@/lib/pb";
 import { useAuthStore } from "@/stores/auth";
-import type { Routine, RoutineItem, Workout, WorkoutEntry, WorkoutSet } from "./types";
+import type { Routine, RoutineItem, RoutineTemplate, Workout, WorkoutEntry, WorkoutSet } from "./types";
 
 export const gymKeys = {
   routines: ["routines"] as const,
@@ -15,7 +15,6 @@ function toRoutine(r: RecordModel): Routine {
     id: r.id,
     name: r.name,
     position: r.position ?? 0,
-    group: r.group ?? "",
     description: r.description ?? "",
     items: (r.items as RoutineItem[] | null) ?? [],
   };
@@ -73,7 +72,6 @@ export function useSaveRoutine() {
       id?: string;
       name: string;
       items: RoutineItem[];
-      group?: string;
       description?: string;
       position?: number;
     }) => {
@@ -82,7 +80,6 @@ export function useSaveRoutine() {
         return pb.collection("routines").update(routine.id, {
           name: routine.name,
           items: routine.items,
-          group: routine.group ?? "",
           description: routine.description ?? "",
         });
       }
@@ -90,7 +87,6 @@ export function useSaveRoutine() {
         owner,
         name: routine.name,
         items: routine.items,
-        group: routine.group ?? "",
         description: routine.description ?? "",
         position: routine.position ?? 0,
       });
@@ -112,7 +108,7 @@ export function useDeleteRoutine() {
 export function useStartWorkout() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: async (routine: Routine | null) => {
+    mutationFn: async (routine: RoutineTemplate | null) => {
       const owner = useAuthStore.getState().user!.id;
       const entries: WorkoutEntry[] = (routine?.items ?? []).map((item) => ({
         name: item.name,
@@ -149,25 +145,22 @@ export function useUpdateWorkout(id: string) {
 /** Seed a few starter routines the first time the gym is opened empty — so the
  * space is alive on arrival instead of a blank wall. Guarded by a persisted
  * flag so a deliberately-cleared gym never regrows. */
-export function useSeedStarterRoutines() {
+/** Create a batch of routines at once — used to seed starters and to add a
+ * whole program's routines to your gym. */
+export function useAddRoutines() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: async (routines: {
-      name: string;
-      group: string;
-      description: string;
-      items: RoutineItem[];
-    }[]) => {
+    mutationFn: async (routines: { name: string; description: string; items: RoutineItem[] }[]) => {
       const owner = useAuthStore.getState().user!.id;
+      const base = Date.now();
       await Promise.all(
         routines.map((r, i) =>
           pb.collection("routines").create({
             owner,
             name: r.name,
-            group: r.group,
             description: r.description,
             items: r.items,
-            position: i,
+            position: base + i,
           }),
         ),
       );

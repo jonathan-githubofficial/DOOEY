@@ -27,9 +27,6 @@ import { usePalette, useType } from "@/stores/theme";
 
 const settle = LinearTransition.springify().stiffness(400).damping(32);
 
-// The classic splits — a routine wears one as its plan, or none.
-const PLANS = ["Push", "Pull", "Legs", "Upper", "Lower", "Full body"] as const;
-
 /** The routine editor: name the plan, stack exercises with their set/rep/
  * weight targets, reorder, done — every change saves itself. */
 export default function RoutineEditor() {
@@ -46,21 +43,19 @@ export default function RoutineEditor() {
 
   const routine = routines?.find((r) => r.id === id);
   const [name, setName] = useState<string | null>(null);
-  const [group, setGroup] = useState<string | null>(null);
   const [description, setDescription] = useState<string | null>(null);
   const [items, setItems] = useState<RoutineItem[] | null>(null);
   const [picking, setPicking] = useState(false);
 
   // Hydrate local state once the routine arrives; nulls mean "not yet".
   const effName = name ?? routine?.name ?? "";
-  const effGroup = group ?? routine?.group ?? "";
   const effDescription = description ?? routine?.description ?? "";
   const effItems = items ?? routine?.items ?? [];
 
   // Debounced autosave — the editor never has a save button.
   const dirty = useRef(false);
   useEffect(() => {
-    if (name === null && items === null && group === null && description === null) return;
+    if (name === null && items === null && description === null) return;
     dirty.current = true;
     const t = setTimeout(() => {
       dirty.current = false;
@@ -68,13 +63,12 @@ export default function RoutineEditor() {
         id,
         name: effName.trim() || "Routine",
         items: effItems,
-        group: effGroup,
         description: effDescription.trim(),
       });
     }, 600);
     return () => clearTimeout(t);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [name, items, group, description]);
+  }, [name, items, description]);
 
   const patchItem = (index: number, patch: Partial<RoutineItem>) => {
     setItems(effItems.map((it, i) => (i === index ? { ...it, ...patch } : it)));
@@ -147,42 +141,6 @@ export default function RoutineEditor() {
           placeholderTextColor={alpha(colors.inkMuted, 0.5)}
           style={[styles.descInput, type.sans, { color: colors.inkMuted }]}
         />
-
-        <Eyebrow style={styles.section}>plan</Eyebrow>
-        <View style={styles.plans}>
-          {PLANS.map((p) => {
-            const active = effGroup === p;
-            return (
-              <PressableScale
-                key={p}
-                scaleTo={0.92}
-                accessibilityRole="button"
-                accessibilityLabel={`Plan ${p}`}
-                onPress={() => {
-                  hapticTap();
-                  setGroup(active ? "" : p);
-                }}
-                style={[
-                  styles.planChip,
-                  {
-                    backgroundColor: active ? alpha(colors.zest, 0.15) : colors.surface,
-                    borderColor: active ? colors.zest : alpha(colors.rule, 0.8),
-                  },
-                ]}
-              >
-                <Text
-                  style={[
-                    styles.planLabel,
-                    type.sansMedium,
-                    { color: active ? colors.ink : colors.inkMuted },
-                  ]}
-                >
-                  {p}
-                </Text>
-              </PressableScale>
-            );
-          })}
-        </View>
 
         <Eyebrow style={styles.section}>exercises</Eyebrow>
         <View style={styles.list}>
@@ -428,22 +386,6 @@ const styles = StyleSheet.create({
   },
   section: {
     marginTop: 20,
-  },
-  plans: {
-    marginTop: 10,
-    flexDirection: "row",
-    flexWrap: "wrap",
-    gap: 7,
-  },
-  planChip: {
-    borderWidth: 1,
-    borderRadius: 999,
-    paddingVertical: 6,
-    paddingHorizontal: 13,
-  },
-  planLabel: {
-    fontSize: 11.5,
-    letterSpacing: 0.4,
   },
   list: {
     marginTop: 10,

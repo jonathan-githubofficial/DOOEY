@@ -1,43 +1,44 @@
 import { useRouter } from "expo-router";
-import { BookOpen, ClipboardList, MoreHorizontal, Play, X } from "lucide-react-native";
+import { BookOpen, ClipboardList, MoreHorizontal, Play } from "lucide-react-native";
 import { useEffect, useState } from "react";
-import { Alert, Image, Modal, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
-import Animated, { FadeIn, FadeInDown } from "react-native-reanimated";
+import { Alert, Image, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+import Animated, { FadeInDown } from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Grain } from "@/components/grain";
 import { Masthead } from "@/components/Masthead";
-import { Plate } from "@/components/plate";
 import { PressableScale } from "@/components/pressable-scale";
 import { Eyebrow, Panel } from "@/components/surface";
 import { useCardRadius } from "@/features/style/store";
 import { PageDoodle } from "@/features/style/components/PageDoodle";
 import { fontStyle } from "@/features/style/tokens";
 import {
+  useAddRoutines,
   useDeleteRoutine,
   useDeleteWorkout,
   useRoutines,
   useSaveRoutine,
-  useSeedStarterRoutines,
   useStartWorkout,
   useWorkouts,
 } from "@/features/workouts/api";
 import { useNow } from "@/features/workouts/clock";
-import { ExercisePicker } from "@/features/workouts/components/ExercisePicker";
+import { ProgramsExplorer } from "@/features/workouts/components/ProgramsExplorer";
 import { exerciseGif, libraryExercise } from "@/features/workouts/library";
+import type { Program, ProgramRoutine } from "@/features/workouts/programs";
 import { STARTER_ROUTINES } from "@/features/workouts/starters";
-import { formatRest, useWorkoutPrefs } from "@/features/workouts/store";
+import { useWorkoutPrefs } from "@/features/workouts/store";
 import {
   formatElapsed,
   workoutSetsDone,
   workoutVolume,
   type Routine,
+  type RoutineTemplate,
   type Workout,
 } from "@/features/workouts/types";
 import { alpha } from "@/lib/theme";
 import { usePalette, useType } from "@/stores/theme";
 
-/** The gym space, Hevy-shaped: quick start on top, routines as board-style
- * cards grouped by plan (tap → preview, ▶ → train), and the log. */
+/** The gym: quick start on top, your routines as board-style cards (tap to
+ * train, ⋯ to edit), and the log. Explore opens the program catalog. */
 export default function Gym() {
   const colors = usePalette();
   const type = useType();
@@ -46,43 +47,45 @@ export default function Gym() {
   const { data: routines } = useRoutines();
   const { data: workouts, isPending } = useWorkouts();
   const saveRoutine = useSaveRoutine();
+  const addRoutines = useAddRoutines();
   const start = useStartWorkout();
-  const seed = useSeedStarterRoutines();
   const seededFlag = useWorkoutPrefs((s) => s.seededRoutines);
   const markSeeded = useWorkoutPrefs((s) => s.markSeeded);
-  const [preview, setPreview] = useState<Routine | null>(null);
   const [exploring, setExploring] = useState(false);
 
   const live = workouts?.find((w) => !w.ended_at) ?? null;
   const history = (workouts ?? []).filter((w) => w.ended_at);
   const routinesReady = !!routines;
 
-  // First open with an empty, never-seeded gym → plant the starter split once.
+  // First open with an empty, never-seeded gym → plant the PPL starter split.
   useEffect(() => {
-    if (routinesReady && routines.length === 0 && !seededFlag && !seed.isPending) {
+    if (routinesReady && routines.length === 0 && !seededFlag && !addRoutines.isPending) {
       markSeeded();
-      seed.mutate(STARTER_ROUTINES);
+      addRoutines.mutate(STARTER_ROUTINES);
     }
-  }, [routinesReady, routines, seededFlag, seed, markSeeded]);
-
-  const plans = [...new Set((routines ?? []).map((r) => r.group).filter(Boolean))];
-  const loose = (routines ?? []).filter((r) => !r.group);
+  }, [routinesReady, routines, seededFlag, addRoutines, markSeeded]);
 
   const openWorkout = (wid: string) =>
     router.push({ pathname: "/workout/[id]", params: { id: wid } });
-  const openRoutine = (rid: string) =>
-    router.push({ pathname: "/routine/[id]", params: { id: rid } });
 
-  const startWorkout = (routine: Routine | null) => {
-    setPreview(null);
+  const startWorkout = (routine: RoutineTemplate | null) => {
     if (live) return openWorkout(live.id); // one session at a time
     start.mutate(routine, { onSuccess: (w) => openWorkout(w.id) });
   };
 
   const newRoutine = () =>
     saveRoutine.mutate(
-      { name: "New routine", items: [], position: routines?.length ?? 0 },
-      { onSuccess: (r) => openRoutine(r.id) },
+      { name: "New routine", items: [] },
+      { onSuccess: (r) => router.push({ pathname: "/routine/[id]", params: { id: r.id } }) },
+    );
+
+  const addProgram = (program: Program) =>
+    addRoutines.mutate(
+      program.routines.map((r) => ({
+        name: r.name,
+        description: `${program.name} · ${r.name}`,
+        items: r.items,
+      })),
     );
 
   return (
@@ -124,9 +127,13 @@ export default function Gym() {
         )}
 
         <View style={styles.routineHeadRow}>
-          <Eyebrow>routines</Eyebrow>
+          <Eyebrow>my routines</Eyebrow>
           <View style={styles.tools}>
-            <ToolButton label="Explore" icon={<BookOpen size={14} color={colors.inkMuted} />} onPress={() => setExploring(true)} />
+            <ToolButton
+              label="Explore"
+              icon={<BookOpen size={14} color={colors.inkMuted} />}
+              onPress={() => setExploring(true)}
+            />
             <ToolButton
               label="New"
               icon={<ClipboardList size={14} color={colors.inkMuted} />}
@@ -136,35 +143,18 @@ export default function Gym() {
           </View>
         </View>
 
-        {plans.map((plan) => (
-          <View key={plan}>
-            <Text style={[styles.planHead, type.sansSemiBold, { color: colors.ink }]}>{plan}</Text>
-            <View style={styles.cards}>
-              {(routines ?? [])
-                .filter((r) => r.group === plan)
-                .map((r, i) => (
-                  <Animated.View key={r.id} entering={FadeInDown.delay(i * 40).duration(220)}>
-                    <RoutineCard routine={r} onOpen={() => setPreview(r)} onStart={() => startWorkout(r)} />
-                  </Animated.View>
-                ))}
-            </View>
-          </View>
-        ))}
-
-        {loose.length > 0 && (
-          <>
-            {plans.length > 0 && (
-              <Text style={[styles.planHead, type.sansSemiBold, { color: colors.ink }]}>Other</Text>
-            )}
-            <View style={[styles.cards, plans.length === 0 && styles.cardsTop]}>
-              {loose.map((r, i) => (
-                <Animated.View key={r.id} entering={FadeInDown.delay(i * 40).duration(220)}>
-                  <RoutineCard routine={r} onOpen={() => setPreview(r)} onStart={() => startWorkout(r)} />
-                </Animated.View>
-              ))}
-            </View>
-          </>
-        )}
+        <View style={styles.cards}>
+          {(routines ?? []).map((r, i) => (
+            <Animated.View key={r.id} entering={FadeInDown.delay(i * 40).duration(220)}>
+              <RoutineCard routine={r} onStart={() => startWorkout(r)} onEdit={() => router.push({ pathname: "/routine/[id]", params: { id: r.id } })} />
+            </Animated.View>
+          ))}
+          {!isPending && (routines ?? []).length === 0 && (
+            <Text style={[styles.empty, type.sans, { color: colors.inkMuted }]}>
+              Setting up your starter routines…
+            </Text>
+          )}
+        </View>
 
         {history.length > 0 && (
           <>
@@ -176,27 +166,17 @@ export default function Gym() {
             </View>
           </>
         )}
-
-        {!isPending && (routines ?? []).length === 0 && (
-          <Text style={[styles.empty, type.sans, { color: colors.inkMuted }]}>
-            Setting up your starter routines…
-          </Text>
-        )}
       </ScrollView>
 
-      <RoutinePreview
-        routine={preview}
-        onStart={() => preview && startWorkout(preview)}
-        onEdit={() => {
-          const r = preview;
-          setPreview(null);
-          if (r) openRoutine(r.id);
+      <ProgramsExplorer
+        visible={exploring}
+        onStartRoutine={(r: ProgramRoutine) => {
+          setExploring(false);
+          startWorkout({ name: r.name, items: r.items });
         }}
-        onClose={() => setPreview(null)}
+        onAddProgram={addProgram}
+        onClose={() => setExploring(false)}
       />
-
-      {/* Explore: the library as pure reference — how-tos, nothing added. */}
-      <ExercisePicker visible={exploring} onClose={() => setExploring(false)} />
     </View>
   );
 }
@@ -254,17 +234,16 @@ function LiveBanner({ workout, onPress }: { workout: Workout; onPress: () => voi
   );
 }
 
-/** A routine as a board-style card: title + description up top, a fan of the
- * exercises' demo loops bleeding off the bottom, a ▶ to train and a ⋯ menu.
- * Tapping the body opens the preview. */
+/** A routine as a board-style card: title + description, a fan of demo loops
+ * off the bottom. Tapping the card starts the workout; ⋯ edits or deletes. */
 function RoutineCard({
   routine,
-  onOpen,
   onStart,
+  onEdit,
 }: {
   routine: Routine;
-  onOpen: () => void;
   onStart: () => void;
+  onEdit: () => void;
 }) {
   const colors = usePalette();
   const type = useType();
@@ -276,7 +255,7 @@ function RoutineCard({
     .slice(0, 3);
 
   return (
-    <PressableScale scaleTo={0.99} accessibilityLabel={`Routine ${routine.name}`} onPress={onOpen}>
+    <PressableScale scaleTo={0.99} accessibilityLabel={`Start ${routine.name}`} onPress={onStart}>
       <Panel style={styles.card}>
         <View style={[styles.cardClip, { borderRadius: radius - 1 }]}>
           <Text numberOfLines={1} style={[styles.cardTitle, type.display, { color: colors.ink }]}>
@@ -286,7 +265,7 @@ function RoutineCard({
             {routine.description ||
               (routine.items.length
                 ? routine.items.map((i) => i.name).join(", ")
-                : "No exercises yet — tap to build")}
+                : "No exercises yet — ⋯ to edit")}
           </Text>
 
           <View style={styles.fanArea} pointerEvents="none">
@@ -317,22 +296,17 @@ function RoutineCard({
           </View>
         </View>
 
-        {/* ▶ train — the one-tap job, floated bottom-right like a stamp. */}
-        <PressableScale
-          scaleTo={0.9}
-          accessibilityRole="button"
-          accessibilityLabel={`Start ${routine.name}`}
-          onPress={onStart}
-          style={[styles.cardStart, { backgroundColor: colors.ink }]}
-        >
+        {/* ▶ hint that the card trains — the tap target is the whole card. */}
+        <View style={[styles.cardStart, { backgroundColor: colors.ink }]} pointerEvents="none">
           <Play size={16} color={colors.paper} />
-        </PressableScale>
+        </View>
 
         <Pressable
-          accessibilityLabel="Routine options"
+          accessibilityLabel={`${routine.name} options`}
           hitSlop={6}
           onPress={() =>
             Alert.alert(routine.name, undefined, [
+              { text: "Edit routine", onPress: onEdit },
               { text: "Delete routine", style: "destructive", onPress: () => del.mutate(routine.id) },
               { text: "Cancel", style: "cancel" },
             ])
@@ -343,107 +317,6 @@ function RoutineCard({
         </Pressable>
       </Panel>
     </PressableScale>
-  );
-}
-
-/** The routine preview: what you're about to start — exercises with their
- * target sets × reps and demo loops — with Start and Edit. */
-function RoutinePreview({
-  routine,
-  onStart,
-  onEdit,
-  onClose,
-}: {
-  routine: Routine | null;
-  onStart: () => void;
-  onEdit: () => void;
-  onClose: () => void;
-}) {
-  const colors = usePalette();
-  const type = useType();
-  const insets = useSafeAreaInsets();
-  const defaultRest = useWorkoutPrefs((s) => s.restSeconds);
-
-  return (
-    <Modal visible={!!routine} transparent animationType="slide" onRequestClose={onClose}>
-      <Pressable style={styles.previewBackdrop} onPress={onClose}>
-        <Animated.View entering={FadeIn.duration(160)}>
-          <Pressable
-            onPress={() => {}}
-            style={[
-              styles.previewSheet,
-              { backgroundColor: colors.paper, paddingBottom: insets.bottom + 16 },
-            ]}
-          >
-            <Grain />
-            {routine && (
-              <>
-                <View style={styles.previewHead}>
-                  <View style={styles.previewTitleText}>
-                    <Text numberOfLines={1} style={[styles.previewTitle, fontStyle("fraunces", "900"), { color: colors.ink }]}>
-                      {routine.name}
-                    </Text>
-                    {!!routine.description && (
-                      <Text style={[styles.previewDesc, type.sans, { color: colors.inkMuted }]}>
-                        {routine.description}
-                      </Text>
-                    )}
-                  </View>
-                  <PressableScale scaleTo={0.85} accessibilityLabel="Close" onPress={onClose} style={styles.close}>
-                    <X size={18} color={colors.inkMuted} />
-                  </PressableScale>
-                </View>
-
-                <ScrollView style={styles.previewList} showsVerticalScrollIndicator={false}>
-                  {routine.items.map((item, i) => {
-                    const ex = libraryExercise(item.libId);
-                    return (
-                      <View key={i} style={[styles.previewRow, { borderBottomColor: alpha(colors.rule, 0.4) }]}>
-                        {ex ? (
-                          <Image source={{ uri: exerciseGif(ex) }} resizeMode="cover" style={[styles.previewThumb, { backgroundColor: "#fff" }]} />
-                        ) : (
-                          <View style={[styles.previewThumb, { backgroundColor: alpha(colors.ink, 0.05) }]} />
-                        )}
-                        <View style={styles.previewRowText}>
-                          <Text numberOfLines={1} style={[styles.previewExName, type.sansMedium, { color: colors.ink }]}>
-                            {item.name}
-                          </Text>
-                          <Text style={[styles.previewExSub, type.sans, { color: colors.inkMuted }]}>
-                            {item.sets} × {item.target_reps}
-                            {item.kind === "weight_reps" ? " reps" : item.kind === "duration" ? "s" : " reps"}
-                            {" · "}
-                            {formatRest(item.rest ?? defaultRest)} rest
-                          </Text>
-                        </View>
-                      </View>
-                    );
-                  })}
-                  {routine.items.length === 0 && (
-                    <Text style={[styles.previewEmpty, type.sans, { color: colors.inkMuted }]}>
-                      No exercises yet — hit Edit to build it.
-                    </Text>
-                  )}
-                </ScrollView>
-
-                <View style={styles.previewActions}>
-                  <PressableScale
-                    scaleTo={0.96}
-                    accessibilityLabel="Edit routine"
-                    onPress={onEdit}
-                    style={[styles.previewEdit, { borderColor: alpha(colors.rule, 0.8) }]}
-                  >
-                    <Text style={[styles.previewEditText, type.sansMedium, { color: colors.ink }]}>
-                      Edit
-                    </Text>
-                  </PressableScale>
-                  <Plate label="Start routine" onPress={onStart} style={styles.previewStart} />
-                </View>
-              </>
-            )}
-          </Pressable>
-        </Animated.View>
-      </Pressable>
-    </Modal>
   );
 }
 
@@ -525,9 +398,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 13,
   },
   toolLabel: { fontSize: 12.5 },
-  planHead: { marginTop: 18, fontSize: 14 },
-  cards: { marginTop: 10, gap: 14 },
-  cardsTop: { marginTop: 14 },
+  cards: { marginTop: 12, gap: 14 },
   liveBanner: {
     marginTop: 10,
     flexDirection: "row",
@@ -540,7 +411,6 @@ const styles = StyleSheet.create({
   liveTitle: { fontSize: 15 },
   liveSub: { marginTop: 1, fontSize: 12 },
   liveClock: { fontSize: 22, fontVariant: ["tabular-nums"] },
-  // Board-style routine card.
   card: { aspectRatio: 16 / 9, padding: 0 },
   cardClip: { flex: 1, overflow: "hidden", padding: 16 },
   cardTitle: { maxWidth: "72%", fontSize: 18, letterSpacing: -0.3 },
@@ -598,48 +468,5 @@ const styles = StyleSheet.create({
   historyText: { flex: 1, minWidth: 0 },
   historyTitle: { fontSize: 14.5 },
   historySub: { marginTop: 2, fontSize: 12 },
-  empty: { marginTop: 16, fontSize: 12.5, textAlign: "center" },
-  // Preview sheet.
-  previewBackdrop: {
-    flex: 1,
-    justifyContent: "flex-end",
-    backgroundColor: "rgba(20,16,12,0.35)",
-  },
-  previewSheet: {
-    borderTopLeftRadius: 24,
-    borderTopRightRadius: 24,
-    paddingHorizontal: 18,
-    paddingTop: 18,
-    maxHeight: "80%",
-    overflow: "hidden",
-  },
-  close: { height: 34, width: 34, alignItems: "center", justifyContent: "center" },
-  previewHead: { flexDirection: "row", alignItems: "flex-start", gap: 10 },
-  previewTitleText: { flex: 1, minWidth: 0 },
-  previewTitle: { fontSize: 24, letterSpacing: -0.3 },
-  previewDesc: { marginTop: 3, fontSize: 13, lineHeight: 18 },
-  previewList: { marginTop: 14 },
-  previewRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 12,
-    paddingVertical: 9,
-    borderBottomWidth: 1,
-  },
-  previewThumb: { height: 40, width: 52, borderRadius: 8 },
-  previewRowText: { flex: 1, minWidth: 0 },
-  previewExName: { fontSize: 14 },
-  previewExSub: { marginTop: 2, fontSize: 11.5 },
-  previewEmpty: { paddingVertical: 20, fontSize: 12.5, textAlign: "center" },
-  previewActions: { marginTop: 16, flexDirection: "row", gap: 10 },
-  previewEdit: {
-    borderWidth: 1,
-    borderRadius: 14,
-    paddingVertical: 15,
-    paddingHorizontal: 24,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  previewEditText: { fontSize: 13, letterSpacing: 0.3 },
-  previewStart: { flex: 1, borderRadius: 14, paddingVertical: 15 },
+  empty: { fontSize: 12.5, textAlign: "center", paddingVertical: 8 },
 });
