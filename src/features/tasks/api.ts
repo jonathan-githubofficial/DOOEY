@@ -1,11 +1,12 @@
 import { useMutation, useQuery, useQueryClient, type QueryClient } from "@tanstack/react-query";
 import type { RecordModel } from "pocketbase";
 import { pb } from "@/lib/pb";
-import { nextMonth } from "@/lib/date";
+import { nextMonth, pad2 } from "@/lib/date";
 import { useCollectionLive } from "@/lib/useCollectionLive";
 import { useAuthStore } from "@/stores";
-import { addDays, localDate } from "./dates";
-import type { Task, TaskPatch } from "./types";
+import { addDays, localDate, weekOf } from "./dates";
+import { SNAP } from "./timeGrid";
+import type { AgendaExternal, Task, TaskPatch } from "./types";
 
 export { localDate };
 
@@ -122,6 +123,110 @@ export function useTask(id: string) {
 export function useTasksLive() {
   const qc = useQueryClient();
   useCollectionLive("tasks", () => qc.invalidateQueries({ queryKey: taskKeys.all }));
+}
+
+// ── Google Calendar events (read-only, unit 5.3) ────────────────────────────
+// Foreign events live in the server-only `calendar_events` collection (populated by
+// pb_hooks/calendar-sync.js; createRule/updateRule/deleteRule = null). The client only READS them
+// (listRule = owner) and folds them into the planner via the AgendaExternal seam — no schedule
+// handlers, so the grids treat them as non-draggable, read-only rows (architecture: "foreign
+// events ... render read-only in Today"). No write path can reach the collection.
+
+export const eventKeys = {
+  all: ["events"] as const,
+  day: (date: string) => ["events", "day", date] as const,
+  week: (anchor: string) => ["events", "week", anchor] as const,
+};
+
+/** The browser-local day (YYYY-MM-DD) a stored-UTC instant falls on — the app's "a day" unit. */
+function eventDay(iso: string): string {
+  const d = new Date(iso);
+  return `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`;
+}
+
+/** A calendar_events record → a read-only AgendaExternal. start_at/end_at are stored UTC; the
+ * planner reasons in browser-local time (dates.localDate / TimeboxSheet.useNowMinutes), so the
+ * start maps to local minutes-from-midnight. INERT: onToggle/onSort are no-ops and there are no
+ * schedule handlers, so it is never draggable and never written back. */
+function toEvent(r: RecordModel): AgendaExternal {
+  const start = new Date(r.start_at);
+  const end = new Date(r.end_at);
+  const startMin = start.getHours() * 60 + start.getMinutes(); // browser-local
+  const durMin = Math.max(SNAP, Math.round((end.getTime() - start.getTime()) / 60000));
+  return {
+    id: r.id,
+    sort: startMin,
+    done: false,
+    title: r.title || "(busy)",
+    subtitle: undefined,
+    accentClass: "bg-sky", // foreign = blue hue (token --sky, kept per crib)
+    to: "/calendar", // events have no detail page
+    params: {},
+    onToggle: () => {}, // read-only
+    onSort: () => {}, // read-only
+    startMin: startMin > 0 ? startMin : undefined, // all-day (midnight) → list-only, off the timed grid
+    durMin,
+  };
+}
+
+/** Read-only Google events overlapping one local day, as AgendaExternal rows (interleaves with
+ * the day's tasks by `sort` = start minutes). */
+export function useDayEvents(date: string) {
+  const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
+  return useQuery({
+    queryKey: eventKeys.day(date),
+    enabled: isAuthenticated,
+    queryFn: async () => {
+      // start_at/end_at are real UTC instants → local-day bounds (cf. useDayTasks' done_at). An
+      // event overlaps the day when it starts before the day ends and ends after the day starts.
+      const dayStart = new Date(`${date}T00:00:00`);
+      const dayEnd = new Date(`${addDays(date, 1)}T00:00:00`);
+      const records = await pb.collection("calendar_events").getFullList({
+        filter: pb.filter("start_at < {:dayEnd} && end_at > {:dayStart}", { dayStart, dayEnd }),
+        sort: "start_at",
+        // Distinct auto-cancel key: the SDK keys cancellation on method+path (query params excluded),
+        // so this day query and the week query below would otherwise cancel each other when both fire
+        // from the same render (Calendar mounts both). A per-query key keeps them independent.
+        requestKey: `events-day-${date}`,
+      });
+      // Keep only events whose local start day IS this day (guards tz edges: a multi-day/overlap
+      // event shows on its start day, matching the single-day planner semantics).
+      return records.filter((r) => eventDay(r.start_at) === date).map(toEvent);
+    },
+  });
+}
+
+/** Read-only Google events across the week containing `anchor`, grouped by browser-local day →
+ * the WeekGrid's externsByDay map. One query for the seven-day UTC range (preferred over 7 hooks;
+ * mirrors the useDayTasks filter shape). */
+export function useWeekEvents(anchor: string) {
+  const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
+  return useQuery({
+    queryKey: eventKeys.week(anchor),
+    enabled: isAuthenticated,
+    queryFn: async () => {
+      const week = weekOf(anchor);
+      const dayStart = new Date(`${week[0]}T00:00:00`);
+      const dayEnd = new Date(`${addDays(week[6], 1)}T00:00:00`);
+      const records = await pb.collection("calendar_events").getFullList({
+        filter: pb.filter("start_at < {:dayEnd} && end_at > {:dayStart}", { dayStart, dayEnd }),
+        sort: "start_at",
+        // Distinct auto-cancel key (see useDayEvents): keeps this week query from cancelling — or
+        // being cancelled by — the day query that fires from the same Calendar render.
+        requestKey: `events-week-${anchor}`,
+      });
+      const byDay: Record<string, AgendaExternal[]> = {};
+      for (const r of records) (byDay[eventDay(r.start_at)] ??= []).push(toEvent(r));
+      return byDay;
+    },
+  });
+}
+
+/** Live-follow calendar_events; any change refreshes every events query (parity with useTasksLive;
+ * realtime via SSE — listRule lets the owner subscribe). */
+export function useCalendarEventsLive() {
+  const qc = useQueryClient();
+  useCollectionLive("calendar_events", () => qc.invalidateQueries({ queryKey: eventKeys.all }));
 }
 
 // ── optimistic-cache plumbing ──────────────────────────────────────────────

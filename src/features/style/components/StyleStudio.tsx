@@ -1,11 +1,11 @@
-import { useRef, useState } from "react";
-import { AnimatePresence, motion } from "motion/react";
-import { ImagePlus, Pencil, RotateCcw, Trash2 } from "lucide-react";
+import { useState } from "react";
+
 import { cn } from "@/lib/cn";
 import { Eyebrow, Panel, Stamp, StampButton } from "@/components/surface";
 import { Button } from "@/components/ui/button";
+import { Slider } from "@/components/ui/slider";
 import { DoodleSvg } from "@/components/doodle-svg";
-import { DoodleEditor } from "@/components/doodle-editor";
+import { Pencil, RotateCcw } from "@/components/icons/lucide";
 import { useThemeStore } from "@/stores";
 import {
   BACKDROP_LIMITS,
@@ -13,7 +13,6 @@ import {
   BASE_BACKDROP,
   BASE_CROP,
   useStyleStore,
-  type BackdropCrop,
   type Device,
 } from "../store";
 import {
@@ -21,22 +20,34 @@ import {
   DEFAULT_COLORS,
   FONT_STACKS,
   PRESETS,
-  hexToTriplet,
-  tripletToHex,
   type ColorKey,
   type FontKey,
   type Mode,
 } from "../tokens";
 
-/** The theme creator: recolour, refont and reshape the whole app, live.
- * Everything edits CSS variables at runtime and persists locally — the code
- * never changes. */
+/** The theme creator: recolour, refont and reshape the whole app, live (unit 3.4, ported
+ * panel-by-panel from src-legacy/features/style/components/StyleStudio.tsx onto Lynx elements).
+ *
+ * Every change edits the reactive theme store; <ThemeVars> re-renders the app-root CSS variables,
+ * so it applies instantly to the whole app and persists via the 1.4 storage adapter - the code
+ * never changes.
+ *
+ * PORTED / DROPPED (recorded in the unit result):
+ *  - <div>/<p>/<span>/<h3>/<label> -> <view>/<text> (crib "Elements"; <text> carries colour+font).
+ *  - <button> -> <view bindtap user-interaction-enabled> (Lynx has no <button>).
+ *  - motion/react (PageDoodlesPanel switch knob) -> a CSS transform transition.
+ *  - lucide-react (RotateCcw, ImagePlus, Pencil, Trash2) -> the 2.4 inline-svg icon set.
+ *  - <input type=color> (palette) -> THREE Sliders editing the H/S/L triplet directly (SPEC 4).
+ *  - <input type=range> (shape/backdrop) -> the Slider primitive (SPEC 3, stepper build).
+ *  - <input type=file> + CropPreview + DoodleEditor + the image choose/replace/remove flow ->
+ *    DEFERRED (SPEC 5 backdrop image pipeline -> a later media unit + PARK native; page-doodle
+ *    EDITING -> unit 7.3). This studio ships the backdrop numeric PREFS + read-only doodle tiles. */
 export function StyleStudio() {
   return (
-    <div className="space-y-4">
-      <p className="text-sm text-ink-muted">
+    <view data-testid="style-studio" className="flex flex-col gap-4">
+      <text className="text-sm text-ink-muted font-sans">
         Every change applies instantly to the whole app and is saved on this device.
-      </p>
+      </text>
       <PresetsPanel />
       <PalettePanel />
       <BackdropPanel />
@@ -44,7 +55,7 @@ export function StyleStudio() {
       <TypePanel />
       <ShapePanel />
       <SpecimenPanel />
-    </div>
+    </view>
   );
 }
 
@@ -56,37 +67,40 @@ function PresetsPanel() {
   return (
     <Panel>
       <Eyebrow>presets</Eyebrow>
-      <div className="mt-3 flex flex-wrap items-center gap-2.5">
+      <view className="mt-3 flex flex-wrap items-center gap-2.5">
         {PRESETS.map((preset) => {
           const chips = (["paper", "surface", "zest"] as const).map(
             (k) => preset.colors.light[k] ?? DEFAULT_COLORS.light[k],
           );
           return (
-            <button
+            <view
               key={preset.key}
-              onClick={() => applyPreset(preset.key)}
-              className="flex items-center gap-2 rounded-full border border-rule/70 bg-surface py-1.5 pl-2 pr-3.5 text-sm font-medium text-ink shadow-soft transition-transform active:scale-95"
+              bindtap={() => applyPreset(preset.key)}
+              user-interaction-enabled={true}
+              data-testid={`preset-${preset.key}`}
+              className="flex items-center gap-2 rounded-full border border-rule/70 bg-surface py-1.5 pl-2 pr-3.5 shadow-soft active:scale-95"
             >
-              <span className="flex -space-x-1.5">
+              <view className="flex flex-row">
                 {chips.map((triplet, i) => (
-                  <span
+                  <view
                     key={i}
-                    className="h-5 w-5 rounded-full border border-rule/70"
-                    style={{ background: `hsl(${triplet})`, zIndex: 3 - i }}
+                    className={cn("h-5 w-5 rounded-full border border-rule/70", i > 0 && "-ml-1.5")}
+                    style={{ backgroundColor: `hsl(${triplet})` }}
                   />
                 ))}
-              </span>
-              {preset.label}
-            </button>
+              </view>
+              <text className="text-sm font-medium text-ink font-sans">{preset.label}</text>
+            </view>
           );
         })}
         <StampButton onClick={resetAll} className="ml-auto text-ink-muted">
-          <RotateCcw className="h-3.5 w-3.5" /> Factory reset
+          <RotateCcw className="h-3.5 w-3.5 text-ink-muted" />
+          <text className="text-sm font-medium text-ink-muted font-sans">Factory reset</text>
         </StampButton>
-      </div>
-      <p className="mt-3 text-xs text-ink-muted">
+      </view>
+      <text className="mt-3 block text-xs text-ink-muted font-sans">
         Presets swap the palette; your fonts and shape settings stay put.
-      </p>
+      </text>
     </Panel>
   );
 }
@@ -98,35 +112,35 @@ function PalettePanel() {
   const setMode = useThemeStore((s) => s.set);
   return (
     <Panel>
-      <div className="flex items-center justify-between gap-4">
+      <view className="flex items-center justify-between gap-4">
         <Eyebrow>palette</Eyebrow>
-        <div className="inset-well flex rounded-full bg-ink/5 p-1">
-          {(["light", "dark"] as const).map((m) => (
-            <button
-              key={m}
-              onClick={() => setMode(m)}
-              className={cn(
-                "rounded-full px-3.5 py-1 text-xs font-medium capitalize transition-colors",
-                mode === m ? "bg-surface text-ink shadow-soft" : "text-ink-muted hover:text-ink",
-              )}
-            >
-              {m}
-            </button>
-          ))}
-        </div>
-      </div>
-      <p className="mt-2 text-xs text-ink-muted">
-        You're editing the <span className="font-medium text-ink">{mode}</span> look — each mode
-        keeps its own palette.
-      </p>
-      <div className="mt-4 grid grid-cols-1 gap-x-8 sm:grid-cols-2">
+        <Segmented
+          options={["light", "dark"] as const}
+          value={mode}
+          onPick={(m) => setMode(m)}
+        />
+      </view>
+      <text className="mt-2 block text-xs text-ink-muted font-sans">
+        You're editing the {mode} look - each mode keeps its own palette.
+      </text>
+      <view className="mt-4 flex flex-col gap-1">
         {COLOR_TOKENS.map((token) => (
           <ColorRow key={token.key} mode={mode} token={token} />
         ))}
-      </div>
+      </view>
     </Panel>
   );
 }
+
+// Parse / serialize the "H S% L%" triplet global.css expects (same shape tokens.ts parses in
+// tripletToHex). Editing the three channels as numbers replaces the native colour dialog.
+function parseTriplet(t: string): { h: number; s: number; l: number } {
+  const m = t.match(/([\d.]+)\s+([\d.]+)%\s+([\d.]+)%/);
+  if (!m) return { h: 0, s: 0, l: 0 };
+  return { h: Number(m[1]), s: Number(m[2]), l: Number(m[3]) };
+}
+const serializeTriplet = (h: number, s: number, l: number) =>
+  `${Math.round(h)} ${Math.round(s)}% ${Math.round(l)}%`;
 
 function ColorRow({
   mode,
@@ -139,226 +153,102 @@ function ColorRow({
   const setColor = useStyleStore((s) => s.setColor);
   const resetColor = useStyleStore((s) => s.resetColor);
   const value = override ?? DEFAULT_COLORS[mode][token.key];
+  const { h, s, l } = parseTriplet(value);
+  const put = (next: { h?: number; s?: number; l?: number }) =>
+    setColor(mode, token.key, serializeTriplet(next.h ?? h, next.s ?? s, next.l ?? l));
   return (
-    <div className="flex items-center gap-3 border-b border-rule/40 py-2.5 last:border-b-0 sm:[&:nth-last-child(2)]:border-b-0">
-      <label
-        title={`Pick a ${token.label.toLowerCase()} colour`}
-        className="relative h-9 w-9 shrink-0 cursor-pointer rounded-full border border-rule shadow-soft transition-transform active:scale-95"
-        style={{ background: `hsl(${value})` }}
-      >
-        <input
-          type="color"
-          value={tripletToHex(value)}
-          onChange={(e) => setColor(mode, token.key, hexToTriplet(e.target.value))}
-          className="absolute inset-0 h-full w-full cursor-pointer opacity-0"
+    <view className="flex flex-col gap-2 border-b border-rule/40 py-3 last:border-b-0">
+      <view className="flex items-center gap-3">
+        <view
+          className="h-9 w-9 shrink-0 rounded-full border border-rule shadow-soft"
+          style={{ backgroundColor: `hsl(${value})` }}
         />
-      </label>
-      <div className="min-w-0 flex-1">
-        <p className="text-sm font-medium text-ink">{token.label}</p>
-        <p className="text-xs text-ink-muted">{token.hint}</p>
-      </div>
-      {override && (
-        <button
-          onClick={() => resetColor(mode, token.key)}
-          title="Back to default"
-          className="text-ink-muted transition-colors hover:text-ink"
-        >
-          <RotateCcw className="h-3.5 w-3.5" />
-        </button>
-      )}
-    </div>
+        <view className="min-w-0 flex-1">
+          <text className="block text-sm font-medium text-ink font-sans">{token.label}</text>
+          <text className="block text-xs text-ink-muted font-sans">{token.hint}</text>
+        </view>
+        {override ? (
+          <view
+            bindtap={() => resetColor(mode, token.key)}
+            user-interaction-enabled={true}
+            className="flex h-7 w-7 items-center justify-center rounded-full active:scale-90"
+          >
+            <RotateCcw className="h-3.5 w-3.5 text-ink-muted" />
+          </view>
+        ) : null}
+      </view>
+      <Slider label="Hue" value={h} min={0} max={360} step={1} onChange={(v) => put({ h: v })} />
+      <Slider label="Sat" value={s} min={0} max={100} step={1} onChange={(v) => put({ s: v })} />
+      <Slider label="Light" value={l} min={0} max={100} step={1} onChange={(v) => put({ l: v })} />
+    </view>
   );
 }
 
 /* --------------------------------------------------------------- backdrop */
 
+// SPEC 5: wire the numeric PREFS to the 2.2 Backdrop; DEFER the image itself. The Backdrop renders
+// only when backdropUrl is set, and image upload (file picking, createImageBitmap/<canvas> encode,
+// IndexedDB backdrop.ts, the pointer-drag CropPreview) is deferred to a later media unit + PARKED
+// on native (no file system on the Sparkling host). OPEN QUESTION recorded in the unit result: no
+// L1-L8 layer clearly owns web image upload (nearest is L4 task attachments). These sliders persist
+// now and will drive the backdrop once an image exists.
 function BackdropPanel() {
-  const url = useStyleStore((s) => s.backdropUrl);
   const backdrop = useStyleStore((s) => s.backdrop);
   const setBackdrop = useStyleStore((s) => s.setBackdrop);
   const setBackdropCrop = useStyleStore((s) => s.setBackdropCrop);
-  const setBackdropImage = useStyleStore((s) => s.setBackdropImage);
-  const removeBackdropImage = useStyleStore((s) => s.removeBackdropImage);
-  const inputRef = useRef<HTMLInputElement>(null);
-  const [device, setDevice] = useState<Device>(() =>
-    window.matchMedia("(min-width: 768px)").matches ? "desktop" : "mobile",
-  );
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  // No window.matchMedia (R11: no BOM in the worker) - default to mobile; the toggle picks device.
+  const [device, setDevice] = useState<Device>("mobile");
   const crop = backdrop[device];
-
-  const pick = async (file: File | undefined) => {
-    if (!file) return;
-    setBusy(true);
-    setError(null);
-    try {
-      await setBackdropImage(file);
-    } catch {
-      setError("Couldn't read that image — try a JPG or PNG.");
-    } finally {
-      setBusy(false);
-    }
-  };
-
   return (
     <Panel>
-      <div className="flex items-center justify-between gap-4">
+      <view className="flex items-center justify-between gap-4">
         <Eyebrow>backdrop</Eyebrow>
-        {url && (
-          <div className="inset-well flex rounded-full bg-ink/5 p-1">
-            {(["mobile", "desktop"] as const).map((d) => (
-              <button
-                key={d}
-                onClick={() => setDevice(d)}
-                className={cn(
-                  "rounded-full px-3.5 py-1 text-xs font-medium capitalize transition-colors",
-                  device === d ? "bg-surface text-ink shadow-soft" : "text-ink-muted hover:text-ink",
-                )}
-              >
-                {d}
-              </button>
-            ))}
-          </div>
-        )}
-      </div>
-      <input
-        ref={inputRef}
-        type="file"
-        accept="image/*"
-        className="hidden"
-        onChange={(e) => {
-          void pick(e.target.files?.[0]);
-          e.target.value = "";
-        }}
-      />
-      {!url ? (
-        <>
-          <p className="mt-3 max-w-prose text-sm text-ink-muted">
-            A photo behind the whole app — blurred and faded within limits, so the paper stays
-            readable and the picture stays an undertone.
-          </p>
-          <StampButton
-            accent
-            onClick={() => inputRef.current?.click()}
-            disabled={busy}
-            className="mt-4"
-          >
-            <ImagePlus className="h-4 w-4" /> {busy ? "…" : "Choose a photo"}
-          </StampButton>
-        </>
-      ) : (
-        <div className="mt-4 space-y-5">
-          <CropPreview
-            url={url}
-            crop={crop}
-            wide={device === "desktop"}
-            onChange={(patch) => setBackdropCrop(device, patch)}
-          />
-          <p className="text-center text-xs text-ink-muted">
-            Drag to reframe the {device} crop — each device remembers its own.
-          </p>
-          <div className="grid grid-cols-1 gap-6 sm:grid-cols-3">
-            <SliderRow
-              label={`Zoom (${device})`}
-              display={`${crop.zoom.toFixed(2)}×`}
-              value={crop.zoom}
-              min={BACKDROP_LIMITS.zoom.min}
-              max={BACKDROP_LIMITS.zoom.max}
-              step={0.05}
-              isDefault={crop.zoom === BASE_CROP.zoom}
-              onChange={(v) => setBackdropCrop(device, { zoom: v })}
-              onReset={() => setBackdropCrop(device, { ...BASE_CROP })}
-            />
-            <SliderRow
-              label="Blur"
-              display={`${backdrop.blur}px`}
-              value={backdrop.blur}
-              min={BACKDROP_LIMITS.blur.min}
-              max={BACKDROP_LIMITS.blur.max}
-              step={1}
-              isDefault={backdrop.blur === BASE_BACKDROP.blur}
-              onChange={(v) => setBackdrop({ blur: v })}
-              onReset={() => setBackdrop({ blur: BASE_BACKDROP.blur })}
-            />
-            <SliderRow
-              label="Visibility"
-              display={`${Math.round(backdrop.opacity * 100)}%`}
-              value={backdrop.opacity}
-              min={BACKDROP_LIMITS.opacity.min}
-              max={BACKDROP_LIMITS.opacity.max}
-              step={0.05}
-              isDefault={backdrop.opacity === BASE_BACKDROP.opacity}
-              onChange={(v) => setBackdrop({ opacity: v })}
-              onReset={() => setBackdrop({ opacity: BASE_BACKDROP.opacity })}
-            />
-          </div>
-          <div className="flex flex-wrap gap-2">
-            <StampButton onClick={() => inputRef.current?.click()} disabled={busy}>
-              <ImagePlus className="h-3.5 w-3.5" /> {busy ? "…" : "Replace"}
-            </StampButton>
-            <StampButton
-              onClick={() => void removeBackdropImage()}
-              className="text-ink-muted"
-            >
-              <Trash2 className="h-3.5 w-3.5" /> Remove
-            </StampButton>
-          </div>
-        </div>
-      )}
-      {error && <p className="mt-3 text-xs text-clay">{error}</p>}
+        <Segmented
+          options={["mobile", "desktop"] as const}
+          value={device}
+          onPick={(d) => setDevice(d)}
+        />
+      </view>
+      <text className="mt-3 block max-w-prose text-sm text-ink-muted font-sans">
+        A photo can sit behind the whole app - blurred and faded within limits, so the paper stays
+        readable. These settings are ready; adding the photo itself arrives in a later update.
+      </text>
+      <view className="mt-4 flex flex-col gap-5">
+        <SliderRow
+          label={`Zoom (${device})`}
+          display={`${crop.zoom.toFixed(2)}x`}
+          value={crop.zoom}
+          min={BACKDROP_LIMITS.zoom.min}
+          max={BACKDROP_LIMITS.zoom.max}
+          step={0.05}
+          isDefault={crop.zoom === BASE_CROP.zoom}
+          onChange={(v) => setBackdropCrop(device, { zoom: v })}
+          onReset={() => setBackdropCrop(device, { ...BASE_CROP })}
+        />
+        <SliderRow
+          label="Blur"
+          display={`${backdrop.blur}px`}
+          value={backdrop.blur}
+          min={BACKDROP_LIMITS.blur.min}
+          max={BACKDROP_LIMITS.blur.max}
+          step={1}
+          isDefault={backdrop.blur === BASE_BACKDROP.blur}
+          onChange={(v) => setBackdrop({ blur: v })}
+          onReset={() => setBackdrop({ blur: BASE_BACKDROP.blur })}
+        />
+        <SliderRow
+          label="Visibility"
+          display={`${Math.round(backdrop.opacity * 100)}%`}
+          value={backdrop.opacity}
+          min={BACKDROP_LIMITS.opacity.min}
+          max={BACKDROP_LIMITS.opacity.max}
+          step={0.05}
+          isDefault={backdrop.opacity === BASE_BACKDROP.opacity}
+          onChange={(v) => setBackdrop({ opacity: v })}
+          onReset={() => setBackdrop({ opacity: BASE_BACKDROP.opacity })}
+        />
+      </view>
     </Panel>
-  );
-}
-
-const clamp = (v: number, min: number, max: number) => Math.min(max, Math.max(min, v));
-
-/** A framing tool, not a preview: the photo at full strength in the target
- * device's aspect ratio. Dragging pans the crop's focal point. */
-function CropPreview({
-  url,
-  crop,
-  wide,
-  onChange,
-}: {
-  url: string;
-  crop: BackdropCrop;
-  wide: boolean;
-  onChange: (patch: Partial<BackdropCrop>) => void;
-}) {
-  const dragFrom = useRef<{ px: number; py: number; x: number; y: number } | null>(null);
-  return (
-    <div
-      className={cn(
-        "inset-well relative mx-auto cursor-grab touch-none select-none overflow-hidden rounded-2xl border border-rule/70 active:cursor-grabbing",
-        wide ? "aspect-video w-full max-w-md" : "aspect-[9/19] h-72",
-      )}
-      onPointerDown={(e) => {
-        e.currentTarget.setPointerCapture(e.pointerId);
-        dragFrom.current = { px: e.clientX, py: e.clientY, x: crop.x, y: crop.y };
-      }}
-      onPointerMove={(e) => {
-        const from = dragFrom.current;
-        if (!from) return;
-        const rect = e.currentTarget.getBoundingClientRect();
-        onChange({
-          x: clamp(from.x - ((e.clientX - from.px) / rect.width) * (150 / crop.zoom), 0, 100),
-          y: clamp(from.y - ((e.clientY - from.py) / rect.height) * (150 / crop.zoom), 0, 100),
-        });
-      }}
-      onPointerUp={() => (dragFrom.current = null)}
-      onPointerCancel={() => (dragFrom.current = null)}
-    >
-      <img
-        src={url}
-        alt=""
-        draggable={false}
-        className="pointer-events-none h-full w-full object-cover"
-        style={{
-          objectPosition: `${crop.x}% ${crop.y}%`,
-          transform: `scale(${crop.zoom})`,
-        }}
-      />
-    </div>
   );
 }
 
@@ -372,87 +262,65 @@ const DOODLE_PAGES = [
   { key: "account", label: "Account" },
 ] as const;
 
-/** Hand-drawn icons for the spaces: each page can wear a little doodle — next
- * to its title and as its icon in the dock — instead of a stock glyph. */
+/** Hand-drawn icons for the spaces. The tiles are READ-ONLY here: the DoodleEditor + setPageDoodle
+ * writes are deferred to unit 7.3 (they are drawn on Boards), so no dead editor button is shipped
+ * (CLAUDE.md no-placeholder). The `dockDoodles` on/off switch stays. */
 function PageDoodlesPanel() {
   const pageDoodles = useStyleStore((s) => s.pageDoodles);
-  const setPageDoodle = useStyleStore((s) => s.setPageDoodle);
   const dockDoodles = useStyleStore((s) => s.dockDoodles);
   const setDockDoodles = useStyleStore((s) => s.setDockDoodles);
-  const [editing, setEditing] = useState<string | null>(null);
-
   return (
     <Panel>
-      <div className="flex items-center justify-between gap-4">
+      <view className="flex items-center justify-between gap-4">
         <Eyebrow>page doodles</Eyebrow>
-        <label className="flex cursor-pointer items-center gap-2 text-xs text-ink-muted">
-          <span>doodle icons in dock</span>
-          <button
-            type="button"
-            role="switch"
-            aria-checked={dockDoodles}
-            aria-label="Use doodles as dock icons"
-            onClick={() => setDockDoodles(!dockDoodles)}
+        <view
+          bindtap={() => setDockDoodles(!dockDoodles)}
+          user-interaction-enabled={true}
+          data-testid="dock-doodles-switch"
+          className="flex items-center gap-2"
+        >
+          <text className="text-xs text-ink-muted font-sans">doodle icons in dock</text>
+          {/* motion/react knob -> a CSS transform transition on a persistent element. */}
+          <view
             className={cn(
-              "inset-well relative flex h-5 w-9 items-center rounded-full px-0.5 transition-colors",
+              "relative flex h-5 w-9 items-center rounded-full px-0.5",
               dockDoodles ? "bg-zest/30" : "bg-ink/10",
             )}
           >
-            <motion.span
-              layout
-              transition={{ type: "spring", stiffness: 500, damping: 32 }}
-              className={cn("h-4 w-4 rounded-full bg-surface shadow-soft", dockDoodles && "ml-auto")}
+            <view
+              className={cn(
+                "h-4 w-4 rounded-full bg-surface shadow-soft transition-transform duration-200 ease-out",
+                dockDoodles ? "translate-x-4" : "translate-x-0",
+              )}
             />
-          </button>
-        </label>
-      </div>
-      <p className="mt-2 text-xs text-ink-muted">
-        Draw a little mark for each space — it appears next to the page title, and (when the
-        switch is on) as its icon in the dock.
-      </p>
-      <div className="mt-3 flex flex-wrap gap-4">
+          </view>
+        </view>
+      </view>
+      <text className="mt-2 block text-xs text-ink-muted font-sans">
+        Each space can wear a little mark next to its title, and (when the switch is on) as its
+        icon in the dock. Draw them on Boards.
+      </text>
+      <view className="mt-3 flex flex-wrap gap-4">
         {DOODLE_PAGES.map((p) => {
           const strokes = pageDoodles[p.key] ?? [];
           return (
-            <div key={p.key} className="flex flex-col items-center gap-1.5">
-              <button
-                onClick={() => setEditing((e) => (e === p.key ? null : p.key))}
-                aria-label={`Doodle the ${p.label} icon`}
-                className={cn(
-                  "grain relative flex h-16 w-16 items-center justify-center rounded-2xl border bg-paper shadow-soft transition-transform active:scale-95",
-                  editing === p.key ? "border-zest" : "border-rule/70",
-                )}
-              >
+            <view key={p.key} className="flex flex-col items-center gap-1.5">
+              <view className="grain relative flex h-16 w-16 items-center justify-center rounded-2xl border border-rule/70 bg-paper shadow-soft">
                 {strokes.length ? (
-                  <span className="relative h-12 w-12">
+                  <view className="relative h-12 w-12">
                     <DoodleSvg strokes={strokes} strokeWidth={1.8} relative />
-                  </span>
+                  </view>
                 ) : (
-                  <Pencil className="h-4 w-4 text-ink-muted/50" />
+                  <Pencil className="h-4 w-4 text-ink-muted" />
                 )}
-              </button>
-              <span className="text-[10px] uppercase tracking-[0.14em] text-ink-muted">
+              </view>
+              <text className="text-[10px] uppercase tracking-[0.14em] text-ink-muted font-sans">
                 {p.label}
-              </span>
-            </div>
+              </text>
+            </view>
           );
         })}
-      </div>
-      <AnimatePresence>
-        {editing && (
-          <DoodleEditor
-            key={editing}
-            heading={`${editing} icon`}
-            initial={pageDoodles[editing] ?? []}
-            className="mt-3"
-            onClose={() => setEditing(null)}
-            onSave={(strokes) => {
-              setPageDoodle(editing, strokes);
-              setEditing(null);
-            }}
-          />
-        )}
-      </AnimatePresence>
+      </view>
     </Panel>
   );
 }
@@ -466,18 +334,18 @@ function TypePanel() {
   return (
     <Panel>
       <Eyebrow>type</Eyebrow>
-      <div className="mt-4 space-y-5">
+      <view className="mt-4 flex flex-col gap-5">
         <FontPicker
-          label="Display — titles & big numbers"
+          label="Display - titles & big numbers"
           active={fontDisplay}
           onPick={(f) => setFont("display", f)}
         />
         <FontPicker
-          label="Body — everything else"
+          label="Body - everything else"
           active={fontSans}
           onPick={(f) => setFont("sans", f)}
         />
-      </div>
+      </view>
     </Panel>
   );
 }
@@ -492,26 +360,32 @@ function FontPicker({
   onPick: (f: FontKey) => void;
 }) {
   return (
-    <div>
-      <p className="text-xs text-ink-muted">{label}</p>
-      <div className="mt-2 flex flex-wrap gap-2">
+    <view>
+      <text className="block text-xs text-ink-muted font-sans">{label}</text>
+      <view className="mt-2 flex flex-wrap gap-2">
         {FONT_STACKS.map((font) => (
-          <button
+          <view
             key={font.key}
-            onClick={() => onPick(font.key)}
-            style={{ fontFamily: font.stack }}
+            bindtap={() => onPick(font.key)}
+            user-interaction-enabled={true}
             className={cn(
-              "rounded-full border px-3.5 py-1.5 text-sm transition-colors active:scale-95",
-              active === font.key
-                ? "border-zest bg-zest/10 font-semibold text-ink"
-                : "border-rule text-ink-muted hover:text-ink",
+              "rounded-full border px-3.5 py-1.5 active:scale-95",
+              active === font.key ? "border-zest bg-zest/10" : "border-rule",
             )}
           >
-            {font.label}
-          </button>
+            <text
+              style={{ fontFamily: font.stack }}
+              className={cn(
+                "text-sm",
+                active === font.key ? "font-semibold text-ink" : "text-ink-muted",
+              )}
+            >
+              {font.label}
+            </text>
+          </view>
         ))}
-      </div>
-    </div>
+      </view>
+    </view>
   );
 }
 
@@ -525,7 +399,7 @@ function ShapePanel() {
   return (
     <Panel>
       <Eyebrow>shape &amp; feel</Eyebrow>
-      <div className="mt-4 grid grid-cols-1 gap-6 sm:grid-cols-3">
+      <view className="mt-4 flex flex-col gap-5">
         <SliderRow
           label="Corners"
           display={`${Math.round(radius * 16)}px`}
@@ -559,11 +433,13 @@ function ShapePanel() {
           onChange={(v) => setShape({ shadow: v })}
           onReset={() => setShape({ shadow: BASE.shadow })}
         />
-      </div>
+      </view>
     </Panel>
   );
 }
 
+/** Label + formatted read-out + reset around the Slider primitive (the src-legacy SliderRow, minus
+ * the raw <input type=range>). */
 function SliderRow({
   label,
   display,
@@ -586,33 +462,26 @@ function SliderRow({
   onReset: () => void;
 }) {
   return (
-    <div>
-      <div className="flex items-baseline justify-between">
-        <p className="text-xs text-ink-muted">{label}</p>
-        <span className="flex items-center gap-1.5 text-xs tabular-nums text-ink-muted">
-          {display}
-          {!isDefault && (
-            <button
-              onClick={onReset}
-              title="Back to default"
-              className="transition-colors hover:text-ink"
+    <view>
+      <view className="flex items-baseline justify-between">
+        <text className="text-xs text-ink-muted font-sans">{label}</text>
+        <view className="flex items-center gap-1.5">
+          <text className="text-xs text-ink-muted font-sans">{display}</text>
+          {!isDefault ? (
+            <view
+              bindtap={onReset}
+              user-interaction-enabled={true}
+              className="flex h-6 w-6 items-center justify-center rounded-full active:scale-90"
             >
-              <RotateCcw className="h-3 w-3" />
-            </button>
-          )}
-        </span>
-      </div>
-      <input
-        type="range"
-        value={value}
-        min={min}
-        max={max}
-        step={step}
-        onChange={(e) => onChange(Number(e.target.value))}
-        className="mt-2 w-full accent-zest"
-        aria-label={label}
-      />
-    </div>
+              <RotateCcw className="h-3 w-3 text-ink-muted" />
+            </view>
+          ) : null}
+        </view>
+      </view>
+      <view className="mt-2">
+        <Slider value={value} min={min} max={max} step={step} onChange={onChange} />
+      </view>
+    </view>
   );
 }
 
@@ -622,31 +491,77 @@ function SpecimenPanel() {
   return (
     <Panel>
       <Eyebrow>specimen</Eyebrow>
-      <h3 className="mt-2 font-display text-3xl font-bold tracking-tight text-ink">
+      <text className="mt-2 block font-display text-3xl font-bold tracking-tight text-ink">
         Sphinx of quartz, judge my vow.
-      </h3>
-      <p className="mt-1 max-w-prose text-sm text-ink-muted">
-        Body text sits like this — lists, notes, and the quiet parts of the day. The dot on the
+      </text>
+      <text className="mt-1 block max-w-prose text-sm text-ink-muted font-sans">
+        Body text sits like this - lists, notes, and the quiet parts of the day. The dot on the
         wordmark, progress washes and highlights all take the accent.
-      </p>
-      <div className="mt-5 flex flex-wrap items-center gap-3">
-        <Button size="sm">button</Button>
-        <Button size="sm" variant="accent">
-          accent
+      </text>
+      <view className="mt-5 flex flex-wrap items-center gap-3">
+        <Button size="sm">
+          <text className="text-xs font-medium text-paper font-sans">button</text>
         </Button>
-        <StampButton>stamp</StampButton>
-        <Stamp className="border-leaf text-leaf">done</Stamp>
-        <span className="flex gap-1.5">
+        <Button size="sm" variant="accent">
+          <text className="text-xs font-medium text-paper font-sans">accent</text>
+        </Button>
+        <StampButton>
+          <text className="text-sm font-medium text-ink font-sans">stamp</text>
+        </StampButton>
+        <Stamp className="border-leaf text-leaf">
+          <text className="text-[9px] font-bold uppercase tracking-[0.2em] text-leaf font-sans">
+            done
+          </text>
+        </Stamp>
+        <view className="flex flex-row gap-1.5">
           {(["leaf", "zest", "sky", "clay", "honey"] as const).map((k) => (
-            <span
+            <view
               key={k}
               className="h-4 w-4 rounded-full"
-              style={{ background: `hsl(var(--${k}))` }}
-              title={k}
+              style={{ backgroundColor: `hsl(var(--${k}))` }}
             />
           ))}
-        </span>
-      </div>
+        </view>
+      </view>
     </Panel>
+  );
+}
+
+/* ----------------------------------------------------------- shared bits */
+
+/** The pill segmented control used by the palette (light/dark) + backdrop (mobile/desktop). */
+function Segmented<T extends string>({
+  options,
+  value,
+  onPick,
+}: {
+  options: readonly T[];
+  value: T;
+  onPick: (v: T) => void;
+}) {
+  return (
+    <view className="flex flex-row rounded-full bg-ink/5 p-1">
+      {options.map((opt) => (
+        <view
+          key={opt}
+          bindtap={() => onPick(opt)}
+          user-interaction-enabled={true}
+          data-testid={`seg-${opt}`}
+          className={cn(
+            "rounded-full px-3.5 py-1",
+            value === opt ? "bg-surface shadow-soft" : "",
+          )}
+        >
+          <text
+            className={cn(
+              "text-xs font-medium capitalize font-sans",
+              value === opt ? "text-ink" : "text-ink-muted",
+            )}
+          >
+            {opt}
+          </text>
+        </view>
+      ))}
+    </view>
   );
 }

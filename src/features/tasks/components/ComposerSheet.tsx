@@ -1,11 +1,40 @@
-import { useState } from "react";
+// The task composer drawer (unit 4.3, ported from src-legacy/features/tasks/components/
+// ComposerSheet.tsx onto Lynx): the sheet that slides up from the bottom edge to shape a new task
+// - title, details, due date, an optional time slot with duration, notes - with Cancel /
+// "Add & open" / "Add task".
+//
+// SHEET MOTION (SPEC 3): NO framer-motion / AnimatePresence. The parent (TaskComposer, 4.1) mounts
+// this on open; on close it plays an exit animation then calls onClose. Backdrop cross-fades; the
+// sheet slides translateY(100%->0) in (SETTLE) and 0->100% out (PEEL); reduced-motion swaps the
+// translate for an opacity fade. Removal is driven by bindanimationend on the out-animation, with a
+// duration-matched timeout as a web-target fallback (guarded so onClose fires once).
+//
+// DROPPED (recorded BROOM): `motion`/`AnimatePresence` (backdrop, sheet, the time/notes height
+// sections) -> the CSS keyframes in styles/global.css + max-height/opacity transitions here;
+// `useDragControls` + all drag-to-dismiss props (drag="y"/dragControls/dragConstraints/
+// dragElastic/dragSnapToOrigin/onDragEnd) -> unit 5.2 (this unit closes via backdrop tap, the
+// Cancel control, and the header handle as a plain TAP); `lucide-react` -> the L2 icon set;
+// `<form onSubmit>`/`<button>` -> Lynx `<view bindtap>`; the DOM `<input>`/`<textarea>` -> Lynx
+// `<input>`/`<textarea>` (event-driven, NO `value` prop - bindinput reports text, bindconfirm =
+// Enter-to-submit on the title; the description's Enter-without-shift submit drops - no keydown on
+// Lynx targets, so submit rides the explicit buttons). ADAPT: the native `<input type="time">` has
+// no Lynx equivalent (input types are text/number/digit/password/tel/email) -> a compact
+// -1h/-15/+15/+1h stepper writing `start` minutes (the sanctioned SPEC alternative; matches the L2
+// Slider stepper, and sidesteps the uncontrolled-input pre-fill dance for a value the sheet owns).
+// The HH:MM-string helper `minToTime` is kept for the readout; `timeToMin` is moot with a stepper
+// and dropped. Press feel on "Add task" uses the shared MTS press helper (src/lib/motion/press.ts).
+import { useRef, useState } from "react";
 import { useNavigate } from "@tanstack/react-router";
-import { AnimatePresence, motion, useDragControls } from "motion/react";
-import { ArrowUpRight, Clock, StickyNote, X } from "lucide-react";
+
+import { ArrowUpRight, Clock, StickyNote, X } from "@/components/icons/lucide";
 import { cn } from "@/lib/cn";
 import { pad2 } from "@/lib/date";
+import { PEEL, SETTLE } from "@/lib/motion/easing";
+import { pressDown, pressUp } from "@/lib/motion/press";
+import { useReducedMotion } from "@/stores";
 import { localDate, useCreateTask } from "../api";
 import { toLocalNoon, toPbDate } from "../dates";
+import { clamp } from "../timeGrid";
 import { DueDateButton } from "./DueDateButton";
 
 const DURATIONS = [
@@ -18,19 +47,11 @@ const DURATIONS = [
   { min: 180, label: "3h" },
 ];
 
+const DEFAULT_START = 9 * 60;
+const MAX_START = 23 * 60 + 45;
+/** minutes-from-midnight -> "HH:MM" readout label. */
 const minToTime = (min: number) => `${pad2(Math.floor(min / 60))}:${pad2(min % 60)}`;
-const timeToMin = (str: string) => {
-  const [h, m] = str.split(":").map(Number);
-  return h * 60 + m;
-};
 
-/** The task drawer: slides up from the bottom edge with everything you need to
- * shape a task — title, details, date, an optional time slot with duration,
- * notes. Deeper structure (checklist, resources, attachments) lives on the
- * task's page via "Add & open". Flick the handle down to dismiss.
- *
- * Mount it inside <AnimatePresence> and unmount to close (the exit animation
- * runs on unmount). `initialStart` opens it pre-scheduled at that minute. */
 export function ComposerSheet({
   date,
   initialStart,
@@ -44,7 +65,7 @@ export function ComposerSheet({
 }) {
   const create = useCreateTask();
   const navigate = useNavigate();
-  const controls = useDragControls();
+  const reduced = useReducedMotion();
   const isToday = date === localDate();
 
   const [title, setTitle] = useState("");
@@ -55,6 +76,7 @@ export function ComposerSheet({
   const [due, setDue] = useState(initialStart != null || !isToday ? toPbDate(date) : "");
   const [start, setStart] = useState<number | null>(initialStart ?? null);
   const [dur, setDur] = useState(initialDur ?? 60);
+  const [exiting, setExiting] = useState(false);
 
   const dayLabel = toLocalNoon(date).toLocaleDateString("en", {
     weekday: "short",
@@ -62,6 +84,19 @@ export function ComposerSheet({
     day: "numeric",
   });
 
+  // Close once: the exit animation's bindanimationend OR the duration-matched fallback fires this.
+  const closedRef = useRef(false);
+  const finish = () => {
+    if (closedRef.current) return;
+    closedRef.current = true;
+    onClose();
+  };
+  const close = () => {
+    setExiting(true);
+    setTimeout(finish, 420);
+  };
+
+  const canSubmit = !!title.trim() && !create.isPending;
   const payload = () => ({
     title: title.trim(),
     description: description.trim() || undefined,
@@ -72,229 +107,252 @@ export function ComposerSheet({
     dur_min: dur,
   });
   const submit = () => {
-    if (!title.trim()) return;
+    if (!canSubmit) return;
     create.mutate(payload());
-    onClose();
+    close();
   };
   const submitAndOpen = async () => {
-    if (!title.trim()) return;
+    if (!canSubmit) return;
     const record = await create.mutateAsync(payload());
-    onClose();
     void navigate({ to: "/task/$id", params: { id: record.id } });
+    close();
   };
 
   const toggleTime = () =>
     setStart((s) => {
       if (s != null) return null;
       setDue(toPbDate(date));
-      return 9 * 60;
+      return DEFAULT_START;
     });
+  const bump = (d: number) => setStart((s) => clamp((s ?? DEFAULT_START) + d, 0, MAX_START));
+
+  const backdropAnim = exiting
+    ? "dooey-fade-out 180ms linear both"
+    : "dooey-fade-in 180ms linear both";
+  const sheetAnim = reduced
+    ? exiting
+      ? "dooey-fade-out 180ms linear both"
+      : "dooey-fade-in 180ms linear both"
+    : exiting
+      ? `dooey-sheet-out 300ms ${PEEL} both`
+      : `dooey-sheet-in 320ms ${SETTLE} both`;
+
+  const timeOpen = start != null;
+
+  // Plain render helper (NOT a component - avoids remount-on-render): a start-time nudge button.
+  const stepBtn = (label: string, delta: number) => (
+    <view
+      key={label}
+      bindtap={() => bump(delta)}
+      accessibility-label={`Shift start ${label}`}
+      accessibility-traits="button"
+      className="flex h-7 items-center justify-center rounded-full border border-rule bg-surface px-2 active:scale-90"
+    >
+      <text className="text-[11px] font-medium tabular-nums text-ink">{label}</text>
+    </view>
+  );
 
   return (
-    <>
-      <motion.button
-        type="button"
-        aria-label="Close"
-        initial={{ opacity: 0 }}
-        animate={{ opacity: 1 }}
-        exit={{ opacity: 0 }}
-        onClick={onClose}
+    <view>
+      <view
+        bindtap={close}
+        accessibility-label="Close"
+        accessibility-traits="button"
+        data-testid="composer-backdrop"
         className="fixed inset-0 z-50 bg-ink/25"
+        style={{ animation: backdropAnim }}
       />
-      <motion.div
-        role="dialog"
-        aria-label="New task"
-        initial={{ y: "100%" }}
-        animate={{ y: 0 }}
-        exit={{ y: "100%" }}
-        transition={{ type: "spring", stiffness: 400, damping: 36 }}
-        drag="y"
-        dragListener={false}
-        dragControls={controls}
-        dragConstraints={{ top: 0 }}
-        dragElastic={{ top: 0, bottom: 0.5 }}
-        dragSnapToOrigin
-        onDragEnd={(_e, info) => {
-          if (info.offset.y > 80 || info.velocity.y > 500) onClose();
+      <view
+        accessibility-label="New task"
+        data-testid="composer-sheet"
+        bindanimationend={() => {
+          if (exiting) finish();
         }}
         className="grain fixed inset-x-0 bottom-0 z-50 mx-auto max-w-xl rounded-t-3xl border border-b-0 border-rule/70 bg-surface px-5 pb-8 pt-3 shadow-soft"
+        style={{ animation: sheetAnim }}
       >
-        <div
-          onPointerDown={(e) => controls.start(e)}
-          style={{ touchAction: "none" }}
-          className="-mx-5 flex cursor-grab justify-center pb-3 pt-1 active:cursor-grabbing"
-          aria-hidden
+        {/* Grab handle - a plain TAP-to-close bar (drag-to-dismiss = 5.2). */}
+        <view
+          bindtap={close}
+          accessibility-label="Close"
+          data-testid="composer-handle"
+          className="-mx-5 flex justify-center pb-3 pt-1 active:scale-95"
         >
-          <span className="h-1 w-10 rounded-full bg-ink/15" />
-        </div>
+          <view className="h-1 w-10 rounded-full bg-ink/15" />
+        </view>
 
-        <form
-          onSubmit={(e) => {
-            e.preventDefault();
-            submit();
-          }}
-          onKeyDown={(e) => e.key === "Escape" && onClose()}
-        >
-          <span className="block text-[10px] uppercase tracking-[0.18em] text-ink-muted">
-            new task{start != null ? ` · ${dayLabel}` : ""}
-          </span>
-          <input
-            autoFocus
-            value={title}
-            onChange={(e) => setTitle(e.target.value)}
-            placeholder="What needs doing?"
-            aria-label="Task title"
-            enterKeyHint="done"
-            className="mt-2 w-full bg-transparent font-display text-xl font-bold tracking-tight text-ink outline-none placeholder:text-ink-muted/50"
-          />
-          <textarea
-            value={description}
-            onChange={(e) => setDescription(e.target.value)}
-            placeholder="Details (optional)"
-            aria-label="Task details"
-            rows={2}
-            onKeyDown={(e) => {
-              if (e.key === "Enter" && !e.shiftKey) {
-                e.preventDefault();
-                submit();
-              }
-            }}
-            className="mt-2 w-full resize-none bg-transparent text-sm text-ink outline-none placeholder:text-ink-muted/50"
-          />
+        <text className="block text-[10px] uppercase tracking-[0.18em] text-ink-muted">
+          {timeOpen ? `new task · ${dayLabel}` : "new task"}
+        </text>
 
-          <div className="mt-1 flex flex-wrap items-center gap-2">
-            {start == null && <DueDateButton due={due} onChange={setDue} />}
-            <button
-              type="button"
-              onClick={toggleTime}
-              aria-pressed={start != null}
-              className={cn(
-                "flex items-center gap-1.5 rounded-full border px-3 py-1 text-xs font-medium transition-[color,border-color,transform] active:scale-95",
-                start != null
-                  ? "border-zest/50 bg-zest/10 text-zest"
-                  : "border-rule text-ink-muted hover:border-ink hover:text-ink",
-              )}
-            >
-              <Clock className="h-3.5 w-3.5" />
-              {start != null ? "timed" : "add time"}
-            </button>
-            <button
-              type="button"
-              onClick={() => setShowNotes((s) => !s)}
-              aria-pressed={showNotes}
-              className={cn(
-                "flex items-center gap-1.5 rounded-full border px-3 py-1 text-xs font-medium transition-[color,border-color,transform] active:scale-95",
-                showNotes
-                  ? "border-honey/50 bg-honey/10 text-ink"
-                  : "border-rule text-ink-muted hover:border-ink hover:text-ink",
-              )}
-            >
-              <StickyNote className="h-3.5 w-3.5" />
+        <input
+          bindinput={(e: { detail: { value: string } }) => setTitle(e.detail.value)}
+          bindconfirm={submit}
+          placeholder="What needs doing?"
+          accessibility-label="Task title"
+          data-testid="composer-title"
+          className="mt-2 w-full bg-transparent font-display text-xl font-bold tracking-tight text-ink placeholder:text-ink-muted/50"
+        />
+        <textarea
+          bindinput={(e: { detail: { value: string } }) => setDescription(e.detail.value)}
+          placeholder="Details (optional)"
+          accessibility-label="Task details"
+          className="mt-2 h-12 w-full bg-transparent text-sm text-ink placeholder:text-ink-muted/50"
+        />
+
+        <view className="mt-1 flex flex-wrap items-center gap-2">
+          {!timeOpen && <DueDateButton due={due} onChange={setDue} />}
+          <view
+            bindtap={toggleTime}
+            accessibility-label={timeOpen ? "Remove time" : "Add time"}
+            accessibility-traits="button"
+            accessibility-value={timeOpen ? "on" : "off"}
+            data-testid="composer-add-time"
+            className={cn(
+              "flex items-center gap-1.5 rounded-full border px-3 py-1 active:scale-95",
+              timeOpen ? "border-zest/50 bg-zest/10" : "border-rule",
+            )}
+          >
+            <Clock className="h-3.5 w-3.5 text-ink-muted" />
+            <text className={cn("text-xs font-medium", timeOpen ? "text-zest" : "text-ink-muted")}>
+              {timeOpen ? "timed" : "add time"}
+            </text>
+          </view>
+          <view
+            bindtap={() => setShowNotes((s) => !s)}
+            accessibility-label="Notes"
+            accessibility-traits="button"
+            accessibility-value={showNotes ? "on" : "off"}
+            data-testid="composer-notes-toggle"
+            className={cn(
+              "flex items-center gap-1.5 rounded-full border px-3 py-1 active:scale-95",
+              showNotes ? "border-honey/50 bg-honey/10" : "border-rule",
+            )}
+          >
+            <StickyNote className="h-3.5 w-3.5 text-ink-muted" />
+            <text className={cn("text-xs font-medium", showNotes ? "text-ink" : "text-ink-muted")}>
               notes
-            </button>
-          </div>
+            </text>
+          </view>
+        </view>
 
-          <AnimatePresence initial={false}>
-            {start != null && (
-              <motion.div
-                initial={{ height: 0, opacity: 0 }}
-                animate={{ height: "auto", opacity: 1 }}
-                exit={{ height: 0, opacity: 0 }}
-                transition={{ duration: 0.18, ease: "easeOut" }}
-                className="overflow-hidden"
+        {/* Time row: DROPPED AnimatePresence height section -> a max-height/opacity transition
+            (crib: CSS transitions for enter/exit), gated on reduced-motion. */}
+        <view
+          className={cn(
+            "overflow-hidden",
+            !reduced && "transition-[max-height,opacity] duration-200 ease-out",
+            timeOpen ? "max-h-40 opacity-100" : "max-h-0 opacity-0",
+          )}
+        >
+          <view className="mt-3 flex flex-wrap items-center gap-2 rounded-xl border border-rule/60 bg-paper/50 p-2.5">
+            <view className="flex items-center gap-1">
+              {stepBtn("-1h", -60)}
+              {stepBtn("-15", -15)}
+              <text
+                data-testid="composer-time"
+                className="w-12 text-center text-sm font-medium tabular-nums text-ink"
               >
-                <div className="mt-3 flex flex-wrap items-center gap-2 rounded-xl border border-rule/60 bg-paper/50 p-2.5">
-                  <input
-                    type="time"
-                    value={minToTime(start)}
-                    onChange={(e) => e.target.value && setStart(timeToMin(e.target.value))}
-                    aria-label="Start time"
-                    className="rounded-lg border border-rule/60 bg-surface px-2 py-1 text-sm text-ink outline-none [color-scheme:light] dark:[color-scheme:dark]"
-                  />
-                  <span className="text-xs text-ink-muted">for</span>
-                  <span className="flex flex-wrap gap-1">
-                    {DURATIONS.map((d) => (
-                      <button
-                        key={d.min}
-                        type="button"
-                        onClick={() => setDur(d.min)}
-                        className={cn(
-                          "rounded-full px-2.5 py-1 text-xs font-medium tabular-nums transition-colors",
-                          dur === d.min
-                            ? "bg-zest text-paper"
-                            : "text-ink-muted hover:bg-ink/5 hover:text-ink",
-                        )}
-                      >
-                        {d.label}
-                      </button>
-                    ))}
-                  </span>
-                  <button
-                    type="button"
-                    onClick={() => setStart(null)}
-                    aria-label="Remove time"
-                    className="ml-auto rounded-full p-1 text-ink-muted/60 transition-colors hover:text-clay"
+                {minToTime(start ?? DEFAULT_START)}
+              </text>
+              {stepBtn("+15", 15)}
+              {stepBtn("+1h", 60)}
+            </view>
+            <text className="text-xs text-ink-muted">for</text>
+            <view className="flex flex-wrap gap-1">
+              {DURATIONS.map((d) => (
+                <view
+                  key={d.min}
+                  bindtap={() => setDur(d.min)}
+                  accessibility-label={`${d.label} duration`}
+                  accessibility-traits="button"
+                  className={cn(
+                    "rounded-full px-2.5 py-1 active:scale-95",
+                    dur === d.min ? "bg-zest" : "bg-transparent",
+                  )}
+                >
+                  <text
+                    className={cn(
+                      "text-xs font-medium tabular-nums",
+                      dur === d.min ? "text-paper" : "text-ink-muted",
+                    )}
                   >
-                    <X className="h-3.5 w-3.5" />
-                  </button>
-                </div>
-              </motion.div>
-            )}
-          </AnimatePresence>
-
-          <AnimatePresence initial={false}>
-            {showNotes && (
-              <motion.div
-                initial={{ height: 0, opacity: 0 }}
-                animate={{ height: "auto", opacity: 1 }}
-                exit={{ height: 0, opacity: 0 }}
-                transition={{ duration: 0.18, ease: "easeOut" }}
-                className="overflow-hidden"
-              >
-                <textarea
-                  value={notes}
-                  onChange={(e) => setNotes(e.target.value)}
-                  placeholder="Notes for the task's page…"
-                  aria-label="Task notes"
-                  rows={3}
-                  className="mt-2 w-full resize-none rounded-xl border border-rule/60 bg-paper/60 p-3 text-sm text-ink outline-none placeholder:text-ink-muted/50"
-                />
-              </motion.div>
-            )}
-          </AnimatePresence>
-
-          <div className="mt-3 flex items-center justify-between gap-1.5">
-            <button
-              type="button"
-              onClick={onClose}
-              className="rounded-full px-3.5 py-2 text-xs font-medium text-ink-muted transition-colors hover:text-ink"
+                    {d.label}
+                  </text>
+                </view>
+              ))}
+            </view>
+            <view
+              bindtap={() => setStart(null)}
+              accessibility-label="Remove time"
+              accessibility-traits="button"
+              className="ml-auto rounded-full p-1 active:scale-90"
             >
-              Cancel
-            </button>
-            <span className="flex items-center gap-1.5">
-              <motion.button
-                type="button"
-                onClick={() => void submitAndOpen()}
-                disabled={!title.trim() || create.isPending}
-                whileTap={{ scale: 0.94 }}
-                title="Add, then open the page for checklist, resources & attachments"
-                className="flex items-center gap-1 rounded-full border border-rule bg-transparent px-4 py-2 text-xs font-medium text-ink transition-opacity hover:bg-ink/5 disabled:opacity-40"
-              >
-                Add &amp; open
-                <ArrowUpRight className="h-3 w-3" />
-              </motion.button>
-              <motion.button
-                type="submit"
-                disabled={!title.trim() || create.isPending}
-                whileTap={{ scale: 0.94 }}
-                className="rounded-full bg-zest px-5 py-2 text-xs font-semibold text-paper shadow-soft transition-opacity disabled:opacity-40"
-              >
-                Add task
-              </motion.button>
-            </span>
-          </div>
-        </form>
-      </motion.div>
-    </>
+              <X className="h-3.5 w-3.5 text-ink-muted" />
+            </view>
+          </view>
+        </view>
+
+        {/* Notes row: same dropped-AnimatePresence -> CSS transition. */}
+        <view
+          className={cn(
+            "overflow-hidden",
+            !reduced && "transition-[max-height,opacity] duration-200 ease-out",
+            showNotes ? "max-h-40 opacity-100" : "max-h-0 opacity-0",
+          )}
+        >
+          <textarea
+            bindinput={(e: { detail: { value: string } }) => setNotes(e.detail.value)}
+            placeholder="Notes for the task's page…"
+            accessibility-label="Task notes"
+            className="mt-2 h-16 w-full rounded-xl border border-rule/60 bg-paper/60 p-3 text-sm text-ink placeholder:text-ink-muted/50"
+          />
+        </view>
+
+        <view className="mt-3 flex items-center justify-between gap-1.5">
+          <view
+            bindtap={close}
+            accessibility-label="Cancel"
+            accessibility-traits="button"
+            data-testid="composer-cancel"
+            className="rounded-full px-3.5 py-2 active:scale-95"
+          >
+            <text className="text-xs font-medium text-ink-muted">Cancel</text>
+          </view>
+          <view className="flex items-center gap-1.5">
+            <view
+              bindtap={canSubmit ? () => void submitAndOpen() : undefined}
+              user-interaction-enabled={canSubmit}
+              accessibility-label="Add and open the task page"
+              accessibility-traits="button"
+              data-testid="composer-submit-open"
+              className={cn(
+                "flex items-center gap-1 rounded-full border border-rule bg-transparent px-4 py-2 active:scale-95",
+                !canSubmit && "opacity-40",
+              )}
+            >
+              <text className="text-xs font-medium text-ink">Add &amp; open</text>
+              <ArrowUpRight className="h-3 w-3 text-ink" />
+            </view>
+            <view
+              bindtap={canSubmit ? submit : undefined}
+              user-interaction-enabled={canSubmit}
+              main-thread:bindtouchstart={pressDown}
+              main-thread:bindtouchend={pressUp}
+              main-thread:bindtouchcancel={pressUp}
+              accessibility-label="Add task"
+              accessibility-traits="button"
+              data-testid="composer-submit"
+              className={cn(
+                "rounded-full bg-zest px-5 py-2 shadow-soft active:scale-95",
+                !canSubmit && "opacity-40",
+              )}
+            >
+              <text className="text-xs font-semibold text-paper">Add task</text>
+            </view>
+          </view>
+        </view>
+      </view>
+    </view>
   );
 }

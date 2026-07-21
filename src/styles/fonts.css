@@ -1,0 +1,58 @@
+/* One font-face rule per weight instance - Lynx ignores font-weight/font-style/
+   font-variant on this at-rule, so each weight needs its own family name.
+   https://lynxjs.org/api/css/at-rule/font-face.html */
+@font-face {
+  font-family: "Outfit-400";
+  src: url("../assets/fonts/outfit-400.woff2") format("woff2");
+}
+@font-face {
+  font-family: "Outfit-500";
+  src: url("../assets/fonts/outfit-500.woff2") format("woff2");
+}
+@font-face {
+  font-family: "Outfit-600";
+  src: url("../assets/fonts/outfit-600.woff2") format("woff2");
+}
+@font-face {
+  font-family: "Outfit-700";
+  src: url("../assets/fonts/outfit-700.woff2") format("woff2");
+}
+@font-face {
+  font-family: "Fraunces-700";
+  src: url("../assets/fonts/fraunces-700.woff2") format("woff2");
+}
+@font-face {
+  font-family: "Fraunces-900";
+  src: url("../assets/fonts/fraunces-900.woff2") format("woff2");
+}
+
+/* Class-based weight -> family mapping, so existing className usage
+   (font-sans/font-display combined with font-normal/medium/semibold/bold/black)
+   keeps resolving without every consumer renaming classes. Compound class selectors
+   (.a.b) are plain CSS, not pseudo/data-attr selectors, so they are Lynx-legal:
+   https://lynxjs.org/api/css/selectors.html only restricts pseudo-CLASSES
+   (:active/:not()/:root supported, others not) and there is no pseudo-ELEMENT support
+   at all - neither restriction applies to compound class selectors. */
+.font-sans,
+.font-sans.font-normal {
+  font-family: "Outfit-400", system-ui, sans-serif;
+}
+.font-sans.font-medium {
+  font-family: "Outfit-500", system-ui, sans-serif;
+}
+.font-sans.font-semibold {
+  font-family: "Outfit-600", system-ui, sans-serif;
+}
+.font-sans.font-bold {
+  font-family: "Outfit-700", system-ui, sans-serif;
+}
+/* Fraunces ships bold/black only (PLAN 5.7) - no regular instance. CLAUDE.md's design
+   aesthetic section already only ever describes display type as "bold/black", so a bare
+   .font-display (no weight class) defaults to bold. */
+.font-display,
+.font-display.font-bold {
+  font-family: "Fraunces-700", Georgia, serif;
+}
+.font-display.font-black {
+  font-family: "Fraunces-900", Georgia, serif;
+}

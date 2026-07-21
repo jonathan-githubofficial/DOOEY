@@ -44,11 +44,15 @@ export const DEFAULT_COLORS: Record<Mode, Record<ColorKey, string>> = {
   },
 };
 
-/** Only stacks that need no extra font downloads: the two bundled variable
- * fonts plus system families. */
+/** Only stacks that need no extra font downloads: the two bundled fonts plus system
+ * families. The lead family MUST match a real @font-face name from styles/fonts.css
+ * ("Outfit-400"/"Fraunces-700", one family per weight instance - Lynx ignores
+ * font-weight on @font-face). The old "Outfit Variable"/"Fraunces Variable" names had
+ * no matching @font-face, so a bare `font-sans`/`font-display` (which resolves through
+ * var(--app-font-*)) fell straight through to the generic serif/sans fallback. */
 export const FONT_STACKS = [
-  { key: "outfit", label: "Outfit", stack: `"Outfit Variable", "Outfit", system-ui, sans-serif` },
-  { key: "fraunces", label: "Fraunces", stack: `"Fraunces Variable", "Fraunces", Georgia, serif` },
+  { key: "outfit", label: "Outfit", stack: `"Outfit-400", system-ui, sans-serif` },
+  { key: "fraunces", label: "Fraunces", stack: `"Fraunces-700", Georgia, serif` },
   { key: "system", label: "System", stack: `system-ui, -apple-system, "Segoe UI", sans-serif` },
   { key: "serif", label: "Georgia", stack: `Georgia, "Times New Roman", serif` },
   { key: "mono", label: "Mono", stack: `ui-monospace, "Cascadia Code", Consolas, monospace` },

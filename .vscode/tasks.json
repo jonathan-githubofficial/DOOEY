@@ -1,12 +1,12 @@
 {
   // One task runs the whole stack: Ctrl+Shift+B (or Terminal → Run Build Task).
-  // scripts/dev.mjs frees ports 5173 / 8090 if a stale process is holding them,
-  // then starts Vite + PocketBase together. Ctrl+C in the terminal stops both.
+  // scripts/dev.mjs frees ports 3000 / 8090 if a stale process is holding them,
+  // then starts rspeedy (Lynx) + PocketBase together. Ctrl+C in the terminal stops both.
   "version": "2.0.0",
   "tasks": [
     {
       "label": "dev",
-      "detail": "Free ports, then run frontend (Vite) + backend (PocketBase)",
+      "detail": "Free ports, then run frontend (rspeedy/Lynx) + backend (PocketBase)",
       "type": "npm",
       "script": "dev:all",
       "isBackground": true,

@@ -1,9 +1,33 @@
-import { useState } from "react";
-import { AnimatePresence, motion } from "motion/react";
-import { Link2, Plus, X } from "lucide-react";
-import { Eyebrow, Panel } from "@/components/surface";
+// A resources section (unit 4.2, ported from src-legacy/components/page/ResourcesSection.tsx onto
+// Lynx): URL parsing, list, add-form, inline label edit, external open, remove.
+//
+// `parseResource`/`youtubeId` are ported verbatim - `new URL(...)` is available on the WEB target
+// (the browser worker has the global `URL`, same class as the crib's TextDecoder note); native
+// `URL` is a PARKED native-only concern. Add-field: a Lynx <input> whose `bindconfirm` (Enter)
+// parses+adds (Lynx has no <form>/onSubmit); uncontrolled, so the draft rides `bindinput` and is
+// cleared via setInputValue. `crypto.randomUUID()` -> `newId()` (SPEC 9).
+//
+// YOUTUBE EMBED - explicit degradation (SPEC): Lynx has NO <iframe> element (PLAN section 2 maps
+// HTML markup to Lynx elements only). Inline playback is dropped; a `youtube` resource renders a
+// tappable thumbnail card - <image src="https://i.ytimg.com/vi/<id>/hqdefault.jpg"> inside a
+// <view bindtap> that calls openExternal(url), with a small play glyph overlay. This is a
+// deliberate parity reduction on the web target (recorded); true inline playback would need a
+// verified Lynx-web HTML-passthrough path (a STOP, not taken here).
+//
+// The framer springs + `lucide-react` + `group-hover` reveal are dropped as elsewhere: CSS enter
+// (.animate-enter) gated on reduced-motion, the L2 icon set, always-visible remove. The old
+// <a href> host link becomes a <text bindtap> calling openExternal (Lynx has no <a>).
+import { useEffect, useRef, useState } from "react";
+
+import { Link2, X } from "@/components/icons/lucide";
+import type { Resource } from "@/components/page/types";
 import { EditableText } from "@/components/editable";
-import type { Resource } from "./types";
+import { Eyebrow, Panel } from "@/components/surface";
+import { cn } from "@/lib/cn";
+import { newId } from "@/lib/id";
+import { focusInput, setInputValue, useDomId } from "@/lib/lynxInput";
+import { openExternal } from "@/lib/openExternal";
+import { useReducedMotion } from "@/stores";
 
 /** The 11-char video id, if the URL is a YouTube watch/short/embed/share link. */
 function youtubeId(url: URL): string | null {
@@ -30,6 +54,14 @@ function parseResource(raw: string): Omit<Resource, "id"> | null {
   return { url: url.href, label: url.hostname.replace(/^www\./, ""), kind: "link" };
 }
 
+function hostLabel(rawUrl: string): string {
+  try {
+    return new URL(rawUrl).hostname.replace(/^www\./, "");
+  } catch {
+    return rawUrl;
+  }
+}
+
 export function ResourcesSection({
   resources,
   onChange,
@@ -39,107 +71,116 @@ export function ResourcesSection({
   onChange: (resources: Resource[]) => void;
   autoFocus?: boolean;
 }) {
-  const [raw, setRaw] = useState("");
+  const reduced = useReducedMotion();
+  const id = useDomId("resource-add");
+  const draftRef = useRef("");
   const [rejected, setRejected] = useState(false);
+
+  useEffect(() => {
+    if (autoFocus) focusInput(id);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const add = () => {
+    const parsed = parseResource(draftRef.current.trim());
+    if (!parsed) {
+      setRejected(!!draftRef.current.trim());
+      return;
+    }
+    onChange([...resources, { id: newId(), ...parsed }]);
+    draftRef.current = "";
+    setInputValue(id, "");
+    setRejected(false);
+    focusInput(id);
+  };
 
   return (
     <Panel className="p-5 md:p-6">
       <Eyebrow>resources</Eyebrow>
 
-      <ul className="mt-3 space-y-3">
-        <AnimatePresence mode="popLayout" initial={false}>
-          {resources.map((r) => (
-            <motion.li
-              key={r.id}
-              layout
-              initial={{ opacity: 0, y: 8 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, scale: 0.96 }}
-              transition={{ type: "spring", stiffness: 420, damping: 32 }}
-              className="group"
-            >
-              <div className="flex items-center gap-2.5">
-                <Link2 className="h-4 w-4 shrink-0 text-ink-muted" />
-                <EditableText
-                  value={r.label}
-                  ariaLabel={`resource "${r.label}"`}
-                  onCommit={(next) =>
-                    onChange(resources.map((x) => (x.id === r.id ? { ...x, label: next } : x)))
-                  }
-                  className="min-w-0 flex-1 truncate text-[15px] font-medium"
-                />
-                <a
-                  href={r.url}
-                  target="_blank"
-                  rel="noreferrer"
-                  className="max-w-40 truncate text-xs text-ink-muted underline-offset-2 hover:text-ink hover:underline"
-                >
-                  {new URL(r.url).hostname.replace(/^www\./, "")}
-                </a>
-                <button
-                  type="button"
-                  aria-label={`Remove "${r.label}"`}
-                  onClick={() => onChange(resources.filter((x) => x.id !== r.id))}
-                  className="text-ink-muted/50 opacity-0 transition-[opacity,color] hover:text-clay focus-visible:opacity-100 group-hover:opacity-100"
-                >
-                  <X className="h-3.5 w-3.5" />
-                </button>
-              </div>
-              {r.kind === "youtube" && <YouTubeEmbed url={r.url} title={r.label} />}
-            </motion.li>
-          ))}
-        </AnimatePresence>
-      </ul>
+      <view className="mt-3 space-y-3">
+        {resources.map((r) => (
+          <view key={r.id} className={cn(!reduced && "animate-enter")} data-testid="resource-item">
+            <view className="flex items-center gap-2.5">
+              <Link2 className="h-4 w-4 shrink-0 text-ink-muted" />
+              <EditableText
+                value={r.label}
+                ariaLabel={`resource "${r.label}"`}
+                onCommit={(next) =>
+                  onChange(resources.map((x) => (x.id === r.id ? { ...x, label: next } : x)))
+                }
+                className="min-w-0 flex-1 text-[15px] font-medium text-ink"
+              />
+              <view
+                bindtap={() => openExternal(r.url)}
+                accessibility-label={`Open ${hostLabel(r.url)}`}
+                className="max-w-40 active:scale-95"
+              >
+                <text className="text-xs text-ink-muted">{hostLabel(r.url)}</text>
+              </view>
+              <view
+                bindtap={() => onChange(resources.filter((x) => x.id !== r.id))}
+                accessibility-label={`Remove "${r.label}"`}
+                className="text-ink-muted/50 active:scale-90"
+              >
+                <X className="h-3.5 w-3.5" />
+              </view>
+            </view>
+            {r.kind === "youtube" && <YouTubeThumb url={r.url} />}
+          </view>
+        ))}
+      </view>
 
-      <form
-        onSubmit={(e) => {
-          e.preventDefault();
-          const parsed = parseResource(raw.trim());
-          if (!parsed) {
-            setRejected(!!raw.trim());
-            return;
-          }
-          onChange([...resources, { id: crypto.randomUUID(), ...parsed }]);
-          setRaw("");
-          setRejected(false);
-        }}
-        className={resources.length > 0 ? "mt-4" : "mt-3"}
-      >
-        <div className="flex items-center gap-2.5 text-ink-muted">
-          <Plus className="h-4 w-4 shrink-0" />
+      <view className={resources.length > 0 ? "mt-4" : "mt-3"}>
+        <view className="flex items-center gap-2.5 text-ink-muted">
+          <Link2 className="h-4 w-4 shrink-0 text-ink-muted" />
           <input
-            value={raw}
-            autoFocus={autoFocus}
-            onChange={(e) => {
-              setRaw(e.target.value);
-              setRejected(false);
+            id={id}
+            data-testid="resource-add"
+            placeholder="Paste a link — YouTube opens in your browser…"
+            accessibility-label="Add a resource URL"
+            confirm-type="done"
+            bindinput={(e: { detail: { value: string } }) => {
+              draftRef.current = e.detail.value;
+              if (rejected) setRejected(false);
             }}
-            placeholder="Paste a link — YouTube plays right here…"
-            aria-label="Add a resource URL"
-            enterKeyHint="done"
-            className="w-full bg-transparent text-[15px] text-ink outline-none placeholder:text-ink-muted/60"
+            bindconfirm={add}
+            bindblur={(e: { detail: { value: string } }) => {
+              draftRef.current = e.detail.value;
+            }}
+            className="w-full bg-transparent text-[15px] text-ink"
           />
-        </div>
+        </view>
         {rejected && (
-          <p className="mt-1.5 pl-6 text-xs text-clay">That doesn&apos;t look like a URL.</p>
+          <text className="mt-1.5 pl-6 text-xs text-clay">That doesn&apos;t look like a URL.</text>
         )}
-      </form>
+      </view>
     </Panel>
   );
 }
 
-function YouTubeEmbed({ url, title }: { url: string; title: string }) {
-  const id = youtubeId(new URL(url));
-  if (!id) return null;
+/** The YouTube degradation: a tappable thumbnail that opens the video externally (no inline
+ * <iframe> on Lynx). The play glyph is a plain overlay - icons render black on the web target
+ * (unit 2.4 finding), so a text glyph avoids depending on a coloured icon here. */
+function YouTubeThumb({ url }: { url: string }) {
+  const yt = youtubeId(new URL(url));
+  if (!yt) return null;
   return (
-    <div className="mt-2.5 overflow-hidden rounded-xl border border-rule/70 shadow-soft">
-      <iframe
-        src={`https://www.youtube-nocookie.com/embed/${id}`}
-        title={title}
-        allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-        allowFullScreen
-        className="aspect-video w-full"
+    <view
+      bindtap={() => openExternal(url)}
+      accessibility-label="Play YouTube video in your browser"
+      className="relative mt-2.5 aspect-video w-full overflow-hidden rounded-xl border border-rule/70 shadow-soft active:scale-[0.99]"
+    >
+      <image
+        src={`https://i.ytimg.com/vi/${yt}/hqdefault.jpg`}
+        className="h-full w-full"
+        mode="aspectFill"
       />
-    </div>
+      <view className="absolute inset-0 flex items-center justify-center">
+        <view className="flex h-12 w-12 items-center justify-center rounded-full bg-ink/70">
+          <text className="text-lg text-paper">▶</text>
+        </view>
+      </view>
+    </view>
   );
 }

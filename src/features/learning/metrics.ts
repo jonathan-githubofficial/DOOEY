@@ -1,4 +1,4 @@
-import type { Task } from "@/features/tasks";
+import type { Task } from "@/features/tasks/types";
 
 const DAY = 86_400_000;
 

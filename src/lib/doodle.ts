@@ -13,13 +13,3 @@ export type InkColor = (typeof INK_COLORS)[number];
 export function strokePath(points: [number, number][]): string {
   return "M " + points.map((p) => `${p[0]} ${p[1]}`).join(" L ");
 }
-
-/** Percent coordinates of a pointer event within `el`, clamped and rounded. */
-export function pointerPct(e: React.PointerEvent, el: HTMLElement): [number, number] {
-  const r = el.getBoundingClientRect();
-  const clamp = (v: number) => Math.min(100, Math.max(0, v));
-  return [
-    Math.round(clamp(((e.clientX - r.left) / r.width) * 100) * 100) / 100,
-    Math.round(clamp(((e.clientY - r.top) / r.height) * 100) * 100) / 100,
-  ];
-}

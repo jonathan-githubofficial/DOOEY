@@ -1,10 +1,20 @@
+// Click-to-edit text (unit 4.2, ported from src-legacy/components/editable.tsx onto Lynx).
+// Renders as plain text until tapped, then swaps to a Lynx <input>; Enter or blur commits, empty
+// commits fall back to the original.
+//
+// Element mapping (crib "Elements, not HTML"): the old <button> display becomes a <view bindtap>
+// wrapping a <text> (Lynx has no <button>; <text> does not inherit CSS, so colour/size stay on
+// the node via className). The controlled <input> becomes a Lynx <input>, which has NO value prop
+// (verified: @lynx-js/types input.d.ts) - so on entering edit mode we imperatively fill it with
+// `setInputValue` and `focusInput` via SelectorQuery (the uncontrolled-input seam, lynxInput.ts).
+// Events: `bindinput` -> draft (event.detail.value), `bindconfirm` (Enter) -> commit,
+// `bindblur` -> commit. Escape-to-revert is dropped: Lynx mobile has no key event for it and there
+// is no cross-platform select-all, so we keep focus-only + blur/enter commit (recorded PARKED).
 import { useEffect, useRef, useState } from "react";
-import { cn } from "@/lib/cn";
 
-/**
- * Click-to-edit text. Renders as plain text until clicked, then becomes an input.
- * Enter or blur commits; Escape reverts. Empty commits fall back to the original.
- */
+import { cn } from "@/lib/cn";
+import { focusInput, setInputValue, useDomId } from "@/lib/lynxInput";
+
 export function EditableText({
   value,
   onCommit,
@@ -13,6 +23,7 @@ export function EditableText({
   placeholder,
   maxLength,
   ariaLabel,
+  testId,
 }: {
   value: string;
   onCommit: (next: string) => void;
@@ -21,63 +32,64 @@ export function EditableText({
   placeholder?: string;
   maxLength?: number;
   ariaLabel: string;
+  testId?: string;
 }) {
   const [editing, setEditing] = useState(false);
-  const [draft, setDraft] = useState(value);
-  const ref = useRef<HTMLInputElement>(null);
+  const draftRef = useRef(value);
+  const id = useDomId("edit");
 
+  // On entering edit mode, fill the (value-less) Lynx input with the current text and focus it.
   useEffect(() => {
-    if (editing) ref.current?.select();
+    if (!editing) return;
+    draftRef.current = value;
+    setInputValue(id, value);
+    focusInput(id);
+    // `value` is intentionally read at edit-open only; re-filling on every change would fight typing.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [editing]);
 
   const commit = () => {
-    const next = draft.trim();
+    const next = draftRef.current.trim();
     if (next && next !== value) onCommit(next);
-    else setDraft(value);
     setEditing(false);
   };
 
   if (!editing) {
     return (
-      <button
-        type="button"
-        aria-label={`Edit ${ariaLabel}`}
-        onClick={(e) => {
-          e.stopPropagation();
-          setDraft(value);
+      <view
+        bindtap={() => {
+          draftRef.current = value;
           setEditing(true);
         }}
+        accessibility-label={`Edit ${ariaLabel}`}
+        data-testid={testId}
         className={cn(
-          "-mx-1 rounded px-1 text-left transition-colors hover:bg-ink/[0.06]",
+          "-mx-1 rounded px-1 active:bg-ink/[0.06]",
           !value && "text-ink-muted/60",
           className,
         )}
       >
-        {value || placeholder}
-      </button>
+        <text className={cn("text-ink", !value && "text-ink-muted/60", className)}>
+          {value || placeholder}
+        </text>
+      </view>
     );
   }
 
   return (
     <input
-      ref={ref}
-      value={draft}
-      maxLength={maxLength}
+      id={id}
+      maxlength={maxLength}
       placeholder={placeholder}
-      aria-label={ariaLabel}
-      onChange={(e) => setDraft(e.target.value)}
-      onClick={(e) => e.stopPropagation()}
-      onBlur={commit}
-      onKeyDown={(e) => {
-        e.stopPropagation();
-        if (e.key === "Enter") commit();
-        if (e.key === "Escape") {
-          setDraft(value);
-          setEditing(false);
-        }
+      accessibility-label={ariaLabel}
+      data-testid={testId}
+      bindinput={(e: { detail: { value: string } }) => {
+        draftRef.current = e.detail.value;
       }}
+      bindconfirm={commit}
+      bindblur={commit}
       className={cn(
-        "-mx-1 w-full rounded bg-ink/[0.06] px-1 outline-none ring-1 ring-ink/20",
+        "-mx-1 w-full rounded bg-ink/[0.06] px-1 text-ink",
         className,
         inputClassName,
       )}

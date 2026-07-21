@@ -1,7 +1,12 @@
 // One command to run the whole stack: frees the ports, then starts Vite + PocketBase
 // together with prefixed output and a clean shutdown.
 //
-// Usage:  npm run dev:all        (or the VS Code "dev" task — Ctrl+Shift+B)
+// Usage:  npm run dev:all            (or the VS Code "dev" task — Ctrl+Shift+B)
+//         npm run dev:all -- --lan   (phone testing: scan the terminal QR with LynxExplorer)
+//
+// --lan makes the stack reachable from a phone on the same Wi-Fi: PocketBase binds
+// all interfaces instead of loopback, and the LAN API origin is baked into the
+// bundle via PUBLIC_PB_URL (a phone can't reach this machine's 127.0.0.1).
 //
 // Ports get stuck when a previous run was killed without releasing them, so each
 // port is cleared first. Only the PIDs actually LISTENING on our two ports are
@@ -10,13 +15,15 @@
 import { spawn, execSync } from "node:child_process";
 import { existsSync, readFileSync } from "node:fs";
 import { createServer } from "node:net";
+import { networkInterfaces } from "node:os";
 import { join, resolve, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const isWin = process.platform === "win32";
+const LAN = process.argv.includes("--lan");
 
-const VITE_PORT = 5173;
+const RSPEEDY_PORT = 3000; // matches lynx.config.ts server.port
 const PB_PORT = pbPortFromEnv() ?? 8090;
 
 function pbPortFromEnv() {
@@ -31,6 +38,20 @@ function pbPortFromEnv() {
 }
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+
+/**
+ * The machine's LAN IPv4 — what the phone dials. Virtual adapters (WSL, Hyper-V,
+ * VPNs) also expose non-internal IPv4s that a phone can't reach, so those are
+ * filtered by name and 192.168.* is preferred over the rest.
+ */
+function lanIp() {
+  const addresses = Object.entries(networkInterfaces())
+    .filter(([name]) => !/vethernet|wsl|hyper-v|vmware|virtualbox|loopback|tailscale|zerotier/i.test(name))
+    .flatMap(([, addrs]) => addrs ?? [])
+    .filter((a) => a.family === "IPv4" && !a.internal)
+    .map((a) => a.address);
+  return addresses.find((ip) => ip.startsWith("192.168.")) ?? addresses[0] ?? null;
+}
 
 /**
  * PIDs listening on `port` — nothing else.
@@ -117,10 +138,13 @@ async function freePort(port, label) {
 const children = [];
 let shuttingDown = false;
 
-function run(name, color, command, args) {
+function run(name, color, command, args, extraEnv) {
   // No shell: pocketbase.exe is a real binary and Vite runs via node, so we get
   // real PIDs (killable as a tree) and no arg-escaping surprises.
-  const child = spawn(command, args, { cwd: ROOT });
+  const child = spawn(command, args, {
+    cwd: ROOT,
+    env: extraEnv ? { ...process.env, ...extraEnv } : process.env,
+  });
   children.push(child);
 
   const prefix = `\x1b[${color}m[${name}]\x1b[0m `;
@@ -165,11 +189,11 @@ process.on("SIGTERM", () => shutdown(0));
 
 // ── go ────────────────────────────────────────────────────────────────────
 const pbBin = join(ROOT, "pb", isWin ? "pocketbase.exe" : "pocketbase");
-const viteBin = join(ROOT, "node_modules", "vite", "bin", "vite.js");
+const rspeedyBin = join(ROOT, "node_modules", "@lynx-js", "rspeedy", "bin", "rspeedy.js");
 
 for (const [path, hint] of [
   [pbBin, "Download it from https://pocketbase.io/docs/ and put it in pb/."],
-  [viteBin, "Run `npm install` first."],
+  [rspeedyBin, "Run `npm install` first."],
 ]) {
   if (!existsSync(path)) {
     console.error(`\x1b[31m[dev] not found: ${path}\x1b[0m\n      ${hint}`);
@@ -177,12 +201,30 @@ for (const [path, hint] of [
   }
 }
 
-await freePort(PB_PORT, "backend");
-await freePort(VITE_PORT, "frontend");
+const lanAddr = LAN ? lanIp() : null;
+if (LAN && !lanAddr) {
+  console.error(
+    `\x1b[31m[dev] --lan: no LAN IPv4 found — is this machine on a network?\x1b[0m`,
+  );
+  process.exit(1);
+}
 
-run("backend", "36", pbBin, ["serve", `--http=127.0.0.1:${PB_PORT}`]);
-run("frontend", "35", process.execPath, [viteBin, "--port", String(VITE_PORT), "--strictPort"]);
+await freePort(PB_PORT, "backend");
+await freePort(RSPEEDY_PORT, "frontend");
+
+run("backend", "36", pbBin, ["serve", `--http=${lanAddr ? "0.0.0.0" : "127.0.0.1"}:${PB_PORT}`]);
+// rspeedy dev takes its port from lynx.config.ts (server.port); no CLI --port flag.
+run(
+  "frontend",
+  "35",
+  process.execPath,
+  [rspeedyBin, "dev"],
+  lanAddr ? { PUBLIC_PB_URL: `http://${lanAddr}:${PB_PORT}` } : undefined,
+);
 
 console.log(
-  `\x1b[90m[dev] frontend → http://localhost:${VITE_PORT}   backend → http://127.0.0.1:${PB_PORT}/_/   (Ctrl+C stops both)\x1b[0m`,
+  lanAddr
+    ? `\x1b[90m[dev] LAN mode — scan the QR below with LynxExplorer (same Wi-Fi).\n` +
+        `      bundle → http://${lanAddr}:${RSPEEDY_PORT}   backend → http://${lanAddr}:${PB_PORT}/_/   (Ctrl+C stops both)\x1b[0m`
+    : `\x1b[90m[dev] frontend → http://localhost:${RSPEEDY_PORT}   backend → http://127.0.0.1:${PB_PORT}/_/   (Ctrl+C stops both)\x1b[0m`,
 );

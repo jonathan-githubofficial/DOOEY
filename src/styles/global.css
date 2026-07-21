@@ -1,37 +1,22 @@
-@import "tailwindcss";
-@import "tw-animate-css";
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+@import "./fonts.css";
 
-/* DOOEY — clean skeuomorphism on warm paper. Soft cards, gentle shadows, grain.
-   Palette: paper + ink, with leaf (green) · zest (orange) · sky (blue) · clay (red)
-   · honey (amber) as category accents. */
-
-@theme inline {
-  --font-sans: var(--app-font-sans);
-  --font-display: var(--app-font-display);
-
-  --color-paper: hsl(var(--paper));
-  --color-surface: hsl(var(--surface));
-  --color-ink: hsl(var(--ink));
-  --color-ink-muted: hsl(var(--ink-muted));
-  --color-rule: hsl(var(--rule));
-  --color-leaf: hsl(var(--leaf));
-  --color-zest: hsl(var(--zest));
-  --color-sky: hsl(var(--sky));
-  --color-clay: hsl(var(--clay));
-  --color-honey: hsl(var(--honey));
-
-  --radius-card: var(--app-radius-card);
-}
+/* DOOEY design tokens — colour / font / radius / shadow, plus the paper-grain
+   tile class (unit 2.2) and the stamp-edge/stamp-btn primitive classes (unit 2.3). The
+   remaining fancy utility classes (.inset-well, ::selection) stay deferred - no unit-2.3
+   consumer needs them yet. */
 
 :root {
-  /* Runtime style tokens — the Style studio overrides these (and the colour
-     triplets below) as inline styles on <html>; the values here are the
-     factory defaults. */
-  --app-font-sans: "Outfit Variable", "Outfit", system-ui, sans-serif;
-  --app-font-display: "Fraunces Variable", "Fraunces", Georgia, serif;
+  /* Runtime style tokens — the Style studio (unit 3.4) overrides these; the
+     values here are the factory defaults. */
+  --app-font-sans: "Outfit-400", system-ui, sans-serif;
+  --app-font-display: "Fraunces-700", Georgia, serif;
   --app-radius-card: 1.5rem;
   --radius-card: var(--app-radius-card);
 
+  /* Colour triplets — light ("H S% L%"), consumed as hsl(var(--token)). */
   --paper: 44 26% 95%;
   --surface: 44 40% 99%;
   --ink: 28 12% 14%;
@@ -42,10 +27,12 @@
   --sky: 208 66% 52%;
   --clay: 10 60% 53%;
   --honey: 36 78% 50%;
+
+  /* --shadow-strength / --grain-strength are runtime multipliers (default 1)
+     set by the Style studio (unit 3.4); keep the references, default via calc. */
   --soft-shadow:
     0 1px 1px rgb(40 32 24 / calc(0.04 * var(--shadow-strength, 1))),
     0 3px 8px -4px rgb(40 32 24 / calc(0.06 * var(--shadow-strength, 1)));
-  --grain: url("data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20width='160'%20height='160'%3E%3Cfilter%20id='n'%3E%3CfeTurbulence%20type='fractalNoise'%20baseFrequency='0.85'%20numOctaves='2'%20stitchTiles='stitch'/%3E%3C/filter%3E%3Crect%20width='100%25'%20height='100%25'%20filter='url(%23n)'/%3E%3C/svg%3E");
   color-scheme: light;
 }
 
@@ -66,60 +53,21 @@
   color-scheme: dark;
 }
 
+/* Web-target convenience: Lynx <text> does NOT inherit CSS, so per-<text>
+   colour / font come with the components in L2+. */
 body {
   font-family: var(--app-font-sans);
   color: hsl(var(--ink));
   background-color: hsl(var(--paper));
-  min-height: 100dvh;
-  -webkit-font-smoothing: antialiased;
 }
 
-/* Paper-grain background wash. */
-body::before {
-  content: "";
-  position: fixed;
-  inset: 0;
-  z-index: -1;
-  pointer-events: none;
-  background-image: var(--grain);
-  opacity: calc(0.7 * var(--grain-strength, 1));
-  mix-blend-mode: multiply;
-}
-
-/* Soft, layered elevation for the card system. */
 .shadow-soft {
   box-shadow: var(--soft-shadow);
 }
 
-/* Printed-paper grain on a card. Sits over the surface, under nothing
-   readable-critical. In the components layer so positioning utilities
-   (fixed/absolute) on the same element still win the cascade. */
-@layer components {
-  .grain {
-    position: relative;
-    isolation: isolate;
-  }
-}
-.grain::after {
-  content: "";
-  position: absolute;
-  inset: 0;
-  border-radius: inherit;
-  pointer-events: none;
-  background-image: var(--grain);
-  /* Fixed to the viewport so the grain is continuous across adjacent grained
-     elements (e.g. a folder tab and its card sample the same texture → same colour). */
-  background-attachment: fixed;
-  opacity: calc(0.5 * var(--grain-strength, 1));
-  mix-blend-mode: multiply;
-}
-.dark body::before,
-.dark .grain::after {
-  mix-blend-mode: overlay;
-  opacity: calc(0.12 * var(--grain-strength, 1));
-}
-
-/* Pressed / embossed inset (progress tracks, wells). */
+/* Pressed / embossed inset (progress tracks, wells) - ported verbatim from src-legacy
+   global.css (unit 1.1 deferred it; the date-shelf day tray in WeekStrip and the agenda
+   counter chip both use `.inset-well` and were rendering flat without it). */
 .inset-well {
   box-shadow: inset 0 1px 3px rgb(20 16 12 / calc(0.14 * var(--shadow-strength, 1)));
 }
@@ -127,21 +75,72 @@ body::before {
   box-shadow: inset 0 1px 3px rgb(0 0 0 / calc(0.45 * var(--shadow-strength, 1)));
 }
 
-/* Postage-stamp perforated edge: notches punched along all four sides. */
+/* text-transform utilities. The @lynx-js/tailwind-preset omits the `uppercase`/`lowercase`/
+   `capitalize`/`normal-case` core utilities (text-transform is not in the Lynx CSS dataset),
+   so eyebrows/stamps that use `uppercase` were rendering in their source casing. On the WEB
+   target text-transform is real CSS (Chromium), so re-add the utilities as plain classes. */
+.uppercase {
+  text-transform: uppercase;
+}
+.lowercase {
+  text-transform: lowercase;
+}
+.capitalize {
+  text-transform: capitalize;
+}
+.normal-case {
+  text-transform: none;
+}
+
+/* color: inherit for wrapped labels. The web-target <text> element (x-text) carries a
+   default black colour that - unlike font-family - does NOT inherit from its parent <view>,
+   so a label wrapped by the Button/StampButton/Stamp primitives (which set their colour on
+   the container) would render black. `.text-inherit` makes the wrapping <text> take the
+   container's colour. (Not emitted by the Lynx preset, so declared explicitly.) */
+.text-inherit {
+  color: inherit;
+}
+
+/* Paper grain: a baked, seamless, tiled PNG (replaces the old SVG-filter
+   data-URI + pseudo-element trick - Lynx has no pseudo-element support:
+   https://lynxjs.org/api/css/selectors.html). Rendered by the real
+   <GrainOverlay> element (src/components/grain-overlay.tsx), one per grained
+   surface - Lynx's <bg-layer> does not support a viewport-locked keyword, so
+   each surface tiles from its own origin instead of a shared one. */
+.grain-tile {
+  background-image: url("../assets/grain.png");
+  background-repeat: repeat;
+  background-size: 160px 160px;
+  /* The grain PNG is near-white noise, so multiply darkens the surface only slightly while
+     the per-pixel variation reads as a fine speckle. Opacities mirror the DOM original
+     (.grain::after was 0.5 on cards, body::before 0.7 on the page); the old 0.03 was a
+     placeholder tuned against the earlier mid-gray bake and left the grain invisible. */
+  opacity: calc(0.5 * var(--grain-strength, 1));
+  mix-blend-mode: multiply;
+}
+/* The whole-page grain wash (mounted on the app-root view in ThemeVars) reads a touch
+   stronger than the per-card grain, matching the original body::before. */
+.grain-tile.grain-page {
+  opacity: calc(0.7 * var(--grain-strength, 1));
+}
+.dark .grain-tile {
+  mix-blend-mode: overlay;
+  opacity: calc(0.12 * var(--grain-strength, 1));
+}
+
+/* Postage-stamp perforated edge: notches punched along all four sides (unit 2.3's
+   StampButton). Only the standard mask + mask-composite pair below is kept - Lynx documents
+   the standard mask shorthand but not the non-standard vendor-prefixed mask-composite
+   extension (https://lynxjs.org/api/css/properties/mask), so the vendor-prefixed pair the
+   old app dual-declared is dropped as dead redundancy, not ported. */
 .stamp-edge {
   --r: 3.5px; /* perforation radius */
   --s: 12px; /* spacing between perforations */
-  -webkit-mask:
-    radial-gradient(var(--r) at 50% 0, #0000 98%, #000) 50% 0 / var(--s) 100% repeat-x,
-    radial-gradient(var(--r) at 50% 100%, #0000 98%, #000) 50% 100% / var(--s) 100% repeat-x,
-    radial-gradient(var(--r) at 0 50%, #0000 98%, #000) 0 50% / 100% var(--s) repeat-y,
-    radial-gradient(var(--r) at 100% 50%, #0000 98%, #000) 100% 50% / 100% var(--s) repeat-y;
   mask:
     radial-gradient(var(--r) at 50% 0, #0000 98%, #000) 50% 0 / var(--s) 100% repeat-x,
     radial-gradient(var(--r) at 50% 100%, #0000 98%, #000) 50% 100% / var(--s) 100% repeat-x,
     radial-gradient(var(--r) at 0 50%, #0000 98%, #000) 0 50% / 100% var(--s) repeat-y,
     radial-gradient(var(--r) at 100% 50%, #0000 98%, #000) 100% 50% / 100% var(--s) repeat-y;
-  -webkit-mask-composite: source-in, source-in, source-in;
   mask-composite: intersect;
 }
 
@@ -153,7 +152,176 @@ body::before {
   filter: drop-shadow(0 1.5px 1.5px rgb(0 0 0 / 0.5));
 }
 
-::selection {
-  background: hsl(var(--zest) / 0.25);
-  color: hsl(var(--ink));
+/* Enter motion (unit 4.2): fade + rise that settles with a gentle cubic-bezier overshoot
+   (CLAUDE.md motion "settle, don't snap"). One-shot on mount - replaces the old framer-motion
+   entrances on the task page and the checklist/resource list items. The Lynx crib sanctions CSS
+   transitions/keyframes for enter/exit. Reduced-motion is honoured at the CALL SITE (the class is
+   simply omitted when useReducedMotion() is true), so this needs no media query - the web worker
+   has no `prefers-reduced-motion` (R11); the signal is the stores/theme pref. */
+@keyframes dooey-enter {
+  from {
+    opacity: 0;
+    transform: translateY(14px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+.animate-enter {
+  animation-name: dooey-enter;
+  animation-duration: 360ms;
+  animation-timing-function: cubic-bezier(0.34, 1.56, 0.5, 1);
+  animation-fill-mode: both;
+}
+
+/* Bottom-sheet open/close motion (unit 4.3, SPEC 3): the sheet slides up from the bottom edge
+   on mount and slides back down on close; the backdrop cross-fades. Keyframes only - the
+   duration + timing-function ride inline `animation` styles from src/lib/motion/easing.ts
+   (SETTLE for the settle-in, PEEL for the peel-away), so the tokens stay the single source of
+   truth. Reduced-motion swaps the translate for an opacity-only fade (same keyframe names below).
+   Removal is driven by the component's bindanimationend on the out-animation, never a timer. */
+@keyframes dooey-sheet-in {
+  from {
+    transform: translateY(100%);
+  }
+  to {
+    transform: translateY(0);
+  }
+}
+@keyframes dooey-sheet-out {
+  from {
+    transform: translateY(0);
+  }
+  to {
+    transform: translateY(100%);
+  }
+}
+@keyframes dooey-fade-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+@keyframes dooey-fade-out {
+  from {
+    opacity: 1;
+  }
+  to {
+    opacity: 0;
+  }
+}
+
+/* Planner page-flip motion (unit 4.1, SPEC 4c): the desk-calendar flip re-expressed as CSS
+   keyframes (the old framer-motion `variants` object is gone - crib: "CSS transitions/keyframes
+   for enter/exit"). Direction-aware: FORWARD (next day) peels the departing page up and over the
+   binding (rotateX 0 -> 140deg, darkening) while the arriving page fades up from beneath; BACK
+   (prev day) flaps the arriving page down from over the top (rotateX 140 -> 0deg) and settles it
+   with a gentle past-the-mark overshoot, while the departing page sinks beneath. The perspective
+   (root) + transform-origin:top (page) that make these read as a hinge are inline constants on the
+   elements. Easings match src/lib/motion/easing.ts (SETTLE for the back-flip settle, PEEL for the
+   forward peel); durations stay <= 350ms (CLAUDE.md motion: transitions settle, don't snap).
+   Reduced-motion is honoured at the CALL SITE (PlannerBook swaps these for dooey-fade-in/out when
+   useReducedMotion() is true), so no media query - the web worker has no prefers-reduced-motion
+   (R11); the signal is the stores/theme pref. */
+@keyframes dooey-flip-in-fwd {
+  from {
+    opacity: 0;
+    transform: translateY(10px) scale(0.99);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+@keyframes dooey-flip-out-fwd {
+  from {
+    opacity: 1;
+    transform: rotateX(0deg);
+    filter: brightness(1);
+  }
+  to {
+    opacity: 0;
+    transform: rotateX(140deg);
+    filter: brightness(0.8);
+  }
+}
+@keyframes dooey-flip-in-back {
+  from {
+    opacity: 1;
+    transform: rotateX(140deg);
+    filter: brightness(0.82);
+  }
+  to {
+    opacity: 1;
+    transform: rotateX(0deg);
+    filter: brightness(1);
+  }
+}
+@keyframes dooey-flip-out-back {
+  from {
+    opacity: 1;
+    transform: scale(1);
+    filter: brightness(1);
+  }
+  to {
+    opacity: 0;
+    transform: scale(0.988);
+    filter: brightness(0.93);
+  }
+}
+.animate-flip-in-fwd {
+  animation: dooey-flip-in-fwd 300ms cubic-bezier(0.3, 0.5, 0.3, 1) both;
+}
+.animate-flip-out-fwd {
+  animation: dooey-flip-out-fwd 340ms cubic-bezier(0.5, 0.05, 0.75, 0.55) both;
+}
+.animate-flip-in-back {
+  animation: dooey-flip-in-back 340ms cubic-bezier(0.34, 1.3, 0.4, 1) both;
+}
+.animate-flip-out-back {
+  animation: dooey-flip-out-back 300ms cubic-bezier(0.5, 0.05, 0.75, 0.55) both;
+}
+/* Reduced-motion page swap (SPEC 4e): a plain opacity cross-fade over the same
+   dooey-fade-in/out keyframes, no 3D flip. */
+.animate-enter-fade {
+  animation: dooey-fade-in 200ms linear both;
+}
+.animate-exit-fade {
+  animation: dooey-fade-out 200ms linear both;
+}
+
+/* Calendar view entrances (unit 5.1, SPEC 4): the old framer-motion week-swap and month-drop
+   entrances re-expressed as CSS keyframes (crib: "CSS transitions/keyframes for enter/exit"). The
+   week spread fades + rises on a week change; the month grid fades + drops from above. Durations
+   stay <= 350ms (CLAUDE.md motion discipline). Reduced-motion swaps these for animate-enter-fade at
+   the call site (Calendar.tsx), so no media query - the web worker has no prefers-reduced-motion
+   (R11); the signal is the stores/theme pref. Keyed remount (view / week[0]) replays the keyframe. */
+@keyframes dooey-cal-week {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+@keyframes dooey-cal-month {
+  from {
+    opacity: 0;
+    transform: translateY(-8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+.animate-cal-week {
+  animation: dooey-cal-week 300ms cubic-bezier(0.3, 0.6, 0.3, 1) both;
+}
+.animate-cal-month {
+  animation: dooey-cal-month 260ms cubic-bezier(0.2, 0.7, 0.3, 1) both;
 }

@@ -10,13 +10,12 @@ export function Backdrop() {
   if (!url) return null;
 
   const image = (crop: BackdropCrop) => (
-    <img
+    <image
       src={url}
-      alt=""
-      className="h-full w-full object-cover"
+      className="h-full w-full"
       style={{
+        objectFit: "cover",
         objectPosition: `${crop.x}% ${crop.y}%`,
-        // slight overscale hides the transparent fringe blur leaves at the edges
         transform: `scale(${crop.zoom * (1 + settings.blur / 300)})`,
         filter: settings.blur > 0 ? `blur(${settings.blur}px)` : undefined,
         opacity: settings.opacity,
@@ -25,9 +24,9 @@ export function Backdrop() {
   );
 
   return (
-    <div aria-hidden className="pointer-events-none fixed inset-0 -z-20 overflow-hidden">
-      <div className="h-full w-full md:hidden">{image(settings.mobile)}</div>
-      <div className="hidden h-full w-full md:block">{image(settings.desktop)}</div>
-    </div>
+    <view aria-hidden className="pointer-events-none fixed inset-0 -z-20 overflow-hidden">
+      <view className="h-full w-full md:hidden">{image(settings.mobile)}</view>
+      <view className="hidden h-full w-full md:block">{image(settings.desktop)}</view>
+    </view>
   );
 }
