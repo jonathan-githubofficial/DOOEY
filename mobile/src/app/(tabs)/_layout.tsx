@@ -1,13 +1,14 @@
 import { Redirect, Tabs } from "expo-router";
 import { Icon, Label, NativeTabs, VectorIcon } from "expo-router/unstable-native-tabs";
 import { useEffect, useRef, useState } from "react";
-import { Platform, StyleSheet, View } from "react-native";
+import { Platform, StyleSheet, View, type ImageSourcePropType } from "react-native";
 import Svg, { Path } from "react-native-svg";
 import ViewShot from "react-native-view-shot";
 import { MaterialIcons } from "@expo/vector-icons";
 import { Dock } from "@/components/Dock";
 import { useStyleStore } from "@/features/style/store";
 import { strokePath, type Stroke } from "@/lib/doodle";
+import { type Palette } from "@/lib/theme";
 import { useAuthStore } from "@/stores/auth";
 import { usePalette } from "@/stores/theme";
 
@@ -35,8 +36,8 @@ export default function TabsLayout() {
 
   if (Platform.OS !== "web") {
     // A native tab bar wants bitmaps, not React views — so each doodle is
-    // rasterized off-screen and handed over as a template image the system
-    // tints like any other tab icon.
+    // rasterized off-screen in its real ink colors and handed to the bar
+    // as-is (the patched Icon keeps it from being tinted as a template).
     const doodles: Record<string, Stroke[]> = {};
     if (dockDoodles) {
       for (const space of SPACES) {
@@ -56,7 +57,10 @@ export default function TabsLayout() {
             return (
               <NativeTabs.Trigger key={space.name} name={space.name}>
                 {uri ? (
-                  <Icon src={{ uri }} />
+                  // __keepColor rides through our expo-router patch (see
+                  // patches/) so the bar shows the doodle's real inks instead
+                  // of tinting it as a template.
+                  <Icon src={{ uri, __keepColor: true } as ImageSourcePropType} />
                 ) : Platform.OS === "ios" ? (
                   <Icon sf={space.sf} />
                 ) : (
@@ -92,12 +96,12 @@ export default function TabsLayout() {
 // density metadata doesn't survive the capture, so the PNG is exported at
 // exactly icon size. It's drawn on a 4× easel first so the downsample
 // antialiases the strokes instead of leaving them ragged.
-const ICON_PT = 24;
+const ICON_PT = 10;
 const EASEL_PX = ICON_PT * 4;
 
 /** Off-screen easels: one per doodled space, snapshotted to PNGs whenever the
- * drawings change. Strokes render opaque black — the tab bar reads the alpha
- * and applies its own tint. */
+ * drawings — or the palette they're inked with — change. Strokes keep their
+ * chosen ink colors, exactly like the island dock did. */
 function DoodleIconRig({
   doodles,
   onCaptured,
@@ -105,8 +109,9 @@ function DoodleIconRig({
   doodles: Record<string, Stroke[]>;
   onCaptured: (icons: Record<string, string>) => void;
 }) {
+  const colors = usePalette();
   const shots = useRef<Record<string, ViewShot | null>>({});
-  const signature = JSON.stringify(doodles);
+  const signature = JSON.stringify(doodles) + JSON.stringify(colors);
 
   useEffect(() => {
     let live = true;
@@ -147,10 +152,11 @@ function DoodleIconRig({
                 key={i}
                 d={strokePath(s.points)}
                 fill="none"
-                stroke="black"
-                strokeWidth={5}
+                stroke={colors[s.color as keyof Palette] ?? colors.ink}
+                strokeWidth={4}
                 strokeLinecap="round"
                 strokeLinejoin="round"
+                opacity={0.85}
               />
             ))}
           </Svg>
