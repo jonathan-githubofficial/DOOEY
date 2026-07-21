@@ -61,12 +61,15 @@ function BackdropWash() {
  * iOS, and react-native-svg's <Pattern> fill won't rasterize an Image there
  * either — so web tiles via CSS background and native lays out a measured
  * grid of plain Image tiles (one shared bitmap, clipped to the corners). */
-export function Grain({ radius = 0 }: { radius?: number }) {
-  const dark = useThemeStore((s) => s.theme) === "dark";
+export function Grain({ radius = 0, tone }: { radius?: number; tone?: "light" }) {
+  const themeDark = useThemeStore((s) => s.theme) === "dark";
   const strength = useStyleStore((s) => s.grain);
   const [size, setSize] = useState({ w: 0, h: 0 });
+  // `tone="light"` pins the texture to the lit-wall look (login, gallery
+  // gutters) whatever the app theme — and a pinned wall stays bare, no wash.
+  const dark = tone === "light" ? false : themeDark;
   // Full-bleed page grain (radius 0) also carries the chosen backdrop wash.
-  const wash = radius === 0 ? <BackdropWash /> : null;
+  const wash = radius === 0 && !tone ? <BackdropWash /> : null;
   if (strength === 0) return wash;
 
   const source = dark

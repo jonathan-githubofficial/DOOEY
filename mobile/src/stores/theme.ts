@@ -45,6 +45,15 @@ const KEY_MAP: Record<ColorKey, keyof Palette> = {
   honey: "honey",
 };
 
+/** The factory light palette, resolved once and theme-independent. The front
+ * door (login and the gutters around it) is always a lit gallery wall — it
+ * must not inherit a dark theme left over from a previous session. */
+export const LIGHT_PALETTE: Palette = (() => {
+  const out = {} as Palette;
+  for (const { key } of COLOR_TOKENS) out[KEY_MAP[key]] = tripletToHsl(DEFAULT_COLORS.light[key]);
+  return out;
+})();
+
 /** The active palette: factory tokens + the Style studio's per-mode overrides
  * — every screen colors itself through this. */
 export function usePalette(): Palette {

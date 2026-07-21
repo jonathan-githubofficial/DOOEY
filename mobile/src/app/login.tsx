@@ -1,7 +1,8 @@
 import { Redirect, useRouter } from "expo-router";
 import { LinearGradient } from "expo-linear-gradient";
+import { useVideoPlayer, VideoView } from "expo-video";
 import { Eye, EyeOff } from "lucide-react-native";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   KeyboardAvoidingView,
   Platform,
@@ -9,7 +10,9 @@ import {
   StyleSheet,
   Text,
   TextInput,
+  useWindowDimensions,
   View,
+  type ViewStyle,
 } from "react-native";
 import Animated, {
   FadeIn,
@@ -19,16 +22,26 @@ import Animated, {
 } from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Grain } from "@/components/grain";
-import { PressableScale } from "@/components/pressable-scale";
+import { Plate } from "@/components/plate";
 import { signIn, signUp } from "@/features/auth/api";
 import { fontStyle } from "@/features/style/tokens";
 import { hapticSuccess, hapticTap, hapticWarn } from "@/lib/haptics";
 import { alpha, type Palette } from "@/lib/theme";
 import { useAuthStore } from "@/stores/auth";
-import { usePalette, useThemeStore, useType } from "@/stores/theme";
+import { LIGHT_PALETTE, useThemeStore, useType } from "@/stores/theme";
 
 const settle = LinearTransition.springify().stiffness(400).damping(32);
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+// The peasant reel rises from the bottom edge and takes this share of the
+// screen height — cover-fit, muted, looping, its top dissolved into the wall.
+const VIDEO_FRACTION = 0.45;
+
+// On the web the login column sits inside the tablet frame — the reel and the
+// picture-light must span the whole browser window, gutters included, or the
+// scene visibly stops at the frame's edges.
+const fullBleed =
+  Platform.OS === "web" ? ({ position: "fixed" } as unknown as ViewStyle) : null;
 
 function strengthOf(pw: string): { score: number; label: string } {
   if (!pw) return { score: 0, label: "" };
@@ -43,11 +56,11 @@ function strengthOf(pw: string): { score: number; label: string } {
  * piece under a soft picture-light, with engraved labels, thin ruled fields
  * and a cast-metal plate to enter. */
 export default function Login() {
-  const colors = usePalette();
+  // The gallery is always lit — the front door ignores the app theme.
+  const colors = LIGHT_PALETTE;
   const type = useType();
   const insets = useSafeAreaInsets();
   const router = useRouter();
-  const dark = useThemeStore((s) => s.theme) === "dark";
   const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
 
   const [mode, setMode] = useState<"in" | "up">("in");
@@ -60,7 +73,21 @@ export default function Login() {
 
   const strength = useMemo(() => strengthOf(password), [password]);
 
-  if (isAuthenticated) return <Redirect href="/" />;
+  const { height: screenH } = useWindowDimensions();
+  const player = useVideoPlayer(require("../../assets/video/peas.mp4"), (p) => {
+    p.loop = true;
+    p.muted = true;
+  });
+  // Play after mount: on the web the setup callback runs before any <video>
+  // element exists, so a play() in there lands on nothing and the reel sits
+  // frozen on its first frame.
+  useEffect(() => {
+    player.play();
+  }, [player]);
+
+  // `busy` guards the sign-up hand-off: auth lands before router.replace runs,
+  // and this Redirect must not race it to "/" when the tour is the destination.
+  if (isAuthenticated && !busy) return <Redirect href="/" />;
 
   const emailOk = EMAIL_RE.test(email.trim());
   const pwOk = password.length >= 8;
@@ -79,10 +106,17 @@ export default function Login() {
     setBusy(true);
     setError(null);
     try {
-      if (mode === "up") await signUp(email.trim(), password);
-      else await signIn(email.trim(), password);
-      hapticSuccess();
-      router.replace("/");
+      if (mode === "up") {
+        await signUp(email.trim(), password);
+        hapticSuccess();
+        // The private view starts on a lit wall — new accounts tour first.
+        useThemeStore.getState().set("light");
+        router.replace("/onboarding");
+      } else {
+        await signIn(email.trim(), password);
+        hapticSuccess();
+        router.replace("/");
+      }
     } catch (e) {
       hapticWarn();
       setError(friendlyError(e, mode));
@@ -90,22 +124,54 @@ export default function Login() {
     }
   };
 
-  const bevelLight = dark ? "rgba(255,255,255,0.12)" : "rgba(255,255,255,0.75)";
-  const bevelDark = alpha(colors.ink, dark ? 0.4 : 0.14);
+  const bevelLight = "rgba(255,255,255,0.75)";
+  const bevelDark = alpha(colors.ink, 0.14);
 
   return (
     <View style={[styles.screen, { backgroundColor: colors.paper }]}>
-      <Grain />
+      <Grain tone="light" />
+
+      {/* The exhibited painting: a locked-camera Bruegel scene alive at the
+          foot of the wall, its top dissolved up into the plaster. */}
+      <View
+        pointerEvents="none"
+        style={[styles.reel, fullBleed, { height: Math.round(screenH * VIDEO_FRACTION) }]}
+      >
+        <VideoView
+          player={player}
+          // Explicit width/height: on the web this style lands on the <video>
+          // itself, and a replaced element won't stretch from insets alone.
+          style={styles.reelVideo}
+          contentFit="cover"
+          nativeControls={false}
+        />
+        <LinearGradient
+          colors={[colors.paper, alpha(colors.paper, 0)]}
+          locations={[0, 0.45]}
+          style={StyleSheet.absoluteFill}
+        />
+        {/* The wall's paper grain continues over the painting — without it the
+            reel reads as a pasted-on rectangle. */}
+        <Grain tone="light" />
+      </View>
+
       {/* The picture-light: a soft wash spilling from above onto the wall. */}
       <LinearGradient
         pointerEvents="none"
-        colors={[alpha(dark ? "#ffffff" : "#ffffff", dark ? 0.05 : 0.22), "transparent"]}
-        style={[StyleSheet.absoluteFill, { height: "55%" }]}
+        colors={["rgba(255,255,255,0.14)", "transparent"]}
+        style={[styles.light, fullBleed]}
       />
 
       <KeyboardAvoidingView
         behavior={Platform.OS === "ios" ? "padding" : undefined}
-        style={[styles.center, { paddingTop: insets.top, paddingBottom: insets.bottom }]}
+        style={[
+          styles.center,
+          {
+            paddingTop: insets.top,
+            // Lift the frame off the painting — it hangs above, not on it.
+            paddingBottom: insets.bottom + Math.round(screenH * 0.12),
+          },
+        ]}
       >
         <Animated.View
           entering={FadeInDown.springify().stiffness(200).damping(23)}
@@ -120,7 +186,7 @@ export default function Login() {
           >
             {/* The mat, with a bevelled window cut into it. */}
             <View style={[styles.mat, { backgroundColor: colors.surface }]}>
-              <Grain radius={4} />
+              <Grain radius={4} tone="light" />
               <View
                 style={[
                   styles.window,
@@ -133,7 +199,7 @@ export default function Login() {
                   },
                 ]}
               >
-                <Grain radius={2} />
+                <Grain radius={2} tone="light" />
 
                 {/* The exhibited piece. */}
                 <Text style={[styles.accession, type.sansMedium, { color: colors.inkMuted }]}>
@@ -240,10 +306,11 @@ export default function Login() {
                 )}
 
                 <Animated.View layout={settle} style={styles.plateRow}>
-                  <EnterPlate
+                  <Plate
                     label={busy ? "…" : mode === "in" ? "Enter" : "Register"}
                     disabled={!canSubmit}
                     onPress={submit}
+                    palette={colors}
                   />
                 </Animated.View>
               </View>
@@ -268,45 +335,14 @@ export default function Login() {
 
 /** An engraved field: a tracked-caps label over a thin ruled input. */
 function Field({ label, children }: { label: string; children: React.ReactNode }) {
-  const colors = usePalette();
   const type = useType();
   return (
     <View style={styles.field}>
-      <Text style={[styles.fieldLabel, type.sansMedium, { color: colors.inkMuted }]}>{label}</Text>
+      <Text style={[styles.fieldLabel, type.sansMedium, { color: LIGHT_PALETTE.inkMuted }]}>
+        {label}
+      </Text>
       {children}
     </View>
-  );
-}
-
-/** A small cast-metal plaque, engraved — the way in. Top-lit sheen, a pressed
- * emboss, and it sinks on tap. */
-function EnterPlate({
-  label,
-  disabled,
-  onPress,
-}: {
-  label: string;
-  disabled: boolean;
-  onPress: () => void;
-}) {
-  const colors = usePalette();
-  const type = useType();
-  return (
-    <PressableScale
-      scaleTo={0.94}
-      accessibilityRole="button"
-      accessibilityLabel={label}
-      disabled={disabled}
-      onPress={onPress}
-      style={[styles.plate, { backgroundColor: colors.ink }, disabled && { opacity: 0.35 }]}
-    >
-      <LinearGradient
-        pointerEvents="none"
-        colors={["rgba(255,255,255,0.18)", "transparent", "rgba(0,0,0,0.22)"]}
-        style={StyleSheet.absoluteFill}
-      />
-      <Text style={[styles.plateText, type.sansSemiBold, { color: colors.paper }]}>{label}</Text>
-    </PressableScale>
   );
 }
 
@@ -328,13 +364,37 @@ const styles = StyleSheet.create({
   screen: {
     flex: 1,
   },
+  reel: {
+    position: "absolute",
+    left: 0,
+    right: 0,
+    bottom: 0,
+    overflow: "hidden",
+  },
+  reelVideo: {
+    position: "absolute",
+    top: 0,
+    left: 0,
+    width: "100%",
+    height: "100%",
+  },
+  light: {
+    position: "absolute",
+    top: 0,
+    left: 0,
+    right: 0,
+    height: "45%",
+  },
   center: {
     flex: 1,
     justifyContent: "center",
     paddingHorizontal: 24,
   },
   hang: {
-    alignSelf: "stretch",
+    // A hung piece is portrait, never a banner — cap it on wide screens.
+    width: "100%",
+    maxWidth: 400,
+    alignSelf: "center",
     alignItems: "center",
   },
   frame: {
@@ -443,24 +503,6 @@ const styles = StyleSheet.create({
   plateRow: {
     marginTop: 26,
     alignItems: "center",
-  },
-  plate: {
-    minWidth: 150,
-    alignItems: "center",
-    borderRadius: 5,
-    paddingVertical: 13,
-    paddingHorizontal: 34,
-    overflow: "hidden",
-    shadowColor: "#282018",
-    shadowOpacity: 0.25,
-    shadowRadius: 5,
-    shadowOffset: { width: 0, height: 3 },
-    elevation: 4,
-  },
-  plateText: {
-    fontSize: 13,
-    letterSpacing: 3,
-    textTransform: "uppercase",
   },
   label: {
     marginTop: 20,

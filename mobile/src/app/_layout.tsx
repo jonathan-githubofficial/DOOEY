@@ -14,7 +14,7 @@ import {
 } from "@expo-google-fonts/outfit";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { useFonts } from "expo-font";
-import { Stack } from "expo-router";
+import { Stack, usePathname } from "expo-router";
 import * as SplashScreen from "expo-splash-screen";
 import { StatusBar } from "expo-status-bar";
 import { useEffect, useState } from "react";
@@ -23,7 +23,7 @@ import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { BootIntro } from "@/components/BootIntro";
 import { Grain } from "@/components/grain";
 import { initSession } from "@/features/auth/api";
-import { usePalette, useThemeStore } from "@/stores/theme";
+import { LIGHT_PALETTE, usePalette, useThemeStore } from "@/stores/theme";
 
 SplashScreen.preventAutoHideAsync();
 
@@ -37,7 +37,13 @@ const COMPOSE_DETENTS = [0.15, 0.2];
 
 export default function RootLayout() {
   const theme = useThemeStore((s) => s.theme);
-  const colors = usePalette();
+  const themed = usePalette();
+  // The front door is always a lit wall — the shell around it must not stay
+  // dark when a dark theme is persisted. Onboarding is NOT pinned: it starts
+  // light (set at sign-up) and its lighting room previews the theme live,
+  // gutters included.
+  const gallery = usePathname() === "/login";
+  const colors = gallery ? LIGHT_PALETTE : themed;
 
   // Native chrome (tab bar, sheets, keyboards) draws with UIKit materials
   // that follow the SYSTEM appearance — pin it to DOOEY's theme instead, so
@@ -76,7 +82,7 @@ export default function RootLayout() {
     <GestureHandlerRootView style={[styles.fill, { backgroundColor: colors.paper }]}>
       {/* The gutters beside the tablet frame are paper too — grain them, or
           the texture visibly stops at the frame's edges. */}
-      {Platform.OS === "web" && <Grain />}
+      {Platform.OS === "web" && <Grain tone={gallery ? "light" : undefined} />}
       <QueryClientProvider client={queryClient}>
         {/* On the web the app sits in a tablet-width frame instead of
             stretching wall-to-wall — room for a sidebar later. */}
@@ -104,7 +110,7 @@ export default function RootLayout() {
             />
           </Stack>
         </View>
-        <StatusBar style={theme === "dark" ? "light" : "dark"} />
+        <StatusBar style={theme === "dark" && !gallery ? "light" : "dark"} />
         {/* The front-door flourish, over everything, once per launch. */}
         <BootIntro onDone={() => {}} />
       </QueryClientProvider>
