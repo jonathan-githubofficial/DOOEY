@@ -29,7 +29,7 @@ import {
 } from "@/features/workouts/api";
 import { useNow } from "@/features/workouts/clock";
 import { ExercisePicker, type PickedExercise } from "@/features/workouts/components/ExercisePicker";
-import { exerciseImage, libraryExercise } from "@/features/workouts/library";
+import { exerciseGif, libraryExercise } from "@/features/workouts/library";
 import { useWorkoutPrefs } from "@/features/workouts/store";
 import {
   formatElapsed,
@@ -203,29 +203,23 @@ export default function WorkoutPage() {
               {effTitle}
             </Text>
           )}
-          <Text
-            style={[
-              styles.clock,
-              fontStyle("fraunces", "700"),
-              { color: live ? colors.zest : colors.inkMuted },
-            ]}
-          >
-            {formatElapsed(duration)}
-          </Text>
         </View>
 
-        {!live && (
-          <Text style={[styles.doneLine, type.sans, { color: colors.inkMuted }]}>
-            {new Date(workout.started_at).toLocaleDateString(undefined, {
-              weekday: "long",
-              month: "long",
-              day: "numeric",
-            })}
-            {" · "}
-            {workoutSetsDone(effEntries)} sets
-            {volume > 0 ? ` · ${Math.round(volume).toLocaleString()} ${unit}` : ""}
-          </Text>
-        )}
+        {/* The session at a glance — duration ticking, volume and sets
+            growing as the work happens. */}
+        <View style={[styles.stats, { borderBottomColor: alpha(colors.rule, 0.5) }]}>
+          <Stat
+            label="duration"
+            value={formatElapsed(duration)}
+            tone={live ? colors.zest : colors.ink}
+          />
+          <Stat
+            label="volume"
+            value={volume > 0 ? `${Math.round(volume).toLocaleString()} ${unit}` : "—"}
+            tone={colors.ink}
+          />
+          <Stat label="sets" value={String(workoutSetsDone(effEntries))} tone={colors.ink} />
+        </View>
 
         <View style={styles.entries}>
           {effEntries.map((entry, ei) => (
@@ -233,7 +227,7 @@ export default function WorkoutPage() {
               <Panel style={styles.entryCard}>
                 <View style={styles.entryHead}>
                   <EntryThumb libId={entry.libId} />
-                  <Text numberOfLines={1} style={[styles.entryName, type.sansSemiBold, { color: colors.ink }]}>
+                  <Text numberOfLines={1} style={[styles.entryName, type.sansSemiBold, { color: colors.zest }]}>
                     {entry.name}
                   </Text>
                   {live && (
@@ -280,16 +274,17 @@ export default function WorkoutPage() {
                 ))}
 
                 {live && (
-                  <Pressable
+                  <PressableScale
+                    scaleTo={0.98}
                     accessibilityLabel={`Add a set to ${entry.name}`}
                     onPress={() => addSet(ei)}
-                    style={styles.addSet}
+                    style={[styles.addSet, { backgroundColor: alpha(colors.ink, 0.05) }]}
                   >
-                    <Plus size={12} color={colors.inkMuted} />
-                    <Text style={[styles.addSetText, type.sansMedium, { color: colors.inkMuted }]}>
-                      add set
+                    <Plus size={13} color={colors.inkMuted} />
+                    <Text style={[styles.addSetText, type.sansMedium, { color: colors.ink }]}>
+                      Add set
                     </Text>
-                  </Pressable>
+                  </PressableScale>
                 )}
               </Panel>
             </Animated.View>
@@ -362,16 +357,28 @@ export default function WorkoutPage() {
   );
 }
 
-/** The exercise's demo photo beside its name — the library made visible. */
+/** One number of the session-stats strip. */
+function Stat({ label, value, tone }: { label: string; value: string; tone: string }) {
+  const colors = usePalette();
+  const type = useType();
+  return (
+    <View style={styles.stat}>
+      <Text style={[styles.statLabel, type.sansMedium, { color: colors.inkMuted }]}>{label}</Text>
+      <Text style={[styles.statValue, fontStyle("fraunces", "700"), { color: tone }]}>{value}</Text>
+    </View>
+  );
+}
+
+/** The exercise's demo loop beside its name — the library made visible. */
 function EntryThumb({ libId }: { libId?: string }) {
   const colors = usePalette();
   const ex = libraryExercise(libId);
   if (!ex) return null;
   return (
     <Image
-      source={{ uri: exerciseImage(ex) }}
+      source={{ uri: exerciseGif(ex) }}
       resizeMode="cover"
-      style={[styles.entryThumb, { backgroundColor: alpha(colors.ink, 0.05), borderColor: alpha(colors.rule, 0.7) }]}
+      style={[styles.entryThumb, { backgroundColor: "#ffffff", borderColor: alpha(colors.rule, 0.7) }]}
     />
   );
 }
@@ -436,7 +443,7 @@ function SetRow({
     <Pressable
       accessibilityLabel={`Set ${index + 1}`}
       onLongPress={live ? onRemove : undefined}
-      style={[styles.setRow, set.done && { backgroundColor: alpha(colors.leaf, 0.08) }]}
+      style={[styles.setRow, set.done && { backgroundColor: alpha(colors.leaf, 0.16) }]}
     >
       <Text style={[styles.colSet, styles.setIndex, type.sansMedium, { color: colors.inkMuted }]}>
         {index + 1}
@@ -550,15 +557,24 @@ const styles = StyleSheet.create({
     letterSpacing: -0.5,
     paddingVertical: 4,
   },
-  clock: {
-    fontSize: 22,
-    fontVariant: ["tabular-nums"],
-    marginLeft: 10,
+  stats: {
+    marginTop: 10,
+    flexDirection: "row",
+    gap: 22,
+    paddingBottom: 12,
+    borderBottomWidth: 1,
   },
-  doneLine: {
-    marginTop: 4,
-    marginLeft: 38,
-    fontSize: 12.5,
+  stat: {
+    gap: 2,
+  },
+  statLabel: {
+    fontSize: 9.5,
+    letterSpacing: 1.6,
+    textTransform: "uppercase",
+  },
+  statValue: {
+    fontSize: 17,
+    fontVariant: ["tabular-nums"],
   },
   entries: {
     marginTop: 16,
@@ -577,6 +593,7 @@ const styles = StyleSheet.create({
     flex: 1,
     minWidth: 0,
     fontSize: 15.5,
+    textTransform: "capitalize",
   },
   entryThumb: {
     height: 34,
@@ -641,15 +658,16 @@ const styles = StyleSheet.create({
     paddingHorizontal: 6,
   },
   addSet: {
-    marginTop: 2,
+    marginTop: 6,
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
     gap: 6,
-    paddingVertical: 7,
+    paddingVertical: 10,
+    borderRadius: 10,
   },
   addSetText: {
-    fontSize: 12,
+    fontSize: 12.5,
   },
   addTile: {
     borderWidth: 1,

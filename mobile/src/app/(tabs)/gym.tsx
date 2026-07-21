@@ -1,5 +1,6 @@
 import { useRouter } from "expo-router";
-import { ChevronRight, Play, Plus } from "lucide-react-native";
+import { BookOpen, ChevronRight, ClipboardList, Play, Plus } from "lucide-react-native";
+import { useState } from "react";
 import { Alert, Image, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import Animated, { FadeInDown } from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -10,6 +11,7 @@ import { Eyebrow, Panel } from "@/components/surface";
 import { PageDoodle } from "@/features/style/components/PageDoodle";
 import { fontStyle } from "@/features/style/tokens";
 import {
+  useDeleteRoutine,
   useDeleteWorkout,
   useRoutines,
   useSaveRoutine,
@@ -17,7 +19,8 @@ import {
   useWorkouts,
 } from "@/features/workouts/api";
 import { useNow } from "@/features/workouts/clock";
-import { exerciseImage, libraryExercise } from "@/features/workouts/library";
+import { ExercisePicker } from "@/features/workouts/components/ExercisePicker";
+import { exerciseGif, libraryExercise } from "@/features/workouts/library";
 import { useWorkoutPrefs } from "@/features/workouts/store";
 import {
   formatElapsed,
@@ -30,8 +33,9 @@ import { hapticTap } from "@/lib/haptics";
 import { alpha } from "@/lib/theme";
 import { usePalette, useType } from "@/stores/theme";
 
-/** The gym space: the live session (if one is running), routines to start
- * from, and the training log so far. */
+/** The gym space, laid out the Hevy way: quick start on top, then routines
+ * (new + explore, grouped under their plans, each with its own start button),
+ * then the training log. */
 export default function Gym() {
   const colors = usePalette();
   const type = useType();
@@ -41,11 +45,13 @@ export default function Gym() {
   const { data: workouts, isPending } = useWorkouts();
   const saveRoutine = useSaveRoutine();
   const start = useStartWorkout();
+  const [exploring, setExploring] = useState(false);
 
   const live = workouts?.find((w) => !w.ended_at) ?? null;
   const history = (workouts ?? []).filter((w) => w.ended_at);
   const plans = [...new Set((routines ?? []).map((r) => r.group).filter(Boolean))];
   const loose = (routines ?? []).filter((r) => !r.group);
+  const fresh = !isPending && (routines ?? []).length === 0 && history.length === 0 && !live;
 
   const openWorkout = (wid: string) =>
     router.push({ pathname: "/workout/[id]", params: { id: wid } });
@@ -76,28 +82,54 @@ export default function Gym() {
           <UnitPill />
         </Masthead>
 
-        {live && <LiveBanner workout={live} onPress={() => openWorkout(live.id)} />}
-
-        {!live && (
+        <Eyebrow style={styles.section}>quick start</Eyebrow>
+        {live ? (
+          <LiveBanner workout={live} onPress={() => openWorkout(live.id)} />
+        ) : (
           <PressableScale
             scaleTo={0.97}
             accessibilityLabel="Start an empty workout"
             onPress={() => startWorkout(null)}
             disabled={start.isPending}
-            style={[styles.startEmpty, { borderColor: alpha(colors.rule, 0.8) }]}
+            style={[styles.quickStart, { backgroundColor: colors.surface, borderColor: alpha(colors.rule, 0.7) }]}
           >
-            <Play size={15} color={colors.zest} />
-            <Text style={[styles.startEmptyText, type.sansMedium, { color: colors.ink }]}>
-              Start an empty workout
+            <Plus size={15} color={colors.zest} />
+            <Text style={[styles.quickStartText, type.sansMedium, { color: colors.ink }]}>
+              Start empty workout
             </Text>
           </PressableScale>
         )}
 
-        {/* Routines gather under their plan — Push · Pull · Legs — with the
-            loose ones under a plain heading at the end. */}
+        <Eyebrow style={styles.section}>routines</Eyebrow>
+        <View style={styles.toolRow}>
+          <ToolButton
+            label="New routine"
+            icon={<ClipboardList size={15} color={colors.inkMuted} />}
+            onPress={newRoutine}
+            disabled={saveRoutine.isPending}
+          />
+          <ToolButton
+            label="Explore"
+            icon={<BookOpen size={15} color={colors.inkMuted} />}
+            onPress={() => setExploring(true)}
+          />
+        </View>
+
+        {fresh && (
+          <Panel style={styles.freshPanel}>
+            <Text style={[styles.freshTitle, fontStyle("fraunces", "900"), { color: colors.ink }]}>
+              First day at the gym.
+            </Text>
+            <Text style={[styles.freshBody, type.sans, { color: colors.inkMuted }]}>
+              Build a routine from 1,500 demonstrated exercises — or just start an empty workout
+              and log as you go. Your last numbers follow you into every next session.
+            </Text>
+          </Panel>
+        )}
+
         {plans.map((plan) => (
           <View key={plan}>
-            <Eyebrow style={styles.section}>{plan.toLowerCase()}</Eyebrow>
+            <Text style={[styles.planHead, type.sansSemiBold, { color: colors.ink }]}>{plan}</Text>
             <View style={styles.cards}>
               {(routines ?? [])
                 .filter((r) => r.group === plan)
@@ -110,40 +142,67 @@ export default function Gym() {
           </View>
         ))}
 
-        <Eyebrow style={styles.section}>routines</Eyebrow>
-        <View style={styles.cards}>
-          {loose.map((r, i) => (
-            <Animated.View key={r.id} entering={FadeInDown.delay(i * 40).duration(220)}>
-              <RoutineCard routine={r} onStart={() => startWorkout(r)} />
-            </Animated.View>
-          ))}
-          <PressableScale
-            scaleTo={0.97}
-            accessibilityLabel="New routine"
-            onPress={newRoutine}
-            disabled={saveRoutine.isPending}
-            style={[styles.newTile, { borderColor: alpha(colors.rule, 0.8) }]}
-          >
-            <Plus size={16} color={colors.inkMuted} />
-            <Text style={[styles.newTileText, type.sansMedium, { color: colors.inkMuted }]}>
-              New routine
-            </Text>
-          </PressableScale>
-        </View>
+        {loose.length > 0 && (
+          <>
+            {plans.length > 0 && (
+              <Text style={[styles.planHead, type.sansSemiBold, { color: colors.ink }]}>
+                My routines
+              </Text>
+            )}
+            <View style={[styles.cards, plans.length === 0 && styles.cardsBare]}>
+              {loose.map((r, i) => (
+                <Animated.View key={r.id} entering={FadeInDown.delay(i * 40).duration(220)}>
+                  <RoutineCard routine={r} onStart={() => startWorkout(r)} />
+                </Animated.View>
+              ))}
+            </View>
+          </>
+        )}
 
-        <Eyebrow style={styles.section}>log</Eyebrow>
-        <View style={styles.cards}>
-          {history.map((w) => (
-            <HistoryRow key={w.id} workout={w} onPress={() => openWorkout(w.id)} />
-          ))}
-          {!isPending && history.length === 0 && (
-            <Text style={[styles.empty, type.sans, { color: colors.inkMuted }]}>
-              No sessions yet — start one and the log builds itself.
-            </Text>
-          )}
-        </View>
+        {history.length > 0 && (
+          <>
+            <Eyebrow style={styles.section}>log</Eyebrow>
+            <View style={styles.cards}>
+              {history.map((w) => (
+                <HistoryRow key={w.id} workout={w} onPress={() => openWorkout(w.id)} />
+              ))}
+            </View>
+          </>
+        )}
       </ScrollView>
+
+      {/* Explore: the library as pure reference — tap an exercise for its
+          how-to; nothing gets added from here. */}
+      <ExercisePicker visible={exploring} onClose={() => setExploring(false)} />
     </View>
+  );
+}
+
+function ToolButton({
+  label,
+  icon,
+  onPress,
+  disabled,
+}: {
+  label: string;
+  icon: React.ReactNode;
+  onPress: () => void;
+  disabled?: boolean;
+}) {
+  const colors = usePalette();
+  const type = useType();
+  return (
+    <PressableScale
+      scaleTo={0.96}
+      accessibilityRole="button"
+      accessibilityLabel={label}
+      onPress={onPress}
+      disabled={disabled}
+      style={[styles.toolBtn, { backgroundColor: colors.surface, borderColor: alpha(colors.rule, 0.7) }]}
+    >
+      {icon}
+      <Text style={[styles.toolLabel, type.sansMedium, { color: colors.ink }]}>{label}</Text>
+    </PressableScale>
   );
 }
 
@@ -194,66 +253,81 @@ function LiveBanner({ workout, onPress }: { workout: Workout; onPress: () => voi
   );
 }
 
+/** A routine the Hevy way: name and summary up top, demo loops fanned like
+ * board pieces, and a full-width start button. Long-press deletes. */
 function RoutineCard({ routine, onStart }: { routine: Routine; onStart: () => void }) {
   const colors = usePalette();
   const type = useType();
   const router = useRouter();
+  const del = useDeleteRoutine();
   const summary =
     routine.items.length === 0
-      ? "no exercises yet"
-      : routine.items.map((i) => i.name).join(" · ");
-  // Up to three demo photos, fanned like the pieces on a board card.
-  const photos = routine.items
+      ? "no exercises yet — tap to build"
+      : routine.items.map((i) => i.name).join(", ");
+  const gifs = routine.items
     .map((i) => libraryExercise(i.libId))
     .filter((e) => !!e)
     .slice(0, 3);
   return (
-    <PressableScale
-      scaleTo={0.98}
-      accessibilityLabel={`Edit routine ${routine.name}`}
+    <Pressable
+      accessibilityLabel={`Routine ${routine.name}`}
       onPress={() => router.push({ pathname: "/routine/[id]", params: { id: routine.id } })}
+      onLongPress={() =>
+        Alert.alert("Delete this routine?", routine.name, [
+          { text: "Keep it", style: "cancel" },
+          { text: "Delete", style: "destructive", onPress: () => del.mutate(routine.id) },
+        ])
+      }
     >
       <Panel style={styles.routineCard}>
-        <View style={styles.routineText}>
-          <Text numberOfLines={1} style={[styles.routineName, type.display, { color: colors.ink }]}>
-            {routine.name}
-          </Text>
-          <Text numberOfLines={2} style={[styles.routineSummary, type.sans, { color: colors.inkMuted }]}>
-            {summary}
-          </Text>
-        </View>
-        {photos.length > 0 && (
-          <View style={styles.fan}>
-            {photos.map((ex, i) => (
-              <Image
-                key={ex.id}
-                source={{ uri: exerciseImage(ex) }}
-                resizeMode="cover"
-                style={[
-                  styles.fanPhoto,
-                  {
-                    backgroundColor: alpha(colors.ink, 0.05),
-                    borderColor: colors.surface,
-                    marginLeft: i === 0 ? 0 : -14,
-                    transform: [{ rotate: `${(i - 1) * 4}deg` }],
-                    zIndex: photos.length - i,
-                  },
-                ]}
-              />
-            ))}
+        <View style={styles.routineTop}>
+          <View style={styles.routineText}>
+            <Text numberOfLines={1} style={[styles.routineName, type.display, { color: colors.ink }]}>
+              {routine.name}
+            </Text>
+            <Text
+              numberOfLines={2}
+              style={[styles.routineSummary, type.sans, { color: colors.inkMuted }]}
+            >
+              {summary}
+            </Text>
           </View>
-        )}
+          {gifs.length > 0 && (
+            <View style={styles.fan}>
+              {gifs.map((ex, i) => (
+                <Image
+                  key={ex.id}
+                  source={{ uri: exerciseGif(ex) }}
+                  resizeMode="cover"
+                  style={[
+                    styles.fanPhoto,
+                    {
+                      backgroundColor: "#ffffff",
+                      borderColor: colors.surface,
+                      marginLeft: i === 0 ? 0 : -14,
+                      transform: [{ rotate: `${(i - 1) * 4}deg` }],
+                      zIndex: gifs.length - i,
+                    },
+                  ]}
+                />
+              ))}
+            </View>
+          )}
+        </View>
         <PressableScale
-          scaleTo={0.88}
+          scaleTo={0.97}
           accessibilityRole="button"
           accessibilityLabel={`Start ${routine.name}`}
           onPress={onStart}
           style={[styles.routineStart, { backgroundColor: alpha(colors.zest, 0.14) }]}
         >
-          <Play size={14} color={colors.zest} />
+          <Play size={13} color={colors.zest} />
+          <Text style={[styles.routineStartText, type.sansSemiBold, { color: colors.ink }]}>
+            Start routine
+          </Text>
         </PressableScale>
       </Panel>
-    </PressableScale>
+    </Pressable>
   );
 }
 
@@ -316,22 +390,67 @@ const styles = StyleSheet.create({
     fontSize: 12,
     letterSpacing: 0.6,
   },
-  startEmpty: {
-    marginTop: 16,
+  section: {
+    marginTop: 22,
+  },
+  quickStart: {
+    marginTop: 10,
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
     gap: 8,
     borderWidth: 1,
-    borderStyle: "dashed",
-    borderRadius: 16,
-    paddingVertical: 14,
+    borderRadius: 14,
+    paddingVertical: 13,
   },
-  startEmptyText: {
+  quickStartText: {
     fontSize: 13.5,
   },
+  toolRow: {
+    marginTop: 10,
+    flexDirection: "row",
+    gap: 10,
+  },
+  toolBtn: {
+    flex: 1,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 8,
+    borderWidth: 1,
+    borderRadius: 14,
+    paddingVertical: 12,
+  },
+  toolLabel: {
+    fontSize: 13,
+  },
+  freshPanel: {
+    marginTop: 14,
+    alignItems: "center",
+  },
+  freshTitle: {
+    fontSize: 20,
+    letterSpacing: -0.3,
+  },
+  freshBody: {
+    marginTop: 8,
+    fontSize: 13,
+    lineHeight: 19,
+    textAlign: "center",
+  },
+  planHead: {
+    marginTop: 18,
+    fontSize: 14,
+  },
+  cards: {
+    marginTop: 10,
+    gap: 10,
+  },
+  cardsBare: {
+    marginTop: 14,
+  },
   liveBanner: {
-    marginTop: 16,
+    marginTop: 10,
     flexDirection: "row",
     alignItems: "center",
     gap: 12,
@@ -357,27 +476,10 @@ const styles = StyleSheet.create({
     fontSize: 22,
     fontVariant: ["tabular-nums"],
   },
-  section: {
-    marginTop: 24,
-  },
-  cards: {
-    marginTop: 10,
-    gap: 10,
-  },
-  newTile: {
-    borderWidth: 1,
-    borderStyle: "dashed",
-    borderRadius: 16,
-    paddingVertical: 14,
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    gap: 8,
-  },
-  newTileText: {
-    fontSize: 13,
-  },
   routineCard: {
+    gap: 12,
+  },
+  routineTop: {
     flexDirection: "row",
     alignItems: "center",
     gap: 12,
@@ -393,13 +495,18 @@ const styles = StyleSheet.create({
     marginTop: 3,
     fontSize: 12,
     lineHeight: 16,
+    textTransform: "capitalize",
   },
   routineStart: {
-    height: 40,
-    width: 40,
-    borderRadius: 999,
+    flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
+    gap: 7,
+    borderRadius: 12,
+    paddingVertical: 11,
+  },
+  routineStartText: {
+    fontSize: 13,
   },
   fan: {
     flexDirection: "row",
@@ -426,10 +533,5 @@ const styles = StyleSheet.create({
   historySub: {
     marginTop: 2,
     fontSize: 12,
-  },
-  empty: {
-    fontSize: 12.5,
-    textAlign: "center",
-    paddingVertical: 12,
   },
 });

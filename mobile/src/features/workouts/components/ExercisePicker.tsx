@@ -1,24 +1,27 @@
-import { Dumbbell, Hash, Timer, X } from "lucide-react-native";
+import { ChevronLeft, Dumbbell, Hash, Timer, X } from "lucide-react-native";
 import { useMemo, useState } from "react";
 import {
   FlatList,
   Image,
   Modal,
   Platform,
+  ScrollView,
   StyleSheet,
   Text,
   TextInput,
   View,
 } from "react-native";
+import Animated, { FadeIn } from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Grain } from "@/components/grain";
+import { Plate } from "@/components/plate";
 import { PressableScale } from "@/components/pressable-scale";
 import { Eyebrow } from "@/components/surface";
 import { hapticTap } from "@/lib/haptics";
 import { alpha } from "@/lib/theme";
 import { usePalette, useType } from "@/stores/theme";
 import {
-  exerciseImage,
+  exerciseGif,
   GROUPS,
   kindOf,
   searchLibrary,
@@ -39,16 +42,17 @@ export interface PickedExercise {
   libId?: string;
 }
 
-/** The exercise library: 873 open-source exercises with demonstration photos,
- * browsed as little polaroids under push/pull/legs lenses — or name something
- * of your own and pick how it's measured. */
+/** The exercise library: 1,500 exercises, each demonstrated by an animated
+ * 3D model with the working muscle lit — browsed under push/pull/legs lenses.
+ * Tap to add (pick mode) or to open the how-to; long-press always opens it.
+ * Naming something unknown adds it as your own. */
 export function ExercisePicker({
   visible,
   onPick,
   onClose,
 }: {
   visible: boolean;
-  onPick: (picked: PickedExercise) => void;
+  onPick?: (picked: PickedExercise) => void;
   onClose: () => void;
 }) {
   const colors = usePalette();
@@ -57,16 +61,20 @@ export function ExercisePicker({
   const [query, setQuery] = useState("");
   const [group, setGroup] = useState<LibraryGroup>("all");
   const [kind, setKind] = useState<ExerciseKind>("weight_reps");
+  const [detail, setDetail] = useState<LibraryExercise | null>(null);
 
   const matches = useMemo(() => searchLibrary(query, group), [query, group]);
   const trimmed = query.trim();
   const isNew =
-    trimmed.length > 1 && !matches.some((e) => e.name.toLowerCase() === trimmed.toLowerCase());
+    !!onPick &&
+    trimmed.length > 1 &&
+    !matches.some((e) => e.name.toLowerCase() === trimmed.toLowerCase());
 
   const pick = (picked: PickedExercise) => {
     hapticTap();
-    onPick(picked);
+    onPick?.(picked);
     setQuery("");
+    setDetail(null);
   };
 
   return (
@@ -74,7 +82,7 @@ export function ExercisePicker({
       visible={visible}
       animationType="slide"
       presentationStyle={Platform.OS === "ios" ? "pageSheet" : "fullScreen"}
-      onRequestClose={onClose}
+      onRequestClose={() => (detail ? setDetail(null) : onClose())}
     >
       <View
         style={[
@@ -98,7 +106,7 @@ export function ExercisePicker({
         <TextInput
           value={query}
           onChangeText={setQuery}
-          placeholder="Search 873 exercises — or name your own"
+          placeholder={onPick ? "Search 1,500 exercises — or name your own" : "Search 1,500 exercises"}
           placeholderTextColor={alpha(colors.inkMuted, 0.5)}
           autoCorrect={false}
           style={[
@@ -206,30 +214,45 @@ export function ExercisePicker({
             <ExerciseTile
               exercise={item}
               index={index}
-              onPress={() => pick({ name: item.name, kind: kindOf(item), libId: item.id })}
+              onPress={() =>
+                onPick ? pick({ name: item.name, kind: kindOf(item), libId: item.id }) : setDetail(item)
+              }
+              onLongPress={() => setDetail(item)}
             />
           )}
           ListEmptyComponent={
             <Text style={[styles.empty, type.sans, { color: colors.inkMuted }]}>
-              Nothing here by that name — keep typing to add it as your own.
+              {onPick
+                ? "Nothing here by that name — keep typing to add it as your own."
+                : "Nothing here by that name."}
             </Text>
           }
         />
+
+        {detail && (
+          <ExerciseDetail
+            exercise={detail}
+            onAdd={onPick && (() => pick({ name: detail.name, kind: kindOf(detail), libId: detail.id }))}
+            onBack={() => setDetail(null)}
+          />
+        )}
       </View>
     </Modal>
   );
 }
 
-/** A little polaroid, like the board tiles: the demo photo on a paper card
- * with a handwritten-ish caption, each hung slightly off-straight. */
+/** A little moving polaroid, like the board tiles: the demo loop on a paper
+ * card with a caption, each hung slightly off-straight. */
 function ExerciseTile({
   exercise,
   index,
   onPress,
+  onLongPress,
 }: {
   exercise: LibraryExercise;
   index: number;
   onPress: () => void;
+  onLongPress: () => void;
 }) {
   const colors = usePalette();
   const type = useType();
@@ -240,6 +263,7 @@ function ExerciseTile({
       accessibilityRole="button"
       accessibilityLabel={exercise.name}
       onPress={onPress}
+      onLongPress={onLongPress}
       style={[
         styles.tile,
         {
@@ -251,17 +275,96 @@ function ExerciseTile({
     >
       <Grain radius={10} />
       <Image
-        source={{ uri: exerciseImage(exercise) }}
+        source={{ uri: exerciseGif(exercise) }}
         resizeMode="cover"
-        style={[styles.tilePhoto, { backgroundColor: alpha(colors.ink, 0.05) }]}
+        style={[styles.tilePhoto, { backgroundColor: "#ffffff" }]}
       />
       <Text numberOfLines={2} style={[styles.tileName, type.sansMedium, { color: colors.ink }]}>
         {exercise.name}
       </Text>
       <Text numberOfLines={1} style={[styles.tileMuscle, type.sans, { color: colors.inkMuted }]}>
-        {exercise.primaryMuscles[0] ?? exercise.category}
+        {exercise.targets[0] ?? exercise.parts[0]}
       </Text>
     </PressableScale>
+  );
+}
+
+/** The how-to: the model demonstrating on a loop, the muscles it works, and
+ * the steps — Hevy's exercise page, on paper. */
+function ExerciseDetail({
+  exercise,
+  onAdd,
+  onBack,
+}: {
+  exercise: LibraryExercise;
+  onAdd?: () => void;
+  onBack: () => void;
+}) {
+  const colors = usePalette();
+  const type = useType();
+  const insets = useSafeAreaInsets();
+  return (
+    <Animated.View
+      entering={FadeIn.duration(160)}
+      style={[StyleSheet.absoluteFill, { backgroundColor: colors.paper }]}
+    >
+      <Grain />
+      <ScrollView
+        showsVerticalScrollIndicator={false}
+        contentContainerStyle={[styles.detail, { paddingBottom: insets.bottom + 24 }]}
+      >
+        <View style={styles.detailHead}>
+          <PressableScale
+            scaleTo={0.85}
+            accessibilityLabel="Back to the library"
+            onPress={onBack}
+            style={styles.close}
+          >
+            <ChevronLeft size={20} color={colors.inkMuted} />
+          </PressableScale>
+          <Text style={[styles.detailName, type.display, { color: colors.ink }]}>
+            {exercise.name}
+          </Text>
+        </View>
+
+        <View
+          style={[
+            styles.detailCard,
+            { backgroundColor: colors.surface, borderColor: alpha(colors.rule, 0.7) },
+          ]}
+        >
+          <Image
+            source={{ uri: exerciseGif(exercise) }}
+            resizeMode="contain"
+            style={styles.detailGif}
+          />
+        </View>
+
+        <View style={styles.muscleRow}>
+          {[...exercise.targets, ...exercise.equip].map((m) => (
+            <View key={m} style={[styles.muscleChip, { backgroundColor: alpha(colors.clay, 0.12) }]}>
+              <Text style={[styles.muscleText, type.sansMedium, { color: colors.clay }]}>{m}</Text>
+            </View>
+          ))}
+        </View>
+
+        <Eyebrow style={styles.stepsHead}>how to</Eyebrow>
+        {exercise.steps.map((s, i) => (
+          <View key={i} style={styles.stepRow}>
+            <Text style={[styles.stepNum, type.sansSemiBold, { color: colors.zest }]}>{i + 1}</Text>
+            <Text style={[styles.stepText, type.sans, { color: colors.ink }]}>
+              {s.replace(/^Step:\d+\s*/, "")}
+            </Text>
+          </View>
+        ))}
+
+        {onAdd && (
+          <View style={styles.detailAdd}>
+            <Plate label="Add exercise" onPress={onAdd} style={styles.detailPlate} />
+          </View>
+        )}
+      </ScrollView>
+    </Animated.View>
   );
 }
 
@@ -355,13 +458,14 @@ const styles = StyleSheet.create({
   },
   tilePhoto: {
     width: "100%",
-    aspectRatio: 1.35,
+    aspectRatio: 1.1,
     borderRadius: 7,
   },
   tileName: {
     marginTop: 6,
     fontSize: 10.5,
     lineHeight: 13,
+    textTransform: "capitalize",
   },
   tileMuscle: {
     marginTop: 2,
@@ -372,5 +476,73 @@ const styles = StyleSheet.create({
     paddingVertical: 28,
     fontSize: 12.5,
     textAlign: "center",
+  },
+  detail: {
+    paddingHorizontal: 16,
+    paddingTop: 12,
+  },
+  detailHead: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+  },
+  detailName: {
+    flex: 1,
+    fontSize: 20,
+    letterSpacing: -0.3,
+    textTransform: "capitalize",
+  },
+  detailCard: {
+    marginTop: 14,
+    borderWidth: 1,
+    borderRadius: 16,
+    overflow: "hidden",
+    backgroundColor: "#ffffff",
+  },
+  detailGif: {
+    width: "100%",
+    aspectRatio: 1,
+    backgroundColor: "#ffffff",
+  },
+  muscleRow: {
+    marginTop: 12,
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 7,
+  },
+  muscleChip: {
+    borderRadius: 999,
+    paddingVertical: 5,
+    paddingHorizontal: 11,
+  },
+  muscleText: {
+    fontSize: 11,
+    textTransform: "capitalize",
+  },
+  stepsHead: {
+    marginTop: 20,
+  },
+  stepRow: {
+    marginTop: 12,
+    flexDirection: "row",
+    gap: 10,
+  },
+  stepNum: {
+    width: 18,
+    fontSize: 13,
+    fontVariant: ["tabular-nums"],
+  },
+  stepText: {
+    flex: 1,
+    fontSize: 13.5,
+    lineHeight: 19,
+  },
+  detailAdd: {
+    marginTop: 24,
+  },
+  detailPlate: {
+    alignSelf: "stretch",
+    borderRadius: 14,
+    paddingVertical: 15,
   },
 });

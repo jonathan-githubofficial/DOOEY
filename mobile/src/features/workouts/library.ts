@@ -1,19 +1,20 @@
 import type { ExerciseKind } from "./types";
 import data from "./exercises.json";
 
-// The open-source exercise library — free-exercise-db (yuhonas), public
-// domain (Unlicense): 873 exercises, each with two demonstration photos
-// (start/end position) hosted from the project's repo.
-const IMAGE_HOST = "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/";
+// The exercise library — the open-source ExerciseDB v1 dataset: 1,500
+// exercises, each with an animated 3D-model demonstration GIF (target muscle
+// highlighted) and step-by-step instructions. GIFs are pinned to the repo
+// commit the dataset was taken from, so the URLs can't drift.
+const GIF_HOST =
+  "https://raw.githubusercontent.com/bootstrapping-lab/exercisedb-api/7cdc82e1a14b06799d16c819d1082f3debb425ce/media/";
 
 export interface LibraryExercise {
   id: string;
   name: string;
-  force: string | null;
-  equipment: string | null;
-  primaryMuscles: string[];
-  category: string;
-  images: string[];
+  targets: string[];
+  parts: string[];
+  equip: string[];
+  steps: string[];
 }
 
 export const LIBRARY = data as LibraryExercise[];
@@ -23,39 +24,35 @@ export function libraryExercise(id: string | undefined): LibraryExercise | undef
   return id ? byId.get(id) : undefined;
 }
 
-export function exerciseImage(ex: LibraryExercise, frame = 0): string {
-  return IMAGE_HOST + ex.images[Math.min(frame, ex.images.length - 1)];
+export function exerciseGif(ex: LibraryExercise): string {
+  return `${GIF_HOST}${ex.id}.gif`;
 }
 
-/** The training-split lens: push / pull / legs / core / cardio. Legs and core
- * are muscle-driven; push and pull fall back to the dataset's force field. */
+/** The training-split lens: push / pull / legs / core / cardio. Body parts
+ * decide legs, core and cardio; chest and shoulders push; back pulls; arms
+ * split by their target muscle. */
 export const GROUPS = ["all", "push", "pull", "legs", "core", "cardio"] as const;
 export type LibraryGroup = (typeof GROUPS)[number];
 
-const LEG_MUSCLES = new Set([
-  "quadriceps",
-  "hamstrings",
-  "glutes",
-  "calves",
-  "adductors",
-  "abductors",
-]);
+const PUSH_TARGETS = new Set(["pectorals", "delts", "triceps", "serratus anterior"]);
 
 export function groupOf(ex: LibraryExercise): Exclude<LibraryGroup, "all"> | null {
-  if (ex.category === "cardio") return "cardio";
-  const main = ex.primaryMuscles[0];
-  if (main === "abdominals") return "core";
-  if (main && LEG_MUSCLES.has(main)) return "legs";
-  if (ex.force === "push") return "push";
-  if (ex.force === "pull") return "pull";
-  return null;
+  const part = ex.parts[0];
+  if (part === "cardio") return "cardio";
+  if (part === "waist") return "core";
+  if (part === "upper legs" || part === "lower legs") return "legs";
+  if (part === "chest" || part === "shoulders") return "push";
+  if (part === "back" || part === "neck") return "pull";
+  // Arms and the rest split by what they actually work.
+  const target = ex.targets[0] ?? "";
+  return PUSH_TARGETS.has(target) ? "push" : "pull";
 }
 
-/** How a library exercise is logged: cardio and stretches by time, bodyweight
- * strength by reps, everything racked by weight × reps. */
+/** How a library exercise is logged: cardio by time, bodyweight by reps,
+ * everything racked by weight × reps. */
 export function kindOf(ex: LibraryExercise): ExerciseKind {
-  if (ex.category === "cardio" || ex.category === "stretching") return "duration";
-  if (ex.equipment === "body only") return "reps";
+  if (ex.parts[0] === "cardio") return "duration";
+  if (ex.equip.every((e) => e === "body weight")) return "reps";
   return "weight_reps";
 }
 
@@ -66,8 +63,8 @@ export function searchLibrary(query: string, group: LibraryGroup): LibraryExerci
     if (!q) return true;
     return (
       ex.name.toLowerCase().includes(q) ||
-      ex.primaryMuscles.some((m) => m.includes(q)) ||
-      (ex.equipment ?? "").includes(q)
+      ex.targets.some((m) => m.includes(q)) ||
+      ex.equip.some((e) => e.includes(q))
     );
   });
 }

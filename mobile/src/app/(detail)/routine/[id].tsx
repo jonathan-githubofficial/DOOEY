@@ -18,7 +18,7 @@ import { PressableScale } from "@/components/pressable-scale";
 import { Eyebrow, Panel } from "@/components/surface";
 import { useDeleteRoutine, useRoutines, useSaveRoutine } from "@/features/workouts/api";
 import { ExercisePicker, type PickedExercise } from "@/features/workouts/components/ExercisePicker";
-import { exerciseImage, libraryExercise } from "@/features/workouts/library";
+import { exerciseGif, libraryExercise } from "@/features/workouts/library";
 import { useWorkoutPrefs } from "@/features/workouts/store";
 import type { RoutineItem } from "@/features/workouts/types";
 import { hapticTap } from "@/lib/haptics";
@@ -248,9 +248,9 @@ function ItemThumb({ libId }: { libId?: string }) {
   if (!ex) return null;
   return (
     <Image
-      source={{ uri: exerciseImage(ex) }}
+      source={{ uri: exerciseGif(ex) }}
       resizeMode="cover"
-      style={[styles.thumb, { backgroundColor: alpha(colors.ink, 0.05), borderColor: alpha(colors.rule, 0.7) }]}
+      style={[styles.thumb, { backgroundColor: "#ffffff", borderColor: alpha(colors.rule, 0.7) }]}
     />
   );
 }
