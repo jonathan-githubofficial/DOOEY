@@ -1,4 +1,4 @@
-import { ChevronLeft, Dumbbell, Hash, Info, Timer, X } from "lucide-react-native";
+import { ChevronLeft, Info, X } from "lucide-react-native";
 import { useMemo, useState } from "react";
 import {
   FlatList,
@@ -33,12 +33,6 @@ import {
 } from "../library";
 import type { ExerciseKind } from "../types";
 
-const KINDS: { key: ExerciseKind; label: string; icon: typeof Dumbbell }[] = [
-  { key: "weight_reps", label: "weight × reps", icon: Dumbbell },
-  { key: "reps", label: "reps only", icon: Hash },
-  { key: "duration", label: "timed", icon: Timer },
-];
-
 export interface PickedExercise {
   name: string;
   kind: ExerciseKind;
@@ -64,7 +58,6 @@ export function ExercisePicker({
   const insets = useSafeAreaInsets();
   const [query, setQuery] = useState("");
   const [group, setGroup] = useState<LibraryGroup>("all");
-  const [kind, setKind] = useState<ExerciseKind>("weight_reps");
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [detail, setDetail] = useState<LibraryExercise | null>(null);
 
@@ -95,7 +88,7 @@ export function ExercisePicker({
     if (!onAdd || selected.size === 0) return;
     const picks: PickedExercise[] = [...selected].flatMap((id) => {
       const ex = libraryExercise(id);
-      return ex ? [{ name: prettyName(ex.name), kind: kindOf(ex), libId: ex.id }] : [];
+      return ex ? [{ name: prettyName(ex.name), kind: kindOf(), libId: ex.id }] : [];
     });
     onAdd(picks);
     reset();
@@ -103,7 +96,7 @@ export function ExercisePicker({
   };
 
   const addCustom = () => {
-    onAdd?.([{ name: trimmed, kind }]);
+    onAdd?.([{ name: trimmed, kind: "weight_reps" }]);
     reset();
     onClose();
   };
@@ -189,39 +182,6 @@ export function ExercisePicker({
 
         {isNew && (
           <View style={styles.customRow}>
-            <View style={styles.kinds}>
-              {KINDS.map((k) => {
-                const active = kind === k.key;
-                const Icon = k.icon;
-                return (
-                  <PressableScale
-                    key={k.key}
-                    scaleTo={0.92}
-                    accessibilityRole="button"
-                    accessibilityLabel={k.label}
-                    onPress={() => setKind(k.key)}
-                    style={[
-                      styles.kindChip,
-                      {
-                        backgroundColor: active ? alpha(colors.zest, 0.15) : colors.surface,
-                        borderColor: active ? colors.zest : alpha(colors.rule, 0.8),
-                      },
-                    ]}
-                  >
-                    <Icon size={12} color={active ? colors.zest : colors.inkMuted} />
-                    <Text
-                      style={[
-                        styles.kindLabel,
-                        type.sansMedium,
-                        { color: active ? colors.ink : colors.inkMuted },
-                      ]}
-                    >
-                      {k.label}
-                    </Text>
-                  </PressableScale>
-                );
-              })}
-            </View>
             <PressableScale
               scaleTo={0.97}
               accessibilityLabel={`Add ${trimmed}`}

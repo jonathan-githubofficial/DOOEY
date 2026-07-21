@@ -2,7 +2,6 @@ import { useLocalSearchParams, useRouter } from "expo-router";
 import { ChevronDown, ChevronLeft, ChevronUp, Plus, Trash2, X } from "lucide-react-native";
 import { useEffect, useRef, useState } from "react";
 import {
-  Alert,
   Image,
   Pressable,
   ScrollView,
@@ -14,13 +13,21 @@ import {
 import Animated, { FadeIn, LinearTransition } from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Grain } from "@/components/grain";
+import { Plate } from "@/components/plate";
 import { PressableScale } from "@/components/pressable-scale";
 import { Eyebrow, Panel } from "@/components/surface";
-import { useDeleteRoutine, useRoutines, useSaveRoutine } from "@/features/workouts/api";
+import {
+  useDeleteRoutine,
+  useRoutines,
+  useSaveRoutine,
+  useStartWorkout,
+  useWorkouts,
+} from "@/features/workouts/api";
 import { ExercisePicker, type PickedExercise } from "@/features/workouts/components/ExercisePicker";
 import { exerciseGif, libraryExercise } from "@/features/workouts/library";
 import { formatRest, useWorkoutPrefs } from "@/features/workouts/store";
 import type { RoutineItem } from "@/features/workouts/types";
+import { confirmDestructive } from "@/lib/confirm";
 import { hapticTap } from "@/lib/haptics";
 import { alpha } from "@/lib/theme";
 import { usePalette, useType } from "@/stores/theme";
@@ -38,8 +45,11 @@ export default function RoutineEditor() {
   const unit = useWorkoutPrefs((s) => s.unit);
   const defaultRest = useWorkoutPrefs((s) => s.restSeconds);
   const { data: routines } = useRoutines();
+  const { data: workouts } = useWorkouts();
   const save = useSaveRoutine();
   const del = useDeleteRoutine();
+  const start = useStartWorkout();
+  const live = workouts?.find((w) => !w.ended_at) ?? null;
 
   const routine = routines?.find((r) => r.id === id);
   const [name, setName] = useState<string | null>(null);
@@ -96,15 +106,23 @@ export default function RoutineEditor() {
     ]);
   };
 
+  const startWorkout = () => {
+    hapticTap();
+    // One session at a time — if something's already running, jump to it.
+    if (live) return router.push({ pathname: "/workout/[id]", params: { id: live.id } });
+    start.mutate(
+      { id, name: effName.trim() || "Routine", items: effItems },
+      { onSuccess: (w) => router.push({ pathname: "/workout/[id]", params: { id: w.id } }) },
+    );
+  };
+
   const remove = () =>
-    Alert.alert("Delete this routine?", effName, [
-      { text: "Keep it", style: "cancel" },
-      {
-        text: "Delete",
-        style: "destructive",
-        onPress: () => del.mutate(id, { onSuccess: () => router.back() }),
-      },
-    ]);
+    confirmDestructive(
+      `Delete “${effName}”?`,
+      "This removes the routine. Logged sessions stay in your history.",
+      "Delete routine",
+      () => del.mutate(id, { onSuccess: () => router.back() }),
+    );
 
   return (
     <View style={[styles.screen, { backgroundColor: colors.paper, paddingTop: insets.top + 12 }]}>
@@ -142,6 +160,15 @@ export default function RoutineEditor() {
           style={[styles.descInput, type.sans, { color: colors.inkMuted }]}
         />
 
+        <View style={styles.startRow}>
+          <Plate
+            label={live ? "Resume workout" : "Start workout"}
+            onPress={startWorkout}
+            disabled={start.isPending}
+            style={styles.startPlate}
+          />
+        </View>
+
         <Eyebrow style={styles.section}>exercises</Eyebrow>
         <View style={styles.list}>
           {effItems.map((item, i) => (
@@ -172,19 +199,16 @@ export default function RoutineEditor() {
                     onChange={(v) => patchItem(i, { sets: v })}
                   />
                   <Stepper
-                    label={item.kind === "duration" ? "seconds" : "reps"}
+                    label="reps"
                     value={item.target_reps}
                     min={1}
-                    step={item.kind === "duration" ? 5 : 1}
                     onChange={(v) => patchItem(i, { target_reps: v })}
                   />
-                  {item.kind === "weight_reps" && (
-                    <WeightField
-                      unit={unit}
-                      value={item.target_weight}
-                      onChange={(v) => patchItem(i, { target_weight: v })}
-                    />
-                  )}
+                  <WeightField
+                    unit={unit}
+                    value={item.target_weight}
+                    onChange={(v) => patchItem(i, { target_weight: v })}
+                  />
                   <Stepper
                     label="rest"
                     value={item.rest ?? defaultRest}
@@ -384,6 +408,14 @@ const styles = StyleSheet.create({
     fontSize: 13.5,
     paddingVertical: 2,
   },
+  startRow: {
+    marginTop: 16,
+  },
+  startPlate: {
+    alignSelf: "stretch",
+    borderRadius: 14,
+    paddingVertical: 15,
+  },
   section: {
     marginTop: 20,
   },
@@ -392,9 +424,9 @@ const styles = StyleSheet.create({
     gap: 10,
   },
   thumb: {
-    height: 34,
-    width: 44,
-    borderRadius: 7,
+    height: 42,
+    width: 52,
+    borderRadius: 8,
     borderWidth: 1,
   },
   itemCard: {

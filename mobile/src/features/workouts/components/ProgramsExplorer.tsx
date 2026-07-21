@@ -66,7 +66,7 @@ export function ProgramsExplorer({
           showsVerticalScrollIndicator={false}
           contentContainerStyle={{ paddingTop: 14, paddingBottom: insets.bottom + 24 }}
         >
-          {PROGRAMS.map((p) => (
+          {PROGRAMS.map((p, idx) => (
             <PressableScale
               key={p.key}
               scaleTo={0.98}
@@ -77,16 +77,31 @@ export function ProgramsExplorer({
               }}
             >
               <Panel style={styles.programCard}>
-                <View style={styles.programText}>
-                  <Text style={[styles.programName, type.display, { color: colors.ink }]}>{p.name}</Text>
-                  <Text style={[styles.programSplit, type.sansMedium, { color: colors.zest }]}>
-                    {p.split}
-                  </Text>
-                  <Text style={[styles.programMeta, type.sans, { color: colors.inkMuted }]}>
-                    {p.days} · {p.bestFor}
-                  </Text>
+                <View style={styles.programTopRow}>
+                  <View style={styles.programText}>
+                    <Text style={[styles.programName, type.display, { color: colors.ink }]}>
+                      {p.name}
+                    </Text>
+                    <Text style={[styles.programSplit, type.sansMedium, { color: colors.zest }]}>
+                      {p.split}
+                    </Text>
+                  </View>
+                  <View style={[styles.daysBadge, { backgroundColor: alpha(colors.zest, 0.14) }]}>
+                    <Text style={[styles.daysNum, fontStyle("fraunces", "700"), { color: colors.zest }]}>
+                      {p.days.split(/[\s–-]/)[0]}
+                    </Text>
+                    <Text style={[styles.daysUnit, type.sansMedium, { color: colors.zest }]}>days</Text>
+                  </View>
                 </View>
-                <ChevronRight size={16} color={colors.inkMuted} />
+
+                <ProgramStrip program={p} accent={idx} />
+
+                <View style={styles.programFootRow}>
+                  <Text numberOfLines={1} style={[styles.programMeta, type.sans, { color: colors.inkMuted }]}>
+                    {p.routines.length} routines · {p.bestFor}
+                  </Text>
+                  <ChevronRight size={16} color={colors.inkMuted} />
+                </View>
               </Panel>
             </PressableScale>
           ))}
@@ -196,6 +211,45 @@ function ProgramDetail({
   );
 }
 
+/** A strip of the program's exercise demos — a visual taste of what's inside. */
+function ProgramStrip({ program }: { program: Program; accent: number }) {
+  const colors = usePalette();
+  const type = useType();
+  const seen = new Set<string>();
+  const gifs: string[] = [];
+  for (const r of program.routines) {
+    for (const it of r.items) {
+      if (it.libId && !seen.has(it.libId)) {
+        seen.add(it.libId);
+        const ex = libraryExercise(it.libId);
+        if (ex) gifs.push(exerciseGif(ex));
+      }
+      if (gifs.length >= 5) break;
+    }
+    if (gifs.length >= 5) break;
+  }
+  const total = new Set(program.routines.flatMap((r) => r.items.map((i) => i.libId ?? i.name))).size;
+  return (
+    <View style={styles.strip}>
+      {gifs.map((uri, i) => (
+        <Image
+          key={i}
+          source={{ uri }}
+          resizeMode="cover"
+          style={[styles.stripPhoto, { borderColor: alpha(colors.rule, 0.6) }]}
+        />
+      ))}
+      {total > gifs.length && (
+        <View style={[styles.stripMore, { backgroundColor: alpha(colors.ink, 0.06) }]}>
+          <Text style={[styles.stripMoreText, type.sansMedium, { color: colors.inkMuted }]}>
+            +{total - gifs.length}
+          </Text>
+        </View>
+      )}
+    </View>
+  );
+}
+
 /** Up to three demo loops, fanned — the same tactile move as the board cards. */
 function RoutineFan({ routine }: { routine: ProgramRoutine }) {
   const colors = usePalette();
@@ -232,11 +286,38 @@ const styles = StyleSheet.create({
   head: { flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
   close: { height: 34, width: 34, alignItems: "center", justifyContent: "center" },
   blurb: { marginTop: 6, fontSize: 13, lineHeight: 18 },
-  programCard: { marginTop: 12, flexDirection: "row", alignItems: "center", gap: 12 },
+  programCard: { marginTop: 12 },
+  programTopRow: { flexDirection: "row", alignItems: "flex-start", gap: 12 },
   programText: { flex: 1, minWidth: 0 },
   programName: { fontSize: 18, letterSpacing: -0.3 },
   programSplit: { marginTop: 3, fontSize: 12.5 },
-  programMeta: { marginTop: 2, fontSize: 12 },
+  daysBadge: {
+    alignItems: "center",
+    justifyContent: "center",
+    borderRadius: 12,
+    paddingVertical: 6,
+    paddingHorizontal: 12,
+  },
+  daysNum: { fontSize: 18, lineHeight: 20 },
+  daysUnit: { fontSize: 9, letterSpacing: 1, textTransform: "uppercase" },
+  strip: { marginTop: 12, flexDirection: "row", alignItems: "center", gap: 6 },
+  stripPhoto: { height: 46, width: 52, borderRadius: 8, borderWidth: 1, backgroundColor: "#fff" },
+  stripMore: {
+    height: 46,
+    width: 38,
+    borderRadius: 8,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  stripMoreText: { fontSize: 12 },
+  programFootRow: {
+    marginTop: 12,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: 8,
+  },
+  programMeta: { flex: 1, minWidth: 0, fontSize: 12 },
   detail: { paddingHorizontal: 16, paddingTop: 12 },
   detailHead: { flexDirection: "row", alignItems: "center", gap: 6 },
   detailTitleText: { flex: 1, minWidth: 0 },

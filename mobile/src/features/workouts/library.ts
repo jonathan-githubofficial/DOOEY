@@ -53,11 +53,9 @@ export function groupOf(ex: LibraryExercise): Exclude<LibraryGroup, "all"> | nul
   return PUSH_TARGETS.has(target) ? "push" : "pull";
 }
 
-/** How a library exercise is logged: cardio by time, bodyweight by reps,
- * everything racked by weight × reps. */
-export function kindOf(ex: LibraryExercise): ExerciseKind {
-  if (ex.parts[0] === "cardio") return "duration";
-  if (ex.equip.every((e) => e === "body weight")) return "reps";
+/** Every exercise logs weight × reps — the universal gym set. Bodyweight
+ * movements just leave the weight at zero (or log added weight). */
+export function kindOf(): ExerciseKind {
   return "weight_reps";
 }
 

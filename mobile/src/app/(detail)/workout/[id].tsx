@@ -2,7 +2,6 @@ import { useLocalSearchParams, useRouter } from "expo-router";
 import { Check as CheckIcon, ChevronLeft, Play, Plus, Square, Trash2, X } from "lucide-react-native";
 import { useEffect, useRef, useState } from "react";
 import {
-  Alert,
   Image,
   Pressable,
   ScrollView,
@@ -36,10 +35,10 @@ import {
   formatElapsed,
   workoutSetsDone,
   workoutVolume,
-  type ExerciseKind,
   type WorkoutEntry,
   type WorkoutSet,
 } from "@/features/workouts/types";
+import { confirmDestructive } from "@/lib/confirm";
 import { hapticSuccess, hapticTap } from "@/lib/haptics";
 import { playFlip } from "@/lib/sounds";
 import { alpha } from "@/lib/theme";
@@ -142,7 +141,7 @@ export default function WorkoutPage() {
   const keypadNext = () => {
     if (!focus) return;
     const entry = effEntries[focus.ei];
-    if (focus.field === "weight" && entry.kind === "weight_reps") {
+    if (focus.field === "weight") {
       openCell(focus.ei, focus.si, "reps", entry.sets[focus.si].reps);
     } else {
       setFocus(null);
@@ -198,10 +197,9 @@ export default function WorkoutPage() {
     ]);
   };
   const removeExercise = (ei: number) =>
-    Alert.alert("Remove exercise?", effEntries[ei].name, [
-      { text: "Keep it", style: "cancel" },
-      { text: "Remove", style: "destructive", onPress: () => commit(effEntries.filter((_, i) => i !== ei)) },
-    ]);
+    confirmDestructive("Remove exercise?", effEntries[ei].name, "Remove", () =>
+      commit(effEntries.filter((_, i) => i !== ei)),
+    );
   const bumpRest = (delta: number) => {
     if (!rest) return;
     const total = Math.max(15, rest.total + delta);
@@ -222,10 +220,12 @@ export default function WorkoutPage() {
       router.back();
     };
     if (done === 0) {
-      Alert.alert("Nothing logged", "Finish anyway? This session will be discarded.", [
-        { text: "Keep going", style: "cancel" },
-        { text: "Discard", style: "destructive", onPress: () => del.mutate(id, { onSuccess: () => router.back() }) },
-      ]);
+      confirmDestructive(
+        "Nothing logged yet",
+        "Finish anyway? This session will be discarded.",
+        "Discard session",
+        () => del.mutate(id, { onSuccess: () => router.back() }),
+      );
     } else {
       close();
     }
@@ -323,12 +323,8 @@ export default function WorkoutPage() {
                 <View style={styles.gridHead}>
                   <Text style={[styles.colSet, styles.colLabel, type.sansMedium, { color: colors.inkMuted }]}>set</Text>
                   <Text style={[styles.colPrev, styles.colLabel, type.sansMedium, { color: colors.inkMuted }]}>prev</Text>
-                  {entry.kind === "weight_reps" && (
-                    <Text style={[styles.colInput, styles.colLabel, type.sansMedium, { color: colors.inkMuted }]}>{unit}</Text>
-                  )}
-                  <Text style={[styles.colInput, styles.colLabel, type.sansMedium, { color: colors.inkMuted }]}>
-                    {entry.kind === "duration" ? "secs" : "reps"}
-                  </Text>
+                  <Text style={[styles.colInput, styles.colLabel, type.sansMedium, { color: colors.inkMuted }]}>{unit}</Text>
+                  <Text style={[styles.colInput, styles.colLabel, type.sansMedium, { color: colors.inkMuted }]}>reps</Text>
                   <View style={styles.colAction} />
                 </View>
 
@@ -337,8 +333,6 @@ export default function WorkoutPage() {
                     key={si}
                     index={si}
                     set={set}
-                    kind={entry.kind}
-                    unit={unit}
                     prev={prev.get(entry.name)?.[si]}
                     live={live}
                     running={running === `${ei}:${si}`}
@@ -388,10 +382,9 @@ export default function WorkoutPage() {
           <Pressable
             accessibilityLabel="Delete session"
             onPress={() =>
-              Alert.alert("Delete this session?", effTitle, [
-                { text: "Keep it", style: "cancel" },
-                { text: "Delete", style: "destructive", onPress: () => del.mutate(id, { onSuccess: () => router.back() }) },
-              ])
+              confirmDestructive("Delete this session?", effTitle, "Delete", () =>
+                del.mutate(id, { onSuccess: () => router.back() }),
+              )
             }
             style={styles.deleteRow}
           >
@@ -404,9 +397,9 @@ export default function WorkoutPage() {
       {/* The keypad wins the bottom while a cell is focused; else the rest bar. */}
       {focus && focusEntry ? (
         <KeyPad
-          caption={`${focusEntry.name} · ${focus.field === "weight" ? unit : focusEntry.kind === "duration" ? "seconds" : "reps"}`}
+          caption={`${focusEntry.name} · ${focus.field === "weight" ? unit : "reps"}`}
           draft={editStr}
-          nextLabel={focus.field === "weight" && focusEntry.kind === "weight_reps" ? "Next — reps" : "Done"}
+          nextLabel={focus.field === "weight" ? "Next — reps" : "Done"}
           onDigit={typeDigit}
           onBackspace={backspace}
           onNext={keypadNext}
@@ -487,8 +480,6 @@ function RestButton({ label, onPress }: { label: string; onPress: () => void }) 
 function SetRow({
   index,
   set,
-  kind,
-  unit,
   prev,
   live,
   running,
@@ -502,8 +493,6 @@ function SetRow({
 }: {
   index: number;
   set: WorkoutSet;
-  kind: ExerciseKind;
-  unit: string;
   prev?: WorkoutSet;
   live: boolean;
   running: boolean;
@@ -517,7 +506,7 @@ function SetRow({
 }) {
   const colors = usePalette();
   const type = useType();
-  const ghost = prev ? (kind === "weight_reps" ? `${prev.weight}×${prev.reps}` : `${prev.reps}`) : "—";
+  const ghost = prev ? `${prev.weight}×${prev.reps}` : "—";
 
   return (
     <Pressable
@@ -535,16 +524,14 @@ function SetRow({
       <Text numberOfLines={1} style={[styles.colPrev, styles.prevText, type.sans, { color: alpha(colors.inkMuted, 0.8) }]}>
         {ghost}
       </Text>
-      {kind === "weight_reps" && (
-        <Cell
-          value={set.weight}
-          ghost={prev?.weight}
-          focused={focusField === "weight"}
-          editStr={editStr}
-          editable={live}
-          onPress={() => onOpenCell("weight", set.weight)}
-        />
-      )}
+      <Cell
+        value={set.weight}
+        ghost={prev?.weight}
+        focused={focusField === "weight"}
+        editStr={editStr}
+        editable={live}
+        onPress={() => onOpenCell("weight", set.weight)}
+      />
       <Cell
         value={set.reps}
         ghost={prev?.reps}
@@ -648,7 +635,7 @@ const styles = StyleSheet.create({
   entries: { marginTop: 16, gap: 12 },
   entryCard: { gap: 6 },
   entryHead: { flexDirection: "row", alignItems: "center", gap: 10 },
-  entryThumb: { height: 40, width: 50, borderRadius: 8, borderWidth: 1 },
+  entryThumb: { height: 48, width: 60, borderRadius: 9, borderWidth: 1 },
   entryTitleText: { flex: 1, minWidth: 0 },
   entryName: { fontSize: 15.5, textTransform: "capitalize" },
   entryRest: { marginTop: 1, fontSize: 11.5 },

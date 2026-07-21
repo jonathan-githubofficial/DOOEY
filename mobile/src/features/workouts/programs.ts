@@ -61,7 +61,7 @@ function item([key, sets, reps, rest]: Line): RoutineItem | null {
   if (!ex) return null;
   return {
     name: prettyName(ex.name),
-    kind: kindOf(ex),
+    kind: kindOf(),
     libId: ex.id,
     sets,
     target_reps: reps,
