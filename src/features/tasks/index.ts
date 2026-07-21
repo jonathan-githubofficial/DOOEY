@@ -11,5 +11,14 @@ export { TaskComposer } from "./components/TaskComposer";
 export { ComposerSheet } from "./components/ComposerSheet";
 export { PlannerBook } from "./components/PlannerBook";
 export { TaskDetail } from "./components/TaskDetail";
-export { useTasksLive, localDate, useProjectTasks, useCreateTask, useUpdateTask } from "./api";
+export {
+  useTasksLive,
+  localDate,
+  useProjectTasks,
+  useCreateTask,
+  useUpdateTask,
+  useDayEvents,
+  useWeekEvents,
+  useCalendarEventsLive,
+} from "./api";
 export type { Task } from "./types";

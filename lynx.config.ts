@@ -31,9 +31,12 @@ export default defineConfig({
     }),
     pluginTypeCheck(),
   ],
-  // The web target is the only target this run verifies; it must emit output.
+  // web = browser/e2e target; lynx = the native bundle LynxExplorer loads on a device.
+  // The QR plugin only reads entries from the `lynx` environment, so dropping it
+  // also silences the dev-server QR code.
   environments: {
     web: {},
+    lynx: {},
   },
   output: {
     // Root-relative prefix for emitted assets, matching how every web host serves `dist/`

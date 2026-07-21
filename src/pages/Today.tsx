@@ -9,9 +9,9 @@
 // useMonthProjectDots is L6/learning, not ported yet -- see the call-site seam).
 //
 // DROPPED (recorded BROOM): the `motion`/`motion.div` slider wrappers -> gone with the date slider.
-// DEFERRED-to-5.3 (R2/R5): calendar-event lines in Today - AgendaSheet is mounted with NO `extern`
-// prop (its default `[]`), so the event-interleave seam is kept but unfed here (no L4 unit brooms
-// it). DROP/STOP-1 (R1): recurring habits do NOT exist in today's app (schema + UI both absent);
+// GOOGLE EVENTS (unit 5.3, R2): the AgendaExternal interleave seam is now FED - useDayEvents(selected)
+// supplies the day's read-only Google events as `extern`, folded among the tasks by time; a live
+// useCalendarEventsLive() subscription refreshes them over SSE. DROP/STOP-1 (R1): recurring habits do NOT exist in today's app (schema + UI both absent);
 // building them is net-new pb_migrations work (HIGH-RISK, forbidden) - recorded as a parity gap for
 // unit 8.4, nothing to port. `<Link>` -> navigate({ to }) on a `<text bindtap>` (crib; memory
 // router has no <a>). Elements: <div>/<h2>/<p> -> <view>/<text>; <text> sets its own colour/font.
@@ -21,7 +21,14 @@ import { useNavigate } from "@tanstack/react-router";
 import { Panel, Eyebrow } from "@/components/surface";
 import { GrainOverlay } from "@/components/grain-overlay";
 import { useAuthStore, useReducedMotion } from "@/stores";
-import { MonthView, WeekStrip, localDate, useTasksLive } from "@/features/tasks";
+import {
+  MonthView,
+  WeekStrip,
+  localDate,
+  useTasksLive,
+  useCalendarEventsLive,
+  useDayEvents,
+} from "@/features/tasks";
 import { PlannerBook } from "@/features/tasks/components/PlannerBook";
 import { AgendaSheet } from "@/features/tasks/components/AgendaSheet";
 import { TaskComposer } from "@/features/tasks/components/TaskComposer";
@@ -36,11 +43,14 @@ export function Today() {
  * Selecting a day flips the page over the rings, desk-calendar style. */
 function Planner() {
   useTasksLive();
+  useCalendarEventsLive();
   const reduced = useReducedMotion();
   const [selected, setSelected] = useState(localDate());
   const [direction, setDirection] = useState(1);
   const [view, setView] = useState<"week" | "month">("week");
   const [month, setMonth] = useState(() => localDate().slice(0, 7));
+  // Read-only Google events for the selected day, folded into the agenda list by time (R2/5.3).
+  const events = useDayEvents(selected);
 
   // A day pick sets the flip direction before the day changes, so the PlannerBook peels the right
   // way (forward for a later day, back for an earlier one).
@@ -90,7 +100,7 @@ function Planner() {
 
       <view className="mt-8 pb-4">
         <PlannerBook page={selected} direction={direction}>
-          <AgendaSheet date={selected} />
+          <AgendaSheet date={selected} extern={events.data ?? []} />
         </PlannerBook>
       </view>
 

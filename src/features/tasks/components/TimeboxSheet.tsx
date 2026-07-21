@@ -395,9 +395,21 @@ export function TimeboxSheet({
 
   const scheduled = boxed.filter((b) => b.startMin > 0);
   const shelf = boxed.filter((b) => b.startMin <= 0);
+  // Read-only Google events (unit 5.3): externs WITHOUT schedule handlers are NOT boxed (the boxed
+  // builder above keeps only `e.onSchedule` sessions), so they never enter the 5.2 drag path. They
+  // render as inert positioned blocks below. All-day events (startMin 0/undefined) stay in the
+  // Today list only, off the timed grid. They still share the overlap layout with the timed set.
+  const readOnlyEvents = useMemo(
+    () => extern.filter((e) => !e.done && !e.onSchedule && (e.startMin ?? 0) > 0),
+    [extern],
+  );
   const lanes = useMemo(
-    () => layoutLanes(scheduled.map((b) => ({ id: b.key, start_min: b.startMin, dur_min: b.durMin }))),
-    [boxed], // eslint-disable-line react-hooks/exhaustive-deps
+    () =>
+      layoutLanes([
+        ...scheduled.map((b) => ({ id: b.key, start_min: b.startMin, dur_min: b.durMin })),
+        ...readOnlyEvents.map((e) => ({ id: e.id, start_min: e.startMin!, dur_min: e.durMin ?? 60 })),
+      ]),
+    [boxed, readOnlyEvents], // eslint-disable-line react-hooks/exhaustive-deps
   );
 
   // Empty-hour TAP -> open the composer. Coarse minute from the element-relative touch Y when the
@@ -500,6 +512,55 @@ export function TimeboxSheet({
                 className="pointer-events-none absolute inset-x-0 rounded-xl border-2 border-dashed border-zest/50 bg-zest/[0.06] opacity-0"
                 style={{ top: 0, height: 0 }}
               />
+
+              {/* Read-only Google events (unit 5.3): inert positioned blocks — no MTS touch
+                  handlers, no tap, no Check, no hem. They never enter the 5.2 drag path and no
+                  client write can reach calendar_events (its write rules are null). A blue accent
+                  bar marks them foreign; the block shows the title + its fixed time. Rendered
+                  BEFORE the draggable blocks so the MTS-bound blocks stay the LAST siblings in this
+                  container: a non-MTS sibling list appended AFTER a main-thread:bind* element breaks
+                  that element's worklet binding on the Lynx web target (proven: a foreign event on
+                  the day silently killed timebox drag until this ordering). */}
+              {readOnlyEvents.map((e) => {
+                const startMin = e.startMin ?? 0;
+                const durMin = e.durMin ?? 60;
+                const lane = lanes.get(e.id) ?? SOLO_LANE;
+                const height = durMin * pxPerMin;
+                const compact = height < 46;
+                return (
+                  <view
+                    key={e.id}
+                    data-testid="timebox-event"
+                    data-top={String(Math.round((startMin - DAY_START) * pxPerMin))}
+                    className="grain absolute overflow-hidden rounded-xl border border-rule/70 bg-surface shadow-soft"
+                    style={{
+                      top: (startMin - DAY_START) * pxPerMin,
+                      height,
+                      left: `${(lane.lane / lane.lanes) * 100}%`,
+                      width: `calc(${100 / lane.lanes}% - 4px)`,
+                      marginLeft: 2,
+                    }}
+                  >
+                    <view
+                      className={cn("absolute inset-y-1 left-1 w-[3px] rounded-full", e.accentClass ?? "bg-sky")}
+                      aria-hidden
+                    />
+                    <view
+                      className={cn("flex h-full flex-col justify-center pl-3 pr-2", compact ? "py-0.5" : "py-1.5")}
+                    >
+                      <text className={cn("truncate font-medium text-ink", compact ? "text-xs" : "text-[13px]")}>
+                        {e.title}
+                      </text>
+                      {!compact && (
+                        <text className="text-[10px] tabular-nums text-ink-muted">
+                          {fmtMin(startMin)} - {fmtMin(startMin + durMin)}
+                        </text>
+                      )}
+                    </view>
+                  </view>
+                );
+              })}
+
               {scheduled.map((b) => {
                 const lane = lanes.get(b.key) ?? SOLO_LANE;
                 const height = b.durMin * pxPerMin;
@@ -592,7 +653,7 @@ export function TimeboxSheet({
                 );
               })}
             </HourRules>
-            {scheduled.length === 0 && (
+            {scheduled.length === 0 && readOnlyEvents.length === 0 && (
               <text className="pointer-events-none mt-3 block px-2 text-center text-sm text-ink-muted">
                 {shelf.length > 0
                   ? "Tap an hour to add, or drag a slip down from the shelf."

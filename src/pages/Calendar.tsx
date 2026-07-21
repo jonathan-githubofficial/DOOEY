@@ -33,6 +33,9 @@ import {
   WeekGrid,
   localDate,
   useTasksLive,
+  useCalendarEventsLive,
+  useDayEvents,
+  useWeekEvents,
 } from "@/features/tasks";
 import { PX_DEFAULT, PX_MAX, PX_MIN, PxPerMinProvider, clampPx } from "@/features/tasks/timeGrid";
 import { addDays, toLocalNoon, weekOf } from "@/features/tasks/dates";
@@ -51,6 +54,7 @@ export function Calendar() {
 
 function CalendarBody() {
   useTasksLive();
+  useCalendarEventsLive();
   const reduced = useReducedMotion();
   const [view, setView] = useState<View>("week");
   const [selected, setSelected] = useState(localDate);
@@ -58,6 +62,10 @@ function CalendarBody() {
   const [month, setMonth] = useState(() => localDate().slice(0, 7));
   const week = weekOf(selected);
   const today = localDate();
+  // Read-only Google events (unit 5.3, R2): the week map for the WeekGrid columns and the selected
+  // day's list for the TimeboxSheet. Both render as non-draggable, read-only blocks (no handlers).
+  const weekEvents = useWeekEvents(selected);
+  const dayEvents = useDayEvents(selected);
   // The tapped slot that opens the task drawer, Google-Calendar style.
   const [slot, setSlot] = useState<{ date: string; start: number } | null>(null);
   const addAt = (date: string, start: number) => setSlot({ date, start });
@@ -127,14 +135,19 @@ function CalendarBody() {
             {view === "day" && (
               <view className="mt-9">
                 <PlannerBook page={selected} direction={direction}>
-                  <TimeboxSheet date={selected} onAddSlot={addAt} />
+                  <TimeboxSheet date={selected} onAddSlot={addAt} extern={dayEvents.data ?? []} />
                 </PlannerBook>
               </view>
             )}
             {view === "week" && (
               <view key={week[0]} className={cn("mt-4", reduced ? "animate-enter-fade" : "animate-cal-week")}>
                 <Panel className="p-4 md:p-5">
-                  <WeekGrid anchor={selected} onPickDay={openDay} onAddSlot={addAt} />
+                  <WeekGrid
+                    anchor={selected}
+                    onPickDay={openDay}
+                    onAddSlot={addAt}
+                    externsByDay={weekEvents.data ?? {}}
+                  />
                 </Panel>
               </view>
             )}

@@ -19,7 +19,8 @@
 // the day sheet, no separate ghost is driven here -- the block itself translates under the finger
 // (its own MTS transform) as the live preview. Native coordinate semantics for the drop are PARKED.
 //
-// externsByDay stays an empty-default seam for 5.3 (WeekSessionBlock is read-only, never dragged).
+// externsByDay is fed by unit 5.3 with read-only Google events (WeekSessionBlock renders them
+// non-draggable -- it has no MTS drag worklets, only a tap-to-open); the default stays empty {}.
 // Elements: <div> -> <view>, <span>/<p> -> <text>; navigation is <view bindtap> + useNavigate().
 import { useEffect, useRef } from "react";
 import { useNavigate } from "@tanstack/react-router";
@@ -322,6 +323,14 @@ function WeekColumn({
           className="absolute inset-0 z-0"
         />
       )}
+      {/* Read-only externs (unit 5.3 Google events) render BEFORE the draggable task blocks so the
+          MTS-bound blocks stay the LAST siblings in this column: a non-MTS sibling list appended
+          AFTER a main-thread:bind* element breaks that element's worklet binding on the Lynx web
+          target (proven in TimeboxSheet — a foreign event silently killed timebox drag until the
+          event blocks were ordered ahead of the draggable ones; the week spread shares the risk). */}
+      {sessions.map((s) => (
+        <WeekSessionBlock key={s.id} ext={s} day={day} lane={lanes.get(s.id) ?? SOLO_LANE} />
+      ))}
       {scheduled.map((t) => {
         const lane = lanes.get(t.id) ?? SOLO_LANE;
         const height = t.dur_min * pxPerMin;
@@ -369,20 +378,21 @@ function WeekColumn({
           </view>
         );
       })}
-      {sessions.map((s) => (
-        <WeekSessionBlock key={s.id} ext={s} lane={lanes.get(s.id) ?? SOLO_LANE} />
-      ))}
     </view>
   );
 }
 
-/** A timeboxed learning session in the week spread (INERT seam for unit 5.3; never instantiated at
- * L5 since externsByDay is empty). Read-only -- it links to its page, no drag. */
+/** A timeboxed read-only extern in the week spread. Unit 5.3 feeds this with Google calendar_events
+ * (externsByDay); a later learning-session producer (L6) reuses it. Read-only -- it links out on
+ * tap but has NO drag worklets (unlike the task WeekBlock), so foreign events are never draggable.
+ * The data-* attributes are E2E instrumentation only (mirrors the task week-block), no render role. */
 function WeekSessionBlock({
   ext,
+  day,
   lane,
 }: {
   ext: AgendaExternal;
+  day: string;
   lane: { lane: number; lanes: number };
 }) {
   const navigate = useNavigate();
@@ -392,6 +402,10 @@ function WeekSessionBlock({
     <view
       bindtap={() => void navigate({ to: ext.to, params: ext.params } as never)}
       accessibility-traits="button"
+      data-testid="week-session"
+      data-day={day}
+      data-top={String(Math.round(((ext.startMin ?? 0) - DAY_START) * pxPerMin))}
+      data-accent={ext.accentClass}
       className="grain absolute overflow-hidden rounded-lg border border-rule/70 bg-surface shadow-soft active:opacity-70"
       style={{
         top: ((ext.startMin ?? 0) - DAY_START) * pxPerMin,
