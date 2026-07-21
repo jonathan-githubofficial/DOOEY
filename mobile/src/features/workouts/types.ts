@@ -9,6 +9,7 @@ export interface RoutineItem {
   sets: number;
   target_reps: number;
   target_weight: number; // 0 for reps/duration kinds; seconds for duration
+  rest?: number; // seconds of rest for this exercise; falls back to the prefs default
   libId?: string;
 }
 
@@ -18,6 +19,8 @@ export interface Routine {
   position: number;
   /** The plan this routine belongs to — "Push", "Legs"… — or "" for loose. */
   group: string;
+  /** A line about what the routine is for — shown on its card. */
+  description: string;
   items: RoutineItem[];
 }
 
@@ -33,6 +36,8 @@ export interface WorkoutEntry {
   name: string;
   kind: ExerciseKind;
   sets: WorkoutSet[];
+  rest?: number; // seconds — this exercise's rest, remembered session to session
+  notes?: string;
   libId?: string;
 }
 

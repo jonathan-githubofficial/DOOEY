@@ -1,13 +1,15 @@
 import { useRouter } from "expo-router";
-import { BookOpen, ChevronRight, ClipboardList, Play, Plus } from "lucide-react-native";
-import { useState } from "react";
-import { Alert, Image, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
-import Animated, { FadeInDown } from "react-native-reanimated";
+import { BookOpen, ClipboardList, MoreHorizontal, Play, X } from "lucide-react-native";
+import { useEffect, useState } from "react";
+import { Alert, Image, Modal, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+import Animated, { FadeIn, FadeInDown } from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Grain } from "@/components/grain";
 import { Masthead } from "@/components/Masthead";
+import { Plate } from "@/components/plate";
 import { PressableScale } from "@/components/pressable-scale";
 import { Eyebrow, Panel } from "@/components/surface";
+import { useCardRadius } from "@/features/style/store";
 import { PageDoodle } from "@/features/style/components/PageDoodle";
 import { fontStyle } from "@/features/style/tokens";
 import {
@@ -15,13 +17,15 @@ import {
   useDeleteWorkout,
   useRoutines,
   useSaveRoutine,
+  useSeedStarterRoutines,
   useStartWorkout,
   useWorkouts,
 } from "@/features/workouts/api";
 import { useNow } from "@/features/workouts/clock";
 import { ExercisePicker } from "@/features/workouts/components/ExercisePicker";
 import { exerciseGif, libraryExercise } from "@/features/workouts/library";
-import { useWorkoutPrefs } from "@/features/workouts/store";
+import { STARTER_ROUTINES } from "@/features/workouts/starters";
+import { formatRest, useWorkoutPrefs } from "@/features/workouts/store";
 import {
   formatElapsed,
   workoutSetsDone,
@@ -29,13 +33,11 @@ import {
   type Routine,
   type Workout,
 } from "@/features/workouts/types";
-import { hapticTap } from "@/lib/haptics";
 import { alpha } from "@/lib/theme";
 import { usePalette, useType } from "@/stores/theme";
 
-/** The gym space, laid out the Hevy way: quick start on top, then routines
- * (new + explore, grouped under their plans, each with its own start button),
- * then the training log. */
+/** The gym space, Hevy-shaped: quick start on top, routines as board-style
+ * cards grouped by plan (tap → preview, ▶ → train), and the log. */
 export default function Gym() {
   const colors = usePalette();
   const type = useType();
@@ -45,27 +47,42 @@ export default function Gym() {
   const { data: workouts, isPending } = useWorkouts();
   const saveRoutine = useSaveRoutine();
   const start = useStartWorkout();
+  const seed = useSeedStarterRoutines();
+  const seededFlag = useWorkoutPrefs((s) => s.seededRoutines);
+  const markSeeded = useWorkoutPrefs((s) => s.markSeeded);
+  const [preview, setPreview] = useState<Routine | null>(null);
   const [exploring, setExploring] = useState(false);
 
   const live = workouts?.find((w) => !w.ended_at) ?? null;
   const history = (workouts ?? []).filter((w) => w.ended_at);
+  const routinesReady = !!routines;
+
+  // First open with an empty, never-seeded gym → plant the starter split once.
+  useEffect(() => {
+    if (routinesReady && routines.length === 0 && !seededFlag && !seed.isPending) {
+      markSeeded();
+      seed.mutate(STARTER_ROUTINES);
+    }
+  }, [routinesReady, routines, seededFlag, seed, markSeeded]);
+
   const plans = [...new Set((routines ?? []).map((r) => r.group).filter(Boolean))];
   const loose = (routines ?? []).filter((r) => !r.group);
-  const fresh = !isPending && (routines ?? []).length === 0 && history.length === 0 && !live;
 
   const openWorkout = (wid: string) =>
     router.push({ pathname: "/workout/[id]", params: { id: wid } });
+  const openRoutine = (rid: string) =>
+    router.push({ pathname: "/routine/[id]", params: { id: rid } });
 
   const startWorkout = (routine: Routine | null) => {
-    // One session at a time — a running workout resumes instead.
-    if (live) return openWorkout(live.id);
+    setPreview(null);
+    if (live) return openWorkout(live.id); // one session at a time
     start.mutate(routine, { onSuccess: (w) => openWorkout(w.id) });
   };
 
   const newRoutine = () =>
     saveRoutine.mutate(
       { name: "New routine", items: [], position: routines?.length ?? 0 },
-      { onSuccess: (r) => router.push({ pathname: "/routine/[id]", params: { id: r.id } }) },
+      { onSuccess: (r) => openRoutine(r.id) },
     );
 
   return (
@@ -78,54 +95,46 @@ export default function Gym() {
           { paddingBottom: Math.max(16, insets.bottom) + 96 },
         ]}
       >
-        <Masthead avatar={<PageDoodle page="gym" />} title="Gym">
-          <UnitPill />
-        </Masthead>
+        <Masthead avatar={<PageDoodle page="gym" />} title="Gym" />
 
         <Eyebrow style={styles.section}>quick start</Eyebrow>
         {live ? (
           <LiveBanner workout={live} onPress={() => openWorkout(live.id)} />
         ) : (
           <PressableScale
-            scaleTo={0.97}
+            scaleTo={0.98}
             accessibilityLabel="Start an empty workout"
             onPress={() => startWorkout(null)}
             disabled={start.isPending}
-            style={[styles.quickStart, { backgroundColor: colors.surface, borderColor: alpha(colors.rule, 0.7) }]}
           >
-            <Plus size={15} color={colors.zest} />
-            <Text style={[styles.quickStartText, type.sansMedium, { color: colors.ink }]}>
-              Start empty workout
-            </Text>
+            <Panel style={[styles.quickStart, { borderColor: alpha(colors.zest, 0.4) }]}>
+              <View style={[styles.quickIcon, { backgroundColor: alpha(colors.zest, 0.14) }]}>
+                <Play size={16} color={colors.zest} />
+              </View>
+              <View style={styles.quickText}>
+                <Text style={[styles.quickTitle, type.sansSemiBold, { color: colors.ink }]}>
+                  Start empty workout
+                </Text>
+                <Text style={[styles.quickSub, type.sans, { color: colors.inkMuted }]}>
+                  Log freestyle — pull exercises in as you go.
+                </Text>
+              </View>
+            </Panel>
           </PressableScale>
         )}
 
-        <Eyebrow style={styles.section}>routines</Eyebrow>
-        <View style={styles.toolRow}>
-          <ToolButton
-            label="New routine"
-            icon={<ClipboardList size={15} color={colors.inkMuted} />}
-            onPress={newRoutine}
-            disabled={saveRoutine.isPending}
-          />
-          <ToolButton
-            label="Explore"
-            icon={<BookOpen size={15} color={colors.inkMuted} />}
-            onPress={() => setExploring(true)}
-          />
+        <View style={styles.routineHeadRow}>
+          <Eyebrow>routines</Eyebrow>
+          <View style={styles.tools}>
+            <ToolButton label="Explore" icon={<BookOpen size={14} color={colors.inkMuted} />} onPress={() => setExploring(true)} />
+            <ToolButton
+              label="New"
+              icon={<ClipboardList size={14} color={colors.inkMuted} />}
+              onPress={newRoutine}
+              disabled={saveRoutine.isPending}
+            />
+          </View>
         </View>
-
-        {fresh && (
-          <Panel style={styles.freshPanel}>
-            <Text style={[styles.freshTitle, fontStyle("fraunces", "900"), { color: colors.ink }]}>
-              First day at the gym.
-            </Text>
-            <Text style={[styles.freshBody, type.sans, { color: colors.inkMuted }]}>
-              Build a routine from 1,500 demonstrated exercises — or just start an empty workout
-              and log as you go. Your last numbers follow you into every next session.
-            </Text>
-          </Panel>
-        )}
 
         {plans.map((plan) => (
           <View key={plan}>
@@ -135,7 +144,7 @@ export default function Gym() {
                 .filter((r) => r.group === plan)
                 .map((r, i) => (
                   <Animated.View key={r.id} entering={FadeInDown.delay(i * 40).duration(220)}>
-                    <RoutineCard routine={r} onStart={() => startWorkout(r)} />
+                    <RoutineCard routine={r} onOpen={() => setPreview(r)} onStart={() => startWorkout(r)} />
                   </Animated.View>
                 ))}
             </View>
@@ -145,14 +154,12 @@ export default function Gym() {
         {loose.length > 0 && (
           <>
             {plans.length > 0 && (
-              <Text style={[styles.planHead, type.sansSemiBold, { color: colors.ink }]}>
-                My routines
-              </Text>
+              <Text style={[styles.planHead, type.sansSemiBold, { color: colors.ink }]}>Other</Text>
             )}
-            <View style={[styles.cards, plans.length === 0 && styles.cardsBare]}>
+            <View style={[styles.cards, plans.length === 0 && styles.cardsTop]}>
               {loose.map((r, i) => (
                 <Animated.View key={r.id} entering={FadeInDown.delay(i * 40).duration(220)}>
-                  <RoutineCard routine={r} onStart={() => startWorkout(r)} />
+                  <RoutineCard routine={r} onOpen={() => setPreview(r)} onStart={() => startWorkout(r)} />
                 </Animated.View>
               ))}
             </View>
@@ -169,10 +176,26 @@ export default function Gym() {
             </View>
           </>
         )}
+
+        {!isPending && (routines ?? []).length === 0 && (
+          <Text style={[styles.empty, type.sans, { color: colors.inkMuted }]}>
+            Setting up your starter routines…
+          </Text>
+        )}
       </ScrollView>
 
-      {/* Explore: the library as pure reference — tap an exercise for its
-          how-to; nothing gets added from here. */}
+      <RoutinePreview
+        routine={preview}
+        onStart={() => preview && startWorkout(preview)}
+        onEdit={() => {
+          const r = preview;
+          setPreview(null);
+          if (r) openRoutine(r.id);
+        }}
+        onClose={() => setPreview(null)}
+      />
+
+      {/* Explore: the library as pure reference — how-tos, nothing added. */}
       <ExercisePicker visible={exploring} onClose={() => setExploring(false)} />
     </View>
   );
@@ -193,7 +216,7 @@ function ToolButton({
   const type = useType();
   return (
     <PressableScale
-      scaleTo={0.96}
+      scaleTo={0.94}
       accessibilityRole="button"
       accessibilityLabel={label}
       onPress={onPress}
@@ -202,28 +225,6 @@ function ToolButton({
     >
       {icon}
       <Text style={[styles.toolLabel, type.sansMedium, { color: colors.ink }]}>{label}</Text>
-    </PressableScale>
-  );
-}
-
-/** lbs ⇄ kg, worn on the masthead. */
-function UnitPill() {
-  const colors = usePalette();
-  const type = useType();
-  const unit = useWorkoutPrefs((s) => s.unit);
-  const setUnit = useWorkoutPrefs((s) => s.setUnit);
-  return (
-    <PressableScale
-      scaleTo={0.9}
-      accessibilityRole="button"
-      accessibilityLabel={`Weights in ${unit} — tap to switch`}
-      onPress={() => {
-        hapticTap();
-        setUnit(unit === "lbs" ? "kg" : "lbs");
-      }}
-      style={[styles.unitPill, { borderColor: alpha(colors.rule, 0.9) }]}
-    >
-      <Text style={[styles.unitText, type.sansMedium, { color: colors.inkMuted }]}>{unit}</Text>
     </PressableScale>
   );
 }
@@ -253,81 +254,196 @@ function LiveBanner({ workout, onPress }: { workout: Workout; onPress: () => voi
   );
 }
 
-/** A routine the Hevy way: name and summary up top, demo loops fanned like
- * board pieces, and a full-width start button. Long-press deletes. */
-function RoutineCard({ routine, onStart }: { routine: Routine; onStart: () => void }) {
+/** A routine as a board-style card: title + description up top, a fan of the
+ * exercises' demo loops bleeding off the bottom, a ▶ to train and a ⋯ menu.
+ * Tapping the body opens the preview. */
+function RoutineCard({
+  routine,
+  onOpen,
+  onStart,
+}: {
+  routine: Routine;
+  onOpen: () => void;
+  onStart: () => void;
+}) {
   const colors = usePalette();
   const type = useType();
-  const router = useRouter();
+  const radius = useCardRadius();
   const del = useDeleteRoutine();
-  const summary =
-    routine.items.length === 0
-      ? "no exercises yet — tap to build"
-      : routine.items.map((i) => i.name).join(", ");
   const gifs = routine.items
     .map((i) => libraryExercise(i.libId))
     .filter((e) => !!e)
     .slice(0, 3);
+
   return (
-    <Pressable
-      accessibilityLabel={`Routine ${routine.name}`}
-      onPress={() => router.push({ pathname: "/routine/[id]", params: { id: routine.id } })}
-      onLongPress={() =>
-        Alert.alert("Delete this routine?", routine.name, [
-          { text: "Keep it", style: "cancel" },
-          { text: "Delete", style: "destructive", onPress: () => del.mutate(routine.id) },
-        ])
-      }
-    >
-      <Panel style={styles.routineCard}>
-        <View style={styles.routineTop}>
-          <View style={styles.routineText}>
-            <Text numberOfLines={1} style={[styles.routineName, type.display, { color: colors.ink }]}>
-              {routine.name}
-            </Text>
-            <Text
-              numberOfLines={2}
-              style={[styles.routineSummary, type.sans, { color: colors.inkMuted }]}
-            >
-              {summary}
-            </Text>
+    <PressableScale scaleTo={0.99} accessibilityLabel={`Routine ${routine.name}`} onPress={onOpen}>
+      <Panel style={styles.card}>
+        <View style={[styles.cardClip, { borderRadius: radius - 1 }]}>
+          <Text numberOfLines={1} style={[styles.cardTitle, type.display, { color: colors.ink }]}>
+            {routine.name}
+          </Text>
+          <Text numberOfLines={2} style={[styles.cardDesc, type.sans, { color: colors.inkMuted }]}>
+            {routine.description ||
+              (routine.items.length
+                ? routine.items.map((i) => i.name).join(", ")
+                : "No exercises yet — tap to build")}
+          </Text>
+
+          <View style={styles.fanArea} pointerEvents="none">
+            {gifs.length === 0 ? (
+              <Text style={[styles.emptyStar, { color: alpha(colors.inkMuted, 0.2) }]}>✦</Text>
+            ) : (
+              gifs.map((ex, i) => {
+                const spread = i - (gifs.length - 1) / 2;
+                return (
+                  <View
+                    key={ex.id}
+                    style={[
+                      styles.fanTile,
+                      {
+                        left: `${30 + spread * 22}%`,
+                        bottom: `${-12 - Math.abs(spread) * 2}%`,
+                        zIndex: i,
+                        backgroundColor: colors.surface,
+                        transform: [{ rotate: `${spread * 9}deg` }],
+                      },
+                    ]}
+                  >
+                    <Image source={{ uri: exerciseGif(ex) }} style={styles.fanFill} resizeMode="cover" />
+                  </View>
+                );
+              })
+            )}
           </View>
-          {gifs.length > 0 && (
-            <View style={styles.fan}>
-              {gifs.map((ex, i) => (
-                <Image
-                  key={ex.id}
-                  source={{ uri: exerciseGif(ex) }}
-                  resizeMode="cover"
-                  style={[
-                    styles.fanPhoto,
-                    {
-                      backgroundColor: "#ffffff",
-                      borderColor: colors.surface,
-                      marginLeft: i === 0 ? 0 : -14,
-                      transform: [{ rotate: `${(i - 1) * 4}deg` }],
-                      zIndex: gifs.length - i,
-                    },
-                  ]}
-                />
-              ))}
-            </View>
-          )}
         </View>
+
+        {/* ▶ train — the one-tap job, floated bottom-right like a stamp. */}
         <PressableScale
-          scaleTo={0.97}
+          scaleTo={0.9}
           accessibilityRole="button"
           accessibilityLabel={`Start ${routine.name}`}
           onPress={onStart}
-          style={[styles.routineStart, { backgroundColor: alpha(colors.zest, 0.14) }]}
+          style={[styles.cardStart, { backgroundColor: colors.ink }]}
         >
-          <Play size={13} color={colors.zest} />
-          <Text style={[styles.routineStartText, type.sansSemiBold, { color: colors.ink }]}>
-            Start routine
-          </Text>
+          <Play size={16} color={colors.paper} />
         </PressableScale>
+
+        <Pressable
+          accessibilityLabel="Routine options"
+          hitSlop={6}
+          onPress={() =>
+            Alert.alert(routine.name, undefined, [
+              { text: "Delete routine", style: "destructive", onPress: () => del.mutate(routine.id) },
+              { text: "Cancel", style: "cancel" },
+            ])
+          }
+          style={styles.menuBtn}
+        >
+          <MoreHorizontal size={16} color={colors.inkMuted} />
+        </Pressable>
       </Panel>
-    </Pressable>
+    </PressableScale>
+  );
+}
+
+/** The routine preview: what you're about to start — exercises with their
+ * target sets × reps and demo loops — with Start and Edit. */
+function RoutinePreview({
+  routine,
+  onStart,
+  onEdit,
+  onClose,
+}: {
+  routine: Routine | null;
+  onStart: () => void;
+  onEdit: () => void;
+  onClose: () => void;
+}) {
+  const colors = usePalette();
+  const type = useType();
+  const insets = useSafeAreaInsets();
+  const defaultRest = useWorkoutPrefs((s) => s.restSeconds);
+
+  return (
+    <Modal visible={!!routine} transparent animationType="slide" onRequestClose={onClose}>
+      <Pressable style={styles.previewBackdrop} onPress={onClose}>
+        <Animated.View entering={FadeIn.duration(160)}>
+          <Pressable
+            onPress={() => {}}
+            style={[
+              styles.previewSheet,
+              { backgroundColor: colors.paper, paddingBottom: insets.bottom + 16 },
+            ]}
+          >
+            <Grain />
+            {routine && (
+              <>
+                <View style={styles.previewHead}>
+                  <View style={styles.previewTitleText}>
+                    <Text numberOfLines={1} style={[styles.previewTitle, fontStyle("fraunces", "900"), { color: colors.ink }]}>
+                      {routine.name}
+                    </Text>
+                    {!!routine.description && (
+                      <Text style={[styles.previewDesc, type.sans, { color: colors.inkMuted }]}>
+                        {routine.description}
+                      </Text>
+                    )}
+                  </View>
+                  <PressableScale scaleTo={0.85} accessibilityLabel="Close" onPress={onClose} style={styles.close}>
+                    <X size={18} color={colors.inkMuted} />
+                  </PressableScale>
+                </View>
+
+                <ScrollView style={styles.previewList} showsVerticalScrollIndicator={false}>
+                  {routine.items.map((item, i) => {
+                    const ex = libraryExercise(item.libId);
+                    return (
+                      <View key={i} style={[styles.previewRow, { borderBottomColor: alpha(colors.rule, 0.4) }]}>
+                        {ex ? (
+                          <Image source={{ uri: exerciseGif(ex) }} resizeMode="cover" style={[styles.previewThumb, { backgroundColor: "#fff" }]} />
+                        ) : (
+                          <View style={[styles.previewThumb, { backgroundColor: alpha(colors.ink, 0.05) }]} />
+                        )}
+                        <View style={styles.previewRowText}>
+                          <Text numberOfLines={1} style={[styles.previewExName, type.sansMedium, { color: colors.ink }]}>
+                            {item.name}
+                          </Text>
+                          <Text style={[styles.previewExSub, type.sans, { color: colors.inkMuted }]}>
+                            {item.sets} × {item.target_reps}
+                            {item.kind === "weight_reps" ? " reps" : item.kind === "duration" ? "s" : " reps"}
+                            {" · "}
+                            {formatRest(item.rest ?? defaultRest)} rest
+                          </Text>
+                        </View>
+                      </View>
+                    );
+                  })}
+                  {routine.items.length === 0 && (
+                    <Text style={[styles.previewEmpty, type.sans, { color: colors.inkMuted }]}>
+                      No exercises yet — hit Edit to build it.
+                    </Text>
+                  )}
+                </ScrollView>
+
+                <View style={styles.previewActions}>
+                  <PressableScale
+                    scaleTo={0.96}
+                    accessibilityLabel="Edit routine"
+                    onPress={onEdit}
+                    style={[styles.previewEdit, { borderColor: alpha(colors.rule, 0.8) }]}
+                  >
+                    <Text style={[styles.previewEditText, type.sansMedium, { color: colors.ink }]}>
+                      Edit
+                    </Text>
+                  </PressableScale>
+                  <Plate label="Start routine" onPress={onStart} style={styles.previewStart} />
+                </View>
+              </>
+            )}
+          </Pressable>
+        </Animated.View>
+      </Pressable>
+    </Modal>
   );
 }
 
@@ -366,89 +482,52 @@ function HistoryRow({ workout, onPress }: { workout: Workout; onPress: () => voi
             {volume > 0 ? ` · ${Math.round(volume).toLocaleString()} ${unit}` : ""}
           </Text>
         </View>
-        <ChevronRight size={15} color={colors.inkMuted} />
       </Panel>
     </Pressable>
   );
 }
 
 const styles = StyleSheet.create({
-  screen: {
-    flex: 1,
-  },
-  scrollContent: {
-    paddingHorizontal: 16,
-    paddingTop: 8,
-  },
-  unitPill: {
-    borderWidth: 1,
-    borderRadius: 999,
-    paddingVertical: 5,
-    paddingHorizontal: 12,
-  },
-  unitText: {
-    fontSize: 12,
-    letterSpacing: 0.6,
-  },
-  section: {
-    marginTop: 22,
-  },
+  screen: { flex: 1 },
+  scrollContent: { paddingHorizontal: 16, paddingTop: 8 },
+  section: { marginTop: 22 },
   quickStart: {
     marginTop: 10,
     flexDirection: "row",
     alignItems: "center",
+    gap: 12,
+    borderWidth: 1.5,
+  },
+  quickIcon: {
+    height: 40,
+    width: 40,
+    borderRadius: 12,
+    alignItems: "center",
     justifyContent: "center",
-    gap: 8,
-    borderWidth: 1,
-    borderRadius: 14,
-    paddingVertical: 13,
   },
-  quickStartText: {
-    fontSize: 13.5,
-  },
-  toolRow: {
-    marginTop: 10,
+  quickText: { flex: 1, minWidth: 0 },
+  quickTitle: { fontSize: 15 },
+  quickSub: { marginTop: 1, fontSize: 12 },
+  routineHeadRow: {
+    marginTop: 24,
     flexDirection: "row",
-    gap: 10,
+    alignItems: "center",
+    justifyContent: "space-between",
   },
+  tools: { flexDirection: "row", gap: 8 },
   toolBtn: {
-    flex: 1,
     flexDirection: "row",
     alignItems: "center",
-    justifyContent: "center",
-    gap: 8,
+    gap: 6,
     borderWidth: 1,
-    borderRadius: 14,
-    paddingVertical: 12,
+    borderRadius: 999,
+    paddingVertical: 7,
+    paddingHorizontal: 13,
   },
-  toolLabel: {
-    fontSize: 13,
-  },
-  freshPanel: {
-    marginTop: 14,
-    alignItems: "center",
-  },
-  freshTitle: {
-    fontSize: 20,
-    letterSpacing: -0.3,
-  },
-  freshBody: {
-    marginTop: 8,
-    fontSize: 13,
-    lineHeight: 19,
-    textAlign: "center",
-  },
-  planHead: {
-    marginTop: 18,
-    fontSize: 14,
-  },
-  cards: {
-    marginTop: 10,
-    gap: 10,
-  },
-  cardsBare: {
-    marginTop: 14,
-  },
+  toolLabel: { fontSize: 12.5 },
+  planHead: { marginTop: 18, fontSize: 14 },
+  cards: { marginTop: 10, gap: 14 },
+  cardsTop: { marginTop: 14 },
   liveBanner: {
     marginTop: 10,
     flexDirection: "row",
@@ -456,82 +535,111 @@ const styles = StyleSheet.create({
     gap: 12,
     borderWidth: 1.5,
   },
-  liveDot: {
-    height: 8,
-    width: 8,
-    borderRadius: 999,
-  },
-  liveText: {
-    flex: 1,
-    minWidth: 0,
-  },
-  liveTitle: {
-    fontSize: 15,
-  },
-  liveSub: {
-    marginTop: 1,
-    fontSize: 12,
-  },
-  liveClock: {
-    fontSize: 22,
-    fontVariant: ["tabular-nums"],
-  },
-  routineCard: {
-    gap: 12,
-  },
-  routineTop: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 12,
-  },
-  routineText: {
-    flex: 1,
-    minWidth: 0,
-  },
-  routineName: {
-    fontSize: 17,
-  },
-  routineSummary: {
-    marginTop: 3,
-    fontSize: 12,
-    lineHeight: 16,
-    textTransform: "capitalize",
-  },
-  routineStart: {
-    flexDirection: "row",
+  liveDot: { height: 8, width: 8, borderRadius: 999 },
+  liveText: { flex: 1, minWidth: 0 },
+  liveTitle: { fontSize: 15 },
+  liveSub: { marginTop: 1, fontSize: 12 },
+  liveClock: { fontSize: 22, fontVariant: ["tabular-nums"] },
+  // Board-style routine card.
+  card: { aspectRatio: 16 / 9, padding: 0 },
+  cardClip: { flex: 1, overflow: "hidden", padding: 16 },
+  cardTitle: { maxWidth: "72%", fontSize: 18, letterSpacing: -0.3 },
+  cardDesc: { marginTop: 3, maxWidth: "62%", fontSize: 12, lineHeight: 16 },
+  menuBtn: {
+    position: "absolute",
+    right: 12,
+    top: 12,
+    height: 32,
+    width: 32,
     alignItems: "center",
     justifyContent: "center",
-    gap: 7,
+    borderRadius: 999,
+  },
+  cardStart: {
+    position: "absolute",
+    right: 14,
+    bottom: 14,
+    height: 44,
+    width: 44,
+    borderRadius: 999,
+    alignItems: "center",
+    justifyContent: "center",
+    shadowColor: "#282018",
+    shadowOpacity: 0.25,
+    shadowRadius: 6,
+    shadowOffset: { width: 0, height: 3 },
+    elevation: 4,
+  },
+  fanArea: { position: "absolute", left: 0, right: 0, bottom: 0, top: "42%" },
+  emptyStar: {
+    position: "absolute",
+    left: 0,
+    right: 0,
+    bottom: 20,
+    textAlign: "center",
+    fontSize: 30,
+  },
+  fanTile: {
+    position: "absolute",
+    width: "34%",
+    aspectRatio: 1.1,
     borderRadius: 12,
-    paddingVertical: 11,
-  },
-  routineStartText: {
-    fontSize: 13,
-  },
-  fan: {
-    flexDirection: "row",
-    alignItems: "center",
-  },
-  fanPhoto: {
-    height: 40,
-    width: 48,
-    borderRadius: 8,
     borderWidth: 2,
+    borderColor: "rgba(255,255,255,0.9)",
+    overflow: "hidden",
+    shadowColor: "#282018",
+    shadowOpacity: 0.15,
+    shadowRadius: 8,
+    shadowOffset: { width: 0, height: 4 },
+    elevation: 3,
   },
-  historyRow: {
+  fanFill: { flex: 1 },
+  historyRow: { flexDirection: "row", alignItems: "center", gap: 10 },
+  historyText: { flex: 1, minWidth: 0 },
+  historyTitle: { fontSize: 14.5 },
+  historySub: { marginTop: 2, fontSize: 12 },
+  empty: { marginTop: 16, fontSize: 12.5, textAlign: "center" },
+  // Preview sheet.
+  previewBackdrop: {
+    flex: 1,
+    justifyContent: "flex-end",
+    backgroundColor: "rgba(20,16,12,0.35)",
+  },
+  previewSheet: {
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+    paddingHorizontal: 18,
+    paddingTop: 18,
+    maxHeight: "80%",
+    overflow: "hidden",
+  },
+  close: { height: 34, width: 34, alignItems: "center", justifyContent: "center" },
+  previewHead: { flexDirection: "row", alignItems: "flex-start", gap: 10 },
+  previewTitleText: { flex: 1, minWidth: 0 },
+  previewTitle: { fontSize: 24, letterSpacing: -0.3 },
+  previewDesc: { marginTop: 3, fontSize: 13, lineHeight: 18 },
+  previewList: { marginTop: 14 },
+  previewRow: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 10,
+    gap: 12,
+    paddingVertical: 9,
+    borderBottomWidth: 1,
   },
-  historyText: {
-    flex: 1,
-    minWidth: 0,
+  previewThumb: { height: 40, width: 52, borderRadius: 8 },
+  previewRowText: { flex: 1, minWidth: 0 },
+  previewExName: { fontSize: 14 },
+  previewExSub: { marginTop: 2, fontSize: 11.5 },
+  previewEmpty: { paddingVertical: 20, fontSize: 12.5, textAlign: "center" },
+  previewActions: { marginTop: 16, flexDirection: "row", gap: 10 },
+  previewEdit: {
+    borderWidth: 1,
+    borderRadius: 14,
+    paddingVertical: 15,
+    paddingHorizontal: 24,
+    alignItems: "center",
+    justifyContent: "center",
   },
-  historyTitle: {
-    fontSize: 14.5,
-  },
-  historySub: {
-    marginTop: 2,
-    fontSize: 12,
-  },
+  previewEditText: { fontSize: 13, letterSpacing: 0.3 },
+  previewStart: { flex: 1, borderRadius: 14, paddingVertical: 15 },
 });

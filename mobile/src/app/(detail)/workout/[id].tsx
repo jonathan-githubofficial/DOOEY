@@ -117,17 +117,15 @@ export default function WorkoutPage() {
         .filter((e) => e.sets.length > 0),
     );
   };
-  const addExercise = (picked: PickedExercise) => {
-    setPicking(false);
-    const sets = prev.get(picked.name)?.length ?? 3;
+  const addExercises = (picked: PickedExercise[]) => {
     commit([
       ...effEntries,
-      {
-        name: picked.name,
-        kind: picked.kind,
-        libId: picked.libId,
-        sets: Array.from({ length: sets }, emptySet),
-      },
+      ...picked.map((p) => ({
+        name: p.name,
+        kind: p.kind,
+        libId: p.libId,
+        sets: Array.from({ length: prev.get(p.name)?.length ?? 3 }, emptySet),
+      })),
     ]);
   };
   const removeExercise = (ei: number) =>
@@ -352,7 +350,7 @@ export default function WorkoutPage() {
         </Animated.View>
       )}
 
-      <ExercisePicker visible={picking} onPick={addExercise} onClose={() => setPicking(false)} />
+      <ExercisePicker visible={picking} onAdd={addExercises} onClose={() => setPicking(false)} />
     </View>
   );
 }

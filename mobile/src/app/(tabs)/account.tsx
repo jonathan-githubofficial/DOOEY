@@ -1,4 +1,4 @@
-import { ChevronRight, Clapperboard, LogOut, Moon, Palette, Sun } from "lucide-react-native";
+import { ChevronRight, Clapperboard, LogOut, Moon, Palette, SlidersHorizontal, Sun } from "lucide-react-native";
 import { useRouter } from "expo-router";
 import { useEffect, useRef } from "react";
 import { Animated, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
@@ -87,6 +87,23 @@ export default function Account() {
               </Text>
               <Text style={[styles.styleSub, type.sans, { color: colors.inkMuted }]}>
                 Doodle the little animation that greets you at the door.
+              </Text>
+            </View>
+            <ChevronRight size={16} color={colors.inkMuted} />
+          </Panel>
+        </PressableScale>
+
+        <PressableScale scaleTo={0.98} onPress={() => router.push("/preferences")}>
+          <Panel style={styles.styleCard}>
+            <View style={[styles.styleIcon, { backgroundColor: alpha(colors.leaf, 0.15) }]}>
+              <SlidersHorizontal size={20} color={colors.leaf} />
+            </View>
+            <View style={styles.styleText}>
+              <Text style={[styles.styleTitle, type.display, { color: colors.ink }]}>
+                Preferences
+              </Text>
+              <Text style={[styles.styleSub, type.sans, { color: colors.inkMuted }]}>
+                Gym units, rest timer & how the app behaves.
               </Text>
             </View>
             <ChevronRight size={16} color={colors.inkMuted} />

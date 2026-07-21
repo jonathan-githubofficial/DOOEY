@@ -16,6 +16,7 @@ function toRoutine(r: RecordModel): Routine {
     name: r.name,
     position: r.position ?? 0,
     group: r.group ?? "",
+    description: r.description ?? "",
     items: (r.items as RoutineItem[] | null) ?? [],
   };
 }
@@ -73,6 +74,7 @@ export function useSaveRoutine() {
       name: string;
       items: RoutineItem[];
       group?: string;
+      description?: string;
       position?: number;
     }) => {
       const owner = useAuthStore.getState().user!.id;
@@ -81,6 +83,7 @@ export function useSaveRoutine() {
           name: routine.name,
           items: routine.items,
           group: routine.group ?? "",
+          description: routine.description ?? "",
         });
       }
       return pb.collection("routines").create({
@@ -88,6 +91,7 @@ export function useSaveRoutine() {
         name: routine.name,
         items: routine.items,
         group: routine.group ?? "",
+        description: routine.description ?? "",
         position: routine.position ?? 0,
       });
     },
@@ -114,6 +118,7 @@ export function useStartWorkout() {
         name: item.name,
         kind: item.kind,
         libId: item.libId,
+        rest: item.rest,
         sets: Array.from({ length: Math.max(1, item.sets) }, () => emptySet()),
       }));
       const rec = await pb.collection("workouts").create({
@@ -141,6 +146,36 @@ export function useUpdateWorkout(id: string) {
   });
 }
 
+/** Seed a few starter routines the first time the gym is opened empty — so the
+ * space is alive on arrival instead of a blank wall. Guarded by a persisted
+ * flag so a deliberately-cleared gym never regrows. */
+export function useSeedStarterRoutines() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (routines: {
+      name: string;
+      group: string;
+      description: string;
+      items: RoutineItem[];
+    }[]) => {
+      const owner = useAuthStore.getState().user!.id;
+      await Promise.all(
+        routines.map((r, i) =>
+          pb.collection("routines").create({
+            owner,
+            name: r.name,
+            group: r.group,
+            description: r.description,
+            items: r.items,
+            position: i,
+          }),
+        ),
+      );
+    },
+    onSettled: () => qc.invalidateQueries({ queryKey: gymKeys.routines }),
+  });
+}
+
 export function useDeleteWorkout() {
   const qc = useQueryClient();
   return useMutation({
@@ -164,6 +199,17 @@ export function previousLookup(workouts: Workout[]): Map<string, WorkoutSet[]> {
       if (map.has(e.name)) continue;
       const done = e.sets.filter((s) => s.done);
       if (done.length > 0) map.set(e.name, done);
+    }
+  }
+  return map;
+}
+
+/** The rest you last used per exercise — memory so you don't re-set it. */
+export function restLookup(workouts: Workout[]): Map<string, number> {
+  const map = new Map<string, number>();
+  for (const w of workouts) {
+    for (const e of w.entries) {
+      if (!map.has(e.name) && typeof e.rest === "number") map.set(e.name, e.rest);
     }
   }
   return map;

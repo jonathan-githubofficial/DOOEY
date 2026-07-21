@@ -19,7 +19,7 @@ import { Eyebrow, Panel } from "@/components/surface";
 import { useDeleteRoutine, useRoutines, useSaveRoutine } from "@/features/workouts/api";
 import { ExercisePicker, type PickedExercise } from "@/features/workouts/components/ExercisePicker";
 import { exerciseGif, libraryExercise } from "@/features/workouts/library";
-import { useWorkoutPrefs } from "@/features/workouts/store";
+import { formatRest, useWorkoutPrefs } from "@/features/workouts/store";
 import type { RoutineItem } from "@/features/workouts/types";
 import { hapticTap } from "@/lib/haptics";
 import { alpha } from "@/lib/theme";
@@ -39,6 +39,7 @@ export default function RoutineEditor() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const unit = useWorkoutPrefs((s) => s.unit);
+  const defaultRest = useWorkoutPrefs((s) => s.restSeconds);
   const { data: routines } = useRoutines();
   const save = useSaveRoutine();
   const del = useDeleteRoutine();
@@ -46,26 +47,34 @@ export default function RoutineEditor() {
   const routine = routines?.find((r) => r.id === id);
   const [name, setName] = useState<string | null>(null);
   const [group, setGroup] = useState<string | null>(null);
+  const [description, setDescription] = useState<string | null>(null);
   const [items, setItems] = useState<RoutineItem[] | null>(null);
   const [picking, setPicking] = useState(false);
 
   // Hydrate local state once the routine arrives; nulls mean "not yet".
   const effName = name ?? routine?.name ?? "";
   const effGroup = group ?? routine?.group ?? "";
+  const effDescription = description ?? routine?.description ?? "";
   const effItems = items ?? routine?.items ?? [];
 
   // Debounced autosave — the editor never has a save button.
   const dirty = useRef(false);
   useEffect(() => {
-    if (name === null && items === null && group === null) return;
+    if (name === null && items === null && group === null && description === null) return;
     dirty.current = true;
     const t = setTimeout(() => {
       dirty.current = false;
-      save.mutate({ id, name: effName.trim() || "Routine", items: effItems, group: effGroup });
+      save.mutate({
+        id,
+        name: effName.trim() || "Routine",
+        items: effItems,
+        group: effGroup,
+        description: effDescription.trim(),
+      });
     }, 600);
     return () => clearTimeout(t);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [name, items, group]);
+  }, [name, items, group, description]);
 
   const patchItem = (index: number, patch: Partial<RoutineItem>) => {
     setItems(effItems.map((it, i) => (i === index ? { ...it, ...patch } : it)));
@@ -78,18 +87,18 @@ export default function RoutineEditor() {
     [next[index], next[to]] = [next[to], next[index]];
     setItems(next);
   };
-  const addExercise = (picked: PickedExercise) => {
-    setPicking(false);
+  const addExercises = (picked: PickedExercise[]) => {
     setItems([
       ...effItems,
-      {
-        name: picked.name,
-        kind: picked.kind,
-        libId: picked.libId,
+      ...picked.map((p) => ({
+        name: p.name,
+        kind: p.kind,
+        libId: p.libId,
         sets: 3,
-        target_reps: picked.kind === "duration" ? 30 : 8,
+        target_reps: p.kind === "duration" ? 30 : 8,
         target_weight: 0,
-      },
+        rest: defaultRest,
+      })),
     ]);
   };
 
@@ -130,6 +139,14 @@ export default function RoutineEditor() {
             style={[styles.nameInput, type.displayBlack, { color: colors.ink }]}
           />
         </View>
+
+        <TextInput
+          value={effDescription}
+          onChangeText={setDescription}
+          placeholder="A line about what this is for…"
+          placeholderTextColor={alpha(colors.inkMuted, 0.5)}
+          style={[styles.descInput, type.sans, { color: colors.inkMuted }]}
+        />
 
         <Eyebrow style={styles.section}>plan</Eyebrow>
         <View style={styles.plans}>
@@ -210,6 +227,14 @@ export default function RoutineEditor() {
                       onChange={(v) => patchItem(i, { target_weight: v })}
                     />
                   )}
+                  <Stepper
+                    label="rest"
+                    value={item.rest ?? defaultRest}
+                    display={formatRest(item.rest ?? defaultRest)}
+                    min={15}
+                    step={15}
+                    onChange={(v) => patchItem(i, { rest: v })}
+                  />
                 </View>
               </Panel>
             </Animated.View>
@@ -236,7 +261,7 @@ export default function RoutineEditor() {
         </Pressable>
       </ScrollView>
 
-      <ExercisePicker visible={picking} onPick={addExercise} onClose={() => setPicking(false)} />
+      <ExercisePicker visible={picking} onAdd={addExercises} onClose={() => setPicking(false)} />
     </View>
   );
 }
@@ -284,12 +309,14 @@ function IconTap({
 function Stepper({
   label,
   value,
+  display,
   min,
   step = 1,
   onChange,
 }: {
   label: string;
   value: number;
+  display?: string;
   min: number;
   step?: number;
   onChange: (v: number) => void;
@@ -311,7 +338,9 @@ function Stepper({
         >
           <Text style={[styles.stepSign, type.sansMedium, { color: colors.inkMuted }]}>−</Text>
         </PressableScale>
-        <Text style={[styles.stepValue, type.sansSemiBold, { color: colors.ink }]}>{value}</Text>
+        <Text style={[styles.stepValue, type.sansSemiBold, { color: colors.ink }]}>
+          {display ?? value}
+        </Text>
         <PressableScale
           scaleTo={0.8}
           accessibilityLabel={`More ${label}`}
@@ -390,6 +419,12 @@ const styles = StyleSheet.create({
     fontSize: 26,
     letterSpacing: -0.5,
     paddingVertical: 4,
+  },
+  descInput: {
+    marginTop: 4,
+    marginLeft: 38,
+    fontSize: 13.5,
+    paddingVertical: 2,
   },
   section: {
     marginTop: 20,

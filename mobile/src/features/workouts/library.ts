@@ -24,6 +24,11 @@ export function libraryExercise(id: string | undefined): LibraryExercise | undef
   return id ? byId.get(id) : undefined;
 }
 
+/** Title-case a library name for display — the dataset stores lowercase. */
+export function prettyName(name: string): string {
+  return name.replace(/\b\w/g, (c) => c.toUpperCase());
+}
+
 export function exerciseGif(ex: LibraryExercise): string {
   return `${GIF_HOST}${ex.id}.gif`;
 }
