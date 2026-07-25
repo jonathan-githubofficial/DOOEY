@@ -1,223 +1,194 @@
-# DOOEY — Project Guide for Claude
+# DOOEY: Project Guide for Claude
 
-DOOEY is a **personal life OS**: your tasks for the day, recurring habits, a food journal, and
-learning programs — in one tactile, playful app that syncs two-way with Google Calendar.
+DOOEY is a **personal life OS**: today's tasks, recurring habits, gym training, mood boards, and
+learning programs in one tactile, playful app.
 
 It is built **for one user (the owner) now**, but every record keeps multi-user data isolation
-(`owner` fields + PocketBase rules) so opening it up as a SaaS later is a config change, not a
-rewrite. No sharing/visibility UI until then.
+(`owner` fields plus PocketBase rules), so opening it up as a SaaS later is a config change, not a
+rewrite. No sharing or visibility UI until then.
 
-This file is the canonical entry point. Deeper docs live in [docs/](docs/).
+> **The app is [mobile/](mobile/), an Expo app.** The Vite web app in `src/` is frozen legacy
+> (last commit 2026-07-18). Work in `mobile/` unless told otherwise, and read
+> [Legacy web app](#legacy-web-app-frozen) before touching anything outside it.
+
+This file is the canonical entry point. Deeper docs live in [docs/](docs/) and
+[mobile/docs/](mobile/docs/).
+
+---
+
+## Current state (updated 2026-07-25)
+
+**Keep this section true.** Update it before you end a session. It is the only place that records
+where things actually stand, and it is what spares the next session from re-reading the repo.
+
+- **Branch** `feat/expo-migration`, with a large uncommitted working tree (about 37 files, mostly
+  gym plus its docs).
+- **Shipped in `mobile/`**: auth and onboarding, Planner (tasks, week/month/agenda views,
+  timeboxing, compose sheet), Boards, Projects (learning programs as folders), Account, the Style
+  studio (runtime palette, fonts, backdrops, doodle icons), and Gym.
+- **Gym is the active feature and the largest one**: program catalog, routine editor, live logger
+  with a docked keypad and Start/Stop per set, history, muscle map. Architecture:
+  [mobile/docs/gym.md](mobile/docs/gym.md).
+- **In flight**: the Gym redesign specced in [mobile/docs/gym-ux-plan.md](mobile/docs/gym-ux-plan.md).
+  The root problem to fix first: the routine editor collects sets, reps, weight and rest, but
+  `useStartWorkout` builds every set from `emptySet()` and discards `target_reps` and
+  `target_weight` ([mobile/src/features/workouts/api.ts](mobile/src/features/workouts/api.ts)), so
+  the catalog's real rep schemes never reach a session and progressive overload stays passive.
+- **Not built**: Journal (food log), Google Calendar two-way sync, Google OAuth sign-in.
+- **Design system**: retargeted to `mobile/` on 2026-07-25.
+  [docs/design-system.md](docs/design-system.md) and [docs/design-audit.md](docs/design-audit.md)
+  now describe this app, built on "you own it" and "motion has to do a job". New:
+  `mobile/src/lib/motion.ts` (durations, easings, four gesture springs) and `useElevation()` in
+  `mobile/src/stores/theme.ts`. The audit's worklist is unstarted: 21 hardcoded `shadowColor`
+  sites, 34 hex literals, 14 card radii the slider cannot move, 6 springs that visibly bounce.
+- **Loose ends**: `src/lib/motion.ts`, `src/components/sheet.tsx` and the uncommitted edits to
+  `src/main.tsx` and `src/styles/global.css` were written for the **frozen web app** in the same
+  pass, before it was clear it had been superseded. Delete or ignore; do not port them, their
+  motion philosophy is the one the current system replaces.
 
 ---
 
 ## The spaces
 
-The app is a handful of spaces behind a persistent **bottom dock** — one tap to anywhere,
-identical on phone and desktop. The dock's left cluster (doodled avatar + wordmark) opens
-**Account**; the tabs are:
+Five spaces behind the tab bar, declared in
+[mobile/src/app/(tabs)/_layout.tsx](mobile/src/app/(tabs)/_layout.tsx):
 
-1. **Planner** (`/`) — everything I have to do today in one glance: one-shot tasks,
-   recurring-habit progress, and calendar events for the day, interleaved.
-2. **Calendar** (`/calendar`) — the week/month view of dated + time-boxed tasks.
-3. **Boards** (`/boards`) — free-form mood boards: sticky notes, text, links, stickers,
-   doodles, groupable into folders on a canvas.
-4. **Projects** (`/projects`) — learning programs as file-folder cards, plus a guided
-   "new program" flow (learning-architect methodology).
+1. **Planner** (`index`): everything due today in one glance, plus week, month and agenda views.
+2. **Boards**: free-form mood boards (sticky notes, text, links, stickers, doodles).
+3. **Projects**: learning programs as file-folder cards.
+4. **Gym**: programs, routines, live logging, history.
+5. **Account**.
 
-Still on the roadmap, not yet built: **Journal** — free-text food log for today.
+Native builds get the platform's own tab bar (`NativeTabs` from
+`expo-router/unstable-native-tabs`), and the hand-drawn page doodles are rasterized off-screen into
+bitmap icons when "doodle icons in dock" is on. The web build keeps the DOOEY dock island
+(`mobile/src/components/Dock.tsx`).
 
-**Tasks are pages, not rows.** Every task opens into its own self-contained page with fixed,
-well-designed sections: notes, checklist, resources (links + video embeds), attachments.
-Notion-ish depth, but structured — no free-form block editor.
+**Tasks are pages, not rows.** Every task opens its own page with fixed, well-designed sections:
+notes, checklist, resources (links and video embeds), attachments. Notion-ish depth, but structured,
+with no free-form block editor.
 
-See [docs/roadmap.md](docs/roadmap.md) for delivery order and acceptance criteria.
-
----
-
-## Creating a learning program from this session
-
-When you build a program with the **learning-architect** skill in this repo, don't hand the
-user files to import by hand — **verify it, then push it straight into DOOEY's database**:
-
-```bash
-npm run verify-program -- <dir>   # checks the bundle against the app's real parser
-npm run push-program   -- <dir>   # verifies again, then writes it to PocketBase
-```
-
-`verify-program` imports the app's own `parse.ts`, so whatever passes is exactly what the UI
-renders. It checks the ≤5-word title, the `Why:` line, ISO dates, gate markers + matching tests,
-and that `calendar.ics` agrees with `SCHEDULE.md`. **push-program refuses to push on any error** —
-never bypass it; fix the bundle.
-
-That reads `PLAN.md` / `SCHEDULE.md` / `TESTS.md` / `DAILY-TEMPLATE.md` / `LOG.md` /
-`calendar.ics` from the directory, derives the goal from PLAN.md's `# Program:` heading, and
-creates a `learning_programs` record. The running app picks it up **live** (PocketBase
-realtime) and **materializes each SCHEDULE.md session into a real task** — a normal `tasks`
-record with a `project` field pointing at the program (plus `gate` + `session_key`). From then
-on a project's work is just tasks: they appear in Today/Calendar, are time-boxable like any
-task, and open the standard task page. The program record keeps the goal/why, the folder
-styling, and the source files as reference; `materialized` guards the one-time conversion so a
-re-sync never duplicates. Deleting a program cascade-deletes its tasks. The old per-session
-tick/progress model (SCHEDULE-derived sessions, `/session/...` pages) is gone.
-
-Prerequisites: PocketBase running (`pb/pocketbase.exe serve`), and `DOOEY_EMAIL` /
-`DOOEY_PASSWORD` set in `.env.local` (the account the user signs into DOOEY with).
-
-The SCHEDULE.md shape matters — the app parses it. See the skill's `references/file-formats.md`:
-`## ` headers → tracks, `- [ ] <Label> — <YYYY-MM-DD> — <Topic>` per session, `⛳`/`GATE` marks a gate.
+Calendar is no longer its own space: week, month and agenda views live in
+`mobile/src/features/tasks/components/`.
 
 ---
 
-## Philosophy
-
-- **Feature by feature.** One feature lands fully before the next starts. No half-finished stubs, no "coming soon" pages, no scaffolding for hypothetical phases.
-- **Simple first, smart later.** Ship the dumb version that works. Add intelligence (smart suggestions, ranking, LLM augmentation) only after the basics earn it.
-- **Personal now, SaaS-ready.** One real user, but data isolation (`owner` + server rules) is never skipped — future multi-user must not require a rewrite.
-- **Getting around is effortless.** One dock, one tap to any space. Depth (task pages, board canvas, program detail) is drill-in + back, never a maze.
-
----
-
-## Current scope (locked feature list)
-
-1. **Navigation shell** — the bottom dock + spaces, in the tactile design language.
-2. **Tasks (Planner space)** — persisted one-shot tasks, quick-add with minimum friction.
-3. **Task pages** — every task opens to structured sections: notes, checklist, resources (links, video embeds), attachments.
-4. **Recurring habits** — "gym 2–4×/week": weekly target + progress, shown in Today.
-5. **Food journal (Journal space)** — free-text log of what I ate today.
-6. **Google Calendar two-way sync** — dated tasks and learning sessions appear in Google Calendar; calendar events appear in Today.
-7. **Learning generation in-app** — describe a goal on the Learning page, Claude generates the program right there (local Claude Code bridge first, API-key path later behind the same seam). Import/push stays as the power-user path.
-
-Out of scope until explicitly added: sharing/visibility UI, friends/social graph, smart suggestions, notifications, billing, offline.
-
----
-
-## Tech stack (locked)
+## Stack (locked)
 
 | Layer | Choice |
 |---|---|
-| Build | Vite + React 19 + TypeScript |
-| Routing | TanStack Router — one route per space + task/program detail |
-| Client state | Zustand v5 — one store per domain |
-| Server state | TanStack Query v5 + PocketBase SDK |
-| Realtime | PocketBase SSE subscriptions |
-| Animation | `motion/react` |
-| UI primitives | **shadcn/ui** — default for all base components |
-| Icons | `lucide-react` + custom SVGs in `src/components/icons` |
-| Styling | Tailwind v4 (`@import "tailwindcss"`) + `tw-animate-css` |
-| Fonts | Outfit (body) + Fraunces (display) — both via `@fontsource-variable/*` |
-| Backend | PocketBase (Go binary) — API, realtime, auth, and static web serving |
-| Auth | PocketBase email + Google OAuth |
-| Native shells | Capacitor 8 — `android/` + `ios/` wrap the same Vite build |
-| Hosting | One Docker container (PocketBase serves API + built web) on Google Compute Engine |
+| Runtime | Expo SDK 54, React Native 0.81, React 19.1 |
+| Routing | expo-router 6, file-based, typed routes on |
+| Compiler | React Compiler enabled (`app.json` → `experiments.reactCompiler`) |
+| Server state | TanStack Query v5 plus the PocketBase JS SDK |
+| Client state | Zustand v5, persisted through AsyncStorage |
+| Animation | react-native-reanimated 4 with react-native-worklets |
+| Styling | React Native `StyleSheet` with tokens in `features/style/tokens.ts`. No Tailwind, no NativeWind, no shadcn, no UI kit |
+| Fonts | Outfit (body) and Fraunces (display) via `@expo-google-fonts/*` |
+| Icons | `lucide-react-native`, `@expo/vector-icons`, plus the user's own doodles |
+| Native | expo-haptics, expo-image-picker, expo-video, expo-audio, expo-file-system, react-native-view-shot |
+| Backend | PocketBase (Go binary in `pb/`): API, realtime, auth |
+| Builds | EAS (`mobile/eas.json`), app id `com.dooey.app` |
 
-**Do not add** without asking: i18n, system theme, a third font, Redux/Jotai/SWR, a second data-fetching lib, react-grid-layout, feature-flag service, a block-editor library, Capacitor plugins beyond core.
+`mobile/patches/` holds patch-package patches applied on `postinstall` (one keeps native tab icons
+from being tinted as templates). If a patched package misbehaves, read the patch before blaming the
+library.
 
----
-
-## Auth & sessions
-
-Every space lives behind a router guard; `/login` is the only public route.
-
-- **Login** (`src/pages/Login.tsx`) is a dedicated full-page: email + password sign-in /
-  sign-up (`SignInCard` in `features/auth`). Google OAuth is on the roadmap, not wired yet.
-- **Guard**: the pathless `app` layout route in `src/router.tsx` redirects signed-out visitors
-  to `/login?redirect=<href>`; signing in returns you to where you were headed. Because of that
-  layout, route **ids** are prefixed `/app/...` (e.g. `useParams({ from: "/app/task/$id" })`)
-  while route **paths** are unchanged.
-- **Session**: PocketBase's auth store persists in localStorage. `initSession()`
-  (`features/auth/api.ts`) runs on boot — it refreshes the token/record, and only a definitive
-  4xx from the server drops the session (network failures never sign you out).
-- **Logout** is the sign-out stamp on Account. Any `pb.authStore` change (in or out) calls
-  `router.invalidate()`, so guards re-run and a stale screen can't outlive its session.
+**Do not add** without asking: NativeWind or Tailwind, a component kit, a second data-fetching or
+state library, i18n, a system theme, a third font, react-navigation used directly instead of
+expo-router, a block-editor library.
 
 ---
 
-## Native iOS & Android (Capacitor)
-
-The native apps are **thin Capacitor shells around the exact same web build** — no separate
-mobile codebase, no React Native. Web-first stays the rule: build features for the browser;
-the shells just package `dist/`.
+## Running it
 
 ```bash
-npm run mobile:sync      # tsc + vite build, then copies dist/ into android/ + ios/
-npx cap open android     # opens Android Studio (build/run from there)
-npx cap open ios         # opens Xcode — requires a Mac
+pb/pocketbase.exe serve          # backend on :8090, start this first
+cd mobile && npm start           # Metro, then press i, a or w
+cd mobile && npm run typecheck   # tsc --noEmit
+cd mobile && npm run lint
 ```
 
-- `capacitor.config.ts` is the single config (`appId com.dooey.app`, `webDir dist`).
-- **A device can't reach `127.0.0.1`** — set `VITE_PB_URL` to the real PocketBase host before
-  `mobile:sync`, or the native app talks to nothing.
-- Safe areas: `index.html` uses `viewport-fit=cover`; the app layout and dock pad with
-  `env(safe-area-inset-*)` (resolves to 0 in desktop browsers). Any new fixed/edge-hugging UI
-  must do the same.
-- `android/` and `ios/` are generated-but-committed. Don't hand-edit generated files inside
-  them beyond standard native config (icons, splash, signing).
+`mobile/src/lib/pb.ts` derives the API host from Expo's `hostUri` in dev, so phones, emulators and
+the web all find PocketBase with no config. Production builds set `EXPO_PUBLIC_PB_URL`.
+
+**`pb/pb_data` is live user data.** Never delete, reset or hand-edit it. Schema changes go through
+`pb/pb_migrations/`.
 
 ---
 
-## Deployment (Docker → Google Cloud)
+## Data (PocketBase)
 
-The whole app is **one Docker image**: a multi-stage build compiles the web app, then
-PocketBase 0.39.7 (pinned to match `pb/pocketbase.exe` — bump both together) serves the API
-*and* the built SPA from `pb_public`, with SQLite on a mounted volume.
+Collections, all owner-scoped: `users`, `tasks`, `moodboards`, `routines`, `workouts`,
+`workout_programs`, `learning_programs`.
 
-- `docker compose up --build` → production-like run at `http://localhost:8090` (local).
-- `src/lib/pb.ts` resolves the API host: explicit `VITE_PB_URL` (mobile builds) → dev
-  `127.0.0.1:8090` → **same-origin** in production, so the image is domain-agnostic.
-- Production home is a free-tier Compute Engine `e2-micro` (Ubuntu) running PocketBase's
-  built-in Let's Encrypt — **not Cloud Run** (SQLite must not live on a network filesystem).
-  The whole stack fits GCP's always-free tier.
-- **Deploy builds on the VM — no registry**: `docker-compose.prod.yml` builds the image on
-  the box and serves on 80/443; `pb_data` is a named volume that survives rebuilds. Manually
-  it's SSH + `git pull` + `docker compose -f docker-compose.prod.yml up -d --build`.
-- **Auto-deploy**: pushing to `main` runs [.github/workflows/deploy.yml](.github/workflows/deploy.yml),
-  which SSHes into the VM and runs that same rebuild (no cloud creds — just an SSH-key secret,
-  the VM still builds). It's the lightweight alternative to a registry+CI pipeline.
-- Full runbook: [docs/deploy-google-cloud.md](docs/deploy-google-cloud.md) — VM creation
-  (console), DNS/TLS, superuser, auto-deploy setup, backups, and the free-tier ($0) checklist.
+- **Data isolation** is enforced server-side by PocketBase rules (`owner = @request.auth.id`). The
+  client trusts what PB returns.
+- Routine and workout bodies are **JSON blobs**, not join tables.
+- The **live gym session is derived** (`!ended_at`), never a flag, and clocks derive from timestamps
+  so backgrounding the app cannot drift them.
+- **Timestamps** are stored UTC and rendered in the user's timezone.
+- Tasks belonging to a learning program carry `project`, `gate` and `session_key`.
+
+Full gym data model: [mobile/docs/gym.md](mobile/docs/gym.md), section "Server collections".
 
 ---
 
-## UI components — shadcn/ui first
+## Auth and sessions
 
-Before building a custom component, check if shadcn has it. Run `npx shadcn@latest add <component>` rather than installing raw Radix packages.
+Every space sits behind a guard; `/login` is the only public route.
 
-- Generated shadcn components go in `src/components/ui/`.
-- Extend with Tailwind classes, not by forking the generated file.
-- One-off components live in `src/features/<feature>/components/` or `src/components/` if genuinely shared.
-- Shared tactile primitives (`Panel`, `Eyebrow`) live in `src/components/surface.tsx`.
+- `(tabs)/_layout.tsx` redirects signed-out visitors to `/login`. `onboarding.tsx` runs for new
+  accounts.
+- The session persists through PocketBase's `AsyncAuthStore` over AsyncStorage. **`authLoaded`
+  (`mobile/src/lib/pb.ts`) must resolve before auth state means anything**: await it, do not race it.
+- Google OAuth is on the roadmap and not wired yet.
 
 ---
 
-## Design aesthetic — "tactile objects"
+## Design
 
-Clean skeuomorphism: real-world metaphors where they earn their keep, calm surfaces everywhere
-else. Simple yet breathtaking; fun and playful, never silly. Depth comes from **soft light**,
-not bevels or gloss.
+The aesthetic is **clean skeuomorphism, "tactile objects"**: real-world metaphors where they earn
+their keep, calm surfaces everywhere else. Simple yet breathtaking, fun and playful, never silly.
+Depth comes from soft light, not bevels or gloss. Tasks are paper cards, learning programs are file
+folders, toggles and checks feel spring-loaded. A metaphor must clarify what a thing *is* or *does*;
+decoration alone does not justify one. Type is Fraunces for display (wordmark, space titles, big
+numbers) and Outfit for everything else, with uppercase tracked eyebrows.
 
-**Objects:** tasks are paper cards; learning programs are file folders (see `CategoryCard`);
-toggles and checks feel spring-loaded. A metaphor must clarify what a thing *is* or *does* —
-decoration alone doesn't justify one.
+**You own it.** The Style page is not a settings screen bolted on the side; it is the point of the
+app. The user picks the palette, the fonts, the corner radius, the shadow depth, the grain, the
+backdrops, the doodles on their tab icons. So: **a hardcoded value is a value stolen from the user.**
+A literal `"#282018"` is a corner of the app they cannot reach, still wearing the factory theme after
+they have made everything else theirs. Before typing a value, ask whose decision it is.
 
-**Surfaces:** soft rounded panels (`--radius-card`), two-layer `.shadow-soft` shadows
-(light/dark variants), a faint feTurbulence paper grain on `body` (2–3% opacity). Sections are
-panels, not hairline-divided columns.
+**Motion has to do a job**, and there are three: follow the finger (drag, swipe, scroll), explain a
+change (something moved and you would otherwise have to re-find it), confirm an action (the press
+dip, the tick). Anything doing none of them does not animate. The test is *what would the user lose
+if this were instant?*, and for most of the app the answer is nothing.
 
-**Type:**
-- Display = **Fraunces Variable** (bold/black, tight tracking) — wordmark, space titles, big numbers.
-- Body = **Outfit Variable** — UI text, lists, inputs.
-- Eyebrows: uppercase, tracked `0.18em`+, 10px, `text-ink-muted`.
+**Nothing wobbles.** Springs are for gestures only, because a finger is driving them. Everything else
+is a short timing curve, 220ms ceiling. Every spring is near-critically damped: the damping ratio
+`damping / (2 * sqrt(stiffness * mass))` must be **0.8 or above**, and the design checker enforces it.
+Decorative bounce, stagger for its own sake, and overshoot-because-it-is-fun are not part of the
+language. A notebook does not wobble when you write in it.
 
-**Palette (CSS tokens in `src/styles/global.css`):**
-- `--paper` / `--ink` / `--ink-muted` / `--rule` — warm neutrals; light default, dark inverts paper↔ink.
-- Accents: `--leaf` (green, done/positive) · `--zest` (orange, highlights/progress/wordmark dot) · `--sky` (blue) · `--clay` (red) · `--honey` (amber) — the last three mainly as category hues.
+The values behind all that live in tokens:
 
-**Motion & micro-interactions** (every feature ships with its own — they're scope, not polish):
-- Things **settle, they don't snap**: springs via `motion/react`, small overshoot, no linear easing.
-- Press states depress (scale/shadow), completions celebrate small (a tick draw-on, a color wash — never confetti walls).
-- Duration discipline: interactions ≤ 200ms perceived; page transitions ≤ 350ms.
-- Everything animated must also work reduced-motion.
+| Concern | Owner |
+|---|---|
+| Palette, fonts, presets, backdrops, doodle pages | `mobile/src/features/style/tokens.ts` |
+| `Palette` type, `alpha()`, `relight()` | `mobile/src/lib/theme.ts` |
+| Live palette, type, elevation (`usePalette`, `useType`, `useElevation`) | `mobile/src/stores/theme.ts` |
+| Radius and shadow strength (`useCardRadius`, `useShadow`) | `mobile/src/features/style/store.ts` |
+| Durations, easings, gesture springs | `mobile/src/lib/motion.ts` |
+| Shared primitives (surface, plate, sheet, stamp-edge, grain, pressable-scale, Check) | `mobile/src/components/` |
+
+**If a value appears in two components, it belongs in a token.**
+
+Full rules: [docs/design-system.md](docs/design-system.md). Known drift and the migration order:
+[docs/design-audit.md](docs/design-audit.md). The `design-system` skill
+(`.claude/skills/design-system/`) loads both and checks a diff against them, including computing
+damping ratios; `/design-check` runs it.
 
 ---
 
@@ -225,74 +196,116 @@ panels, not hairline-divided columns.
 
 ```
 DOOEY/
-├── CLAUDE.md                ← you are here
-├── capacitor.config.ts      ← native shell config (appId, webDir)
-├── Dockerfile               ← the whole app as one container (web build + PocketBase)
-├── docker-compose.yml       ← local production-like run (port 8090)
-├── docker-compose.prod.yml  ← on-VM production run (build on box, serve 80/443)
-├── docs/
-│   ├── architecture.md      ← data model, sync, realtime
-│   ├── deploy-google-cloud.md ← free-tier GCE VM runbook (SSH + docker compose)
-│   └── roadmap.md           ← feature-by-feature delivery plan
-├── src/                     ← Vite app
-├── android/                 ← Capacitor Android shell (generated, committed)
-├── ios/                     ← Capacitor iOS shell (generated, committed)
-└── pb/                      ← PocketBase binary + pb_hooks + pb_migrations
+├── CLAUDE.md               ← you are here
+├── mobile/                 ← THE APP (Expo)
+│   ├── app.json            ← Expo config (plugins, icons, typed routes)
+│   ├── eas.json            ← build profiles
+│   ├── patches/            ← patch-package patches, applied on postinstall
+│   ├── docs/gym.md         ← gym architecture, UI and logic
+│   ├── docs/gym-ux-plan.md ← the in-flight gym redesign
+│   └── src/
+│       ├── app/            ← expo-router routes
+│       ├── components/     ← shared primitives (Dock, sheet, plate, surface, doodles)
+│       ├── features/       ← tasks, workouts, boards, learning, style, auth
+│       ├── lib/            ← pb, theme, dates, haptics, sounds, doodle, confirm, shell
+│       └── stores/         ← auth, theme, sheet, garden (Zustand)
+├── pb/                     ← PocketBase binary, pb_hooks, pb_migrations, pb_data (never touch pb_data)
+├── docs/                   ← design system, deploy runbook, learning programs
+├── scripts/                ← learning-program verify and push
+└── src/ android/ ios/      ← legacy web app and its Capacitor shells (frozen)
 ```
 
-**Source folder layout** (folders created when a feature needs them — don't pre-create empties):
+Routes in `mobile/src/app/`: `(tabs)/` for the five spaces, `(detail)/` for `task/[id]`,
+`project/[id]`, `routine/[id]`, `workout/[id]`, `board/[id]`, `preferences`, `style`, `wordmark`,
+and at the root `compose`, `login`, `onboarding`.
 
-```
-src/
-  components/
-    ui/                ← shadcn primitives
-    icons/ornaments/   ← decorative SVGs
-    surface.tsx        ← Panel, Eyebrow (shared tactile primitives)
-  features/
-    <feature>/         ← one folder per delivered feature (tasks, learning, boards, style, auth)
-      components/      ← feature-specific UI
-      api.ts           ← PB queries/mutations for this feature
-      types.ts         ← feature-local types
-      index.ts         ← public surface
-  lib/                 ← pb, cn, format (shared utilities only)
-  stores/              ← auth, theme (Zustand)
-  pages/               ← one file per space + detail pages
-  styles/              ← global.css
-  main.tsx
-  router.tsx
+A feature's code lives **entirely** inside `mobile/src/features/<feature>/`: `components/` for its
+UI, `api.ts` for its PB queries and mutations, `types.ts`, `store.ts` when it needs one. If two
+features reach for the same thing, it moves to `mobile/src/lib/` or `mobile/src/components/`.
+Folders are created when a feature needs them, never pre-created empty.
+
+---
+
+## Legacy web app (frozen)
+
+Root `src/` is the original Vite app: React 19, TanStack Router, Tailwind v4, shadcn/ui,
+`motion/react`, wrapped by Capacitor 8 in `android/` and `ios/`, shipped as one Docker image to a
+free-tier Compute Engine VM ([docs/deploy-google-cloud.md](docs/deploy-google-cloud.md), with
+auto-deploy in [.github/workflows/deploy.yml](.github/workflows/deploy.yml)).
+
+Last commit 2026-07-18. **Do not add features to it, and do not copy its patterns into `mobile/`**:
+different styling system, different router, different animation library. It still owns one live
+thing, materializing learning-program sessions into tasks. Ask before deleting any of it.
+
+[docs/roadmap.md](docs/roadmap.md) and [docs/architecture.md](docs/architecture.md) predate the
+migration and describe this web app. Read them as history, not as the plan.
+
+---
+
+## Learning programs
+
+Programs built with the **learning-architect** skill are verified and pushed straight into
+PocketBase, never hand-imported:
+
+```bash
+npm run verify-program -- <dir>
+npm run push-program   -- <dir>
 ```
 
-A feature's code lives entirely inside `src/features/<feature>/`. If something is reached for by two features, it moves to `src/lib/` or `src/components/`.
+Full procedure, file formats, and the one caveat that matters (materialization still runs in the
+legacy web app): [docs/learning-programs.md](docs/learning-programs.md).
+
+---
+
+## Philosophy
+
+- **Feature by feature.** One feature lands fully before the next starts. No half-finished stubs, no
+  "coming soon" pages, no scaffolding for hypothetical phases.
+- **Simple first, smart later.** Ship the dumb version that works. Add intelligence (smart
+  suggestions, ranking, LLM augmentation) only once the basics earn it.
+- **Personal now, SaaS-ready.** One real user, but `owner` plus server rules is never skipped.
+- **Getting around is effortless.** One tab bar, one tap to any space. Depth (task pages, board
+  canvas, routine and workout pages) is drill-in and back, never a maze.
 
 ---
 
 ## Code quality rules
 
-**No dead code.**
-- Delete unused imports, variables, and functions immediately.
-- Don't comment-out code. Git remembers.
-- No `TODO`/`FIXME` in committed code — fix it or open an issue.
-- No placeholder functions or "coming soon" blocks.
+**No dead code.** Delete unused imports, variables and functions immediately. Do not comment code
+out; git remembers. No `TODO` or `FIXME` in committed code: fix it or open an issue. No placeholder
+functions or "coming soon" blocks.
 
-**Fix the root cause.** When something breaks, find the actual cause. Don't add a guard for an impossible case, don't swallow errors, don't paper over.
+**Fix the root cause.** When something breaks, find the actual cause. Do not add a guard for an
+impossible case, do not swallow errors, do not paper over.
 
-**Trust the boundaries.** Validate at user input and external API edges only. Don't defensively re-check things internal code already guarantees.
+**Trust the boundaries.** Validate at user input and external API edges only. Do not defensively
+re-check what internal code already guarantees.
 
-**Comments only when the *why* is non-obvious.** Code explains *what*; comments explain *why this surprising thing*.
+**Comments only when the *why* is non-obvious.** Code explains what; comments explain why this
+surprising thing.
+
+**No em dashes.** Not in UI copy, comments, docs, or commit messages. Use a colon, a semicolon, a
+comma, or two sentences. (A bare `—` standing in for a missing value in a stat or table cell is a
+glyph, not punctuation, and stays.)
+
+**TypeScript strict.** Narrow types; `any` is a code smell, not a tool.
 
 ---
 
 ## Conventions
 
-- **One store per domain** in `src/stores/` (`auth`, `theme`, …) — except feature-isolated stores, which live in their feature folder (e.g. `features/learning/store.ts`).
-- **Timestamps** are stored UTC in PocketBase, rendered in the user's timezone via `formatLocal(iso, user.timezone)`.
-- **Data isolation** is enforced server-side via PocketBase rules (`owner = @request.auth.id`). The client trusts what PB returns.
-- **Theme** is light + dark only. No system. Light is the default.
-- **TypeScript strict.** Narrow types; `any` is a code smell, not a tool.
+- **One store per domain** in `mobile/src/stores/` (`auth`, `theme`, `sheet`, `garden`), except
+  feature-isolated stores, which live in the feature folder (`features/workouts/store.ts`,
+  `features/style/store.ts`).
+- **Three kinds of state, never blurred**: server state is TanStack Query, preferences are Zustand
+  plus AsyncStorage, static data is bundled (the exercise library and the program catalog).
+- **Theme** is light and dark only. No system theme. Light is the default.
+- **Autosave, no save buttons.** The gym feature has none anywhere; new surfaces match.
 
 ---
 
 ## What to read next
 
-1. [docs/roadmap.md](docs/roadmap.md) — feature list with acceptance criteria + order
-2. [docs/architecture.md](docs/architecture.md) — data model, calendar sync, realtime
+1. [mobile/docs/gym.md](mobile/docs/gym.md): the current app's deepest feature, end to end.
+2. [mobile/docs/gym-ux-plan.md](mobile/docs/gym-ux-plan.md): what we are fixing right now, and why.
+3. [docs/design-system.md](docs/design-system.md): the tokens, the ownership rule, and the motion rules.

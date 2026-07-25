@@ -41,9 +41,10 @@ Seven surfaces. Two are real routes pushed over the tabs (`(detail)/…`); two a
 `Modal`s owned by the gym screen; the rest are the tab and an Account drill-in.
 
 ```
-(tabs)/gym.tsx  ── the hub ────────────────────────────────────────────────┐
-  │  Masthead · LiveBanner (if a session is running) · "my routines" board  │
-  │  · history log · [Explore] [New] tools                                  │
+(tabs)/gym.tsx  ── the hub (a file folder) ────────────────────────────────┐
+  │  "Gym" title + [Workout|History] folder tabs → an open folder body      │
+  │  Workout: [Explore][New] + collapsible program sections of routine cards│
+  │  History: finished sessions as rich cards → the read-only log           │
   │                                                                         │
   ├─▶ ProgramsExplorer   (Modal)      Explore → program detail → start/add  │
   ├─▶ routine/[id]       (route)      shape a routine, Start workout         │
@@ -55,10 +56,10 @@ Seven surfaces. Two are real routes pushed over the tabs (`(detail)/…`); two a
 
 | File | Surface | Role |
 |---|---|---|
-| `app/(tabs)/gym.tsx` | **Gym home** | Hub. Routines as board-style cards, the running session up top, finished-session log below, `Explore`/`New` tools. Seeds starter routines on first empty open. |
+| `app/(tabs)/gym.tsx` | **Gym home** | Hub styled as an **open file folder**: the "Gym" title with **folder tabs** (Workout / History) beside it on the right, the active tab merged flush into a **folder-body** surface that holds the content. The running session banner rides at the top of the folder on both tabs. **Workout:** `Explore`/`New` tools + **collapsible** program sections — each program (a folder of routines) heads a fold-away group of board-style routine cards + an "add routine" tile. **History:** finished sessions as rich cards (exercise-demo strip + time / volume / exercises / date) that open the read-only log. `New` creates an empty program (prompt sheet); seeds a starter program on first empty open. |
 | `features/workouts/components/ProgramsExplorer.tsx` | **Explore** | Program catalog → program detail. Start a routine (→ logger) or add the whole program (→ real routines). |
 | `app/(detail)/routine/[id].tsx` | **Routine editor** | Name + description, ordered exercise list with sets/reps/weight/rest steppers, `Start workout`. Debounced autosave, no save button. |
-| `features/workouts/components/ExercisePicker.tsx` | **Library** | 1,500 exercises as moving polaroid tiles; multi-select to add, ⓘ for the how-to. Reused read-only as pure reference. |
+| `features/workouts/components/ExercisePicker.tsx` | **Library** | Browse **by muscle group** — group cards → drill into a group's exercises (moving polaroid tiles); search cuts across all 1,500. Multi-select to add, ⓘ for the how-to (motion GIF + a male/female **muscle map** shading the worked muscle). Reused read-only as pure reference. |
 | `app/(detail)/workout/[id].tsx` | **Live logger / review** | Set grids, docked keypad, per-set Start→Stop → rest timer, stats strip, notes. The same page renders finished sessions read-only. |
 | `features/workouts/components/KeyPad.tsx` | **Keypad** | Docked number pad — presentational; the logger owns the draft. Keeps the OS keyboard out of the logging loop. |
 | `app/(detail)/preferences.tsx` | **Preferences** | Account drill-in. The Gym banner holds units, default rest, auto-start rest, buzz — settings that used to clutter the gym itself. |
@@ -207,9 +208,18 @@ flip. If **nothing** was logged it offers to discard the session instead of savi
 
 ### 8. First-open seeding
 
-An empty, never-seeded gym plants the PPL starter split (`STARTER_ROUTINES`) once, guarded by the
-persisted `seededRoutines` flag — so the space is alive on arrival, but a deliberately-cleared gym
-never regrows.
+An empty, never-seeded gym plants the PPL starter *program* (`STARTER_PROGRAM` → `useAddProgram`)
+once, guarded by the persisted `seededRoutines` flag — so the space is alive on arrival, but a
+deliberately-cleared gym never regrows.
+
+### 9. Programs group routines
+
+Every routine belongs to a `workout_program` (a named folder you own). The home page groups
+routines by program into sections. `New` creates an empty program (prompt sheet → `useSaveProgram`);
+each program section has an "add routine" tile (`useSaveRoutine` with the program id); a program's
+⋯ renames or deletes it (delete cascades its routines server-side). Explore's **add program** builds
+a real program + its routines (`useAddProgram`); **save one routine** drops it into a catch-all
+"My Routines" program (`useSaveLooseRoutine`).
 
 ---
 
@@ -221,10 +231,24 @@ never regrows.
   1,500 exercises, each with an animated 3D-model demo GIF (working muscle lit red) and step
   instructions.
 - `exercises.json` (~948 KB) is a slimmed slice: `{ id, name, targets, parts, equip, steps }`.
-- GIFs are **pinned to a commit SHA** (`GIF_HOST`) so the URLs can't drift; served from
-  `raw.githubusercontent.com`, so demos need network (they aren't bundled).
-- `groupOf()` buckets each exercise into push / pull / legs / core / cardio for the picker's
-  filter chips; `searchLibrary(query, group)` matches name, target muscle, or equipment.
+- Demos come in **two rungs**, and `exerciseGif(ex, res)` picks between them: **360px** by default,
+  **180px** for the 40–60px list thumbnails where 360 is 3× the bytes for no visible gain. Both
+  hosts are **pinned to a commit SHA** so the URLs can't drift, and both are served from
+  `raw.githubusercontent.com` — demos need network, they aren't bundled.
+- The 360 rung is the same artwork at 2×, but the mirror carrying it keys files by ExerciseDB's
+  *other* id scheme (a 4-digit number), so **`media360.json` maps our 1,500 ids → those keys**.
+  It's generated from `exercises.json`; regenerate it if the library ever changes, since a missing
+  key silently falls back to 180. 360 is the **best free rung that exists** for this art — above it
+  the art is only sold, and the vendor's own public previews are themselves 180px.
+- 1,324 distinct animations cover the 1,500 rows: 176 names are modifier variants ("cable decline
+  fly" / "rough cable decline fly") that **already shared one animation at 180px**, upstream.
+- `MUSCLE_GROUPS` are the browse buckets — the dataset's real target muscles (Chest, Shoulders,
+  Biceps, … Cardio) with friendly labels; `searchLibrary(query, muscle)` filters by
+  `targets.includes(muscle)` (or, for `"all"`, matches name / muscle / equipment on the query).
+- The **muscle map** (`MuscleMap.tsx`) shades the worked muscle on a male/female figure via the
+  `react-native-body-highlighter` library (MIT, rides on the already-present `react-native-svg`).
+  ExerciseDB targets are mapped to the figure's `Slug`s (it's coarser — lats/traps → upper-back/
+  trapezius, no abductors slug). Gender comes from `useWorkoutPrefs`.
 - `kindOf()` returns **`"weight_reps"` universally** — every set is weight × reps; bodyweight
   moves just leave weight at 0. (See rough edges.)
 
@@ -232,24 +256,36 @@ never regrows.
 
 Eight famous splits — PPL, Upper/Lower, Full Body, Bro, Arnold, PHUL, StrongLifts 5×5, Starting
 Strength — each a set of named routines built from a `POOL` of verified library IDs (so every
-movement has its demo). Fully static/bundled. Explore reads it three ways: **start a routine now**
-(→ blank-titled workout), or **add the whole program** (→ real `routines` records via
-`useAddRoutines`).
+movement has its demo). Fully static/bundled — **not** the same as a `workout_program` (the DB
+folder you own). Explore reads the catalog three ways: **preview a routine**, **start it now**
+(→ workout), or **add the whole program** (→ a real `workout_program` + its `routines`).
 
 ---
 
 ## Server collections (the data layer)
 
-Two collections, added in migration `022_workouts.js` (023–025 evolved the grouping). Both follow
-DOOEY's **JSON-blob-not-join-tables** pattern — the same shape as `tasks` and `boards`: a routine
-or session loads and saves as one unit, one realtime event covers the whole thing, and nothing
-queries individual sets across records.
+Three collections: `workouts` + `routines` (migration `022_workouts.js`; 023–025 evolved the
+grouping) and `workout_programs` (`026_workout_programs.js`). Routines and workouts follow DOOEY's
+**JSON-blob-not-join-tables** pattern — the same shape as `tasks` and `boards`: a routine or session
+loads and saves as one unit, one realtime event covers the whole thing, and nothing queries
+individual sets across records.
+
+### `workout_programs` — the folders
+
+| Field | Type | Notes |
+|---|---|---|
+| `owner` | relation → users | required |
+| `name` | text (≤80) | required — the section heading |
+| `description` | text (≤160) | optional line under the name |
+| `position` | number | sort order |
+| `created` / `updated` | autodate | |
 
 ### `routines` — reusable templates
 
 | Field | Type | Notes |
 |---|---|---|
 | `owner` | relation → users | required |
+| `program` | relation → workout_programs | the folder it lives in; `cascadeDelete: true` (deleting a program deletes its routines) |
 | `name` | text (≤80) | required |
 | `position` | number | sort order |
 | `description` | text (≤160) | the line on the card |
@@ -268,13 +304,15 @@ queries individual sets across records.
 | `entries` | json | `WorkoutEntry[]` — `{ name, kind, sets: [{weight, reps, done}], rest?, notes?, libId? }` |
 | `created` / `updated` | autodate | |
 
-**Grouping history:** 023 added a `group` text field on routines (Hevy-style folders), 025 dropped
-it — grouping now lives in the read-only program catalog, not on the routine. 024 added
+**Grouping history:** 023 added a `group` text field on routines, 025 dropped it, then 026 brought
+grouping back properly as the `workout_programs` collection + a `program` relation — a first-class,
+nameable folder (can be empty, renamed, deleted) instead of a loose label. 026 also backfills any
+pre-existing routines into a per-owner "My Routines" program so nothing is orphaned. 024 added
 `description`.
 
 ### Data isolation
 
-Every rule on both collections is owner-scoped
+Every rule on all three collections is owner-scoped
 (`@request.auth.id != '' && owner = @request.auth.id` on list/view/create/update/delete), same as
 the rest of DOOEY — personal now, SaaS-ready without a rewrite. The client trusts what PB returns.
 
@@ -285,19 +323,16 @@ the rest of DOOEY — personal now, SaaS-ready without a rewrite. The client tru
 Honest notes for when we next give the gym love — none are broken, but each is a loose thread:
 
 1. **`ExerciseKind` is effectively single-valued.** The type still declares `reps` and `duration`,
-   and code branches on them (e.g. the editor's `p.kind === "duration" ? 30 : 8`), but `kindOf()`
-   only ever returns `weight_reps` and the picker never yields the others — so those branches are
-   dead paths. Either commit to weight-only and delete the type's other arms, or actually surface
-   duration/reps kinds. (Touches the "no dead code" rule.)
-2. **Dead styles in `ExercisePicker`** — `kinds` / `kindChip` / `kindLabel` are defined but unused.
-   Delete.
-3. **`running` / `rest` are logger-local.** Navigate away from a live session and the
+   but `kindOf()` only ever returns `weight_reps` and the picker never yields the others. The dead
+   code branches are gone; the unused type arms could follow if we're sure we'll never surface
+   duration/reps kinds.
+2. **`running` / `rest` are logger-local.** Navigate away from a live session and the
    Start-running highlight and rest countdown reset (logged sets persist fine). Fine for now;
-   would need lifting to survive backgrounding-to-home mid-set.
-4. **"New routine" persists eagerly.** `New` creates the record *then* navigates, so backing out of
-   an untouched "New routine" leaves an empty routine behind.
-5. **History caps at 60** sessions (`useWorkouts`) and memory scans all of them client-side — both
-   fine at one-user scale, both worth revisiting before multi-user.
+   would need lifting to survive backgrounding-to-home mid-set. (Plan step 5 — deferred.)
+3. **Eager persistence.** `New` creates an empty program immediately, and a program's "add routine"
+   creates an empty routine, then navigates — backing out leaves the empty record behind.
+4. **History caps at 60** sessions (`useWorkouts`) and memory/PR scans run over all of them
+   client-side — both fine at one-user scale, both worth revisiting before multi-user.
 
 ---
 
@@ -305,8 +340,9 @@ Honest notes for when we next give the gym love — none are broken, but each is
 
 - **Browse → Shape → Do → Review** is the whole IA.
 - **Routes** are places you live in; **modals** are pickers.
-- **Server state** = TanStack Query (`routines`, `workouts`); **prefs** = Zustand+AsyncStorage;
-  **static** = the bundled library + program catalog.
+- **Server state** = TanStack Query (`workout_programs`, `routines`, `workouts`); **prefs** =
+  Zustand+AsyncStorage; **static** = the bundled library + program catalog.
 - The **live session is derived** (`!ended_at`), not flagged; **clocks derive from timestamps**;
-  **memory** makes logging two taps.
-- Two owner-scoped collections, JSON blobs, no join tables.
+  **memory** makes logging one tap and shows the number to beat.
+- **Programs group routines** (a real collection); home is programs-only.
+- Three owner-scoped collections, JSON blobs for routine/workout bodies, no join tables.

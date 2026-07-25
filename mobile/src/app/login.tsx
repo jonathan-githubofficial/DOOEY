@@ -23,7 +23,7 @@ import Animated, {
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { DoodleFlipbook } from "@/components/DoodleFlipbook";
 import { Grain } from "@/components/grain";
-import { Plate } from "@/components/plate";
+import { StampButton } from "@/components/surface";
 import { signIn, signUp } from "@/features/auth/api";
 import { useStyleStore } from "@/features/style/store";
 import { fontStyle } from "@/features/style/tokens";
@@ -35,11 +35,25 @@ import { LIGHT_PALETTE, useThemeStore, useType } from "@/stores/theme";
 const settle = LinearTransition.springify().stiffness(400).damping(32);
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
-// The peasant reel rises from the bottom edge and takes this share of the
-// screen height — cover-fit, muted, looping, its top dissolved into the wall.
+// The peasant reel rises from the bottom edge: cover-fit, muted, played once,
+// its top dissolved into the wall. Cover crops whichever axis overflows, so on a
+// phone the band is the narrow one and the painting keeps its full height, only
+// losing its sides. A wide desktop window makes that same height-derived band far
+// wider than the 16:9 source, and cover then slices the middle out of the frame,
+// leaving the scene stranded below the fold under a dead strip of paper. Taking
+// the larger of the two there keeps the whole composition in view; the cap stops
+// the band from climbing into the card.
 const VIDEO_FRACTION = 0.45;
+const VIDEO_MAX_FRACTION = 0.62;
+const VIDEO_ASPECT = 720 / 1280;
 
-// On the web the login column sits inside the tablet frame — the reel and the
+function reelHeight(width: number, height: number): number {
+  return Math.round(
+    Math.min(Math.max(height * VIDEO_FRACTION, width * VIDEO_ASPECT), height * VIDEO_MAX_FRACTION),
+  );
+}
+
+// On the web the login column sits inside the tablet frame, so the reel and the
 // picture-light must span the whole browser window, gutters included, or the
 // scene visibly stops at the frame's edges.
 const fullBleed =
@@ -56,9 +70,9 @@ function strengthOf(pw: string): { score: number; label: string } {
 
 /** The front door as a gallery wall: the wordmark hangs as a matted, framed
  * piece under a soft picture-light, with engraved labels, thin ruled fields
- * and a cast-metal plate to enter. */
+ * and the app's postage stamp to enter. */
 export default function Login() {
-  // The gallery is always lit — the front door ignores the app theme.
+  // The gallery is always lit: the front door ignores the app theme.
   const colors = LIGHT_PALETTE;
   const type = useType();
   const insets = useSafeAreaInsets();
@@ -78,14 +92,14 @@ export default function Login() {
   const logo = useStyleStore((s) => s.logoDoodle);
   const logoInterval = useStyleStore((s) => s.logoInterval);
 
-  const { height: screenH } = useWindowDimensions();
+  const { width: screenW, height: screenH } = useWindowDimensions();
   const player = useVideoPlayer(require("../../assets/video/peas.mp4"), (p) => {
-    p.loop = true;
     p.muted = true;
   });
-  // Play after mount: on the web the setup callback runs before any <video>
-  // element exists, so a play() in there lands on nothing and the reel sits
-  // frozen on its first frame.
+  // Plays through once and holds on its last frame, so the scene settles into a
+  // still painting instead of restarting under the card. Play after mount: on
+  // the web the setup callback runs before any <video> element exists, so a
+  // play() in there lands on nothing and the reel sits frozen on frame one.
   useEffect(() => {
     player.play();
   }, [player]);
@@ -114,7 +128,7 @@ export default function Login() {
       if (mode === "up") {
         await signUp(email.trim(), password);
         hapticSuccess();
-        // The private view starts on a lit wall — new accounts tour first.
+        // The private view starts on a lit wall, so new accounts tour first.
         useThemeStore.getState().set("light");
         router.replace("/onboarding");
       } else {
@@ -137,7 +151,7 @@ export default function Login() {
           foot of the wall, its top dissolved up into the plaster. */}
       <View
         pointerEvents="none"
-        style={[styles.reel, fullBleed, { height: Math.round(screenH * VIDEO_FRACTION) }]}
+        style={[styles.reel, fullBleed, { height: reelHeight(screenW, screenH) }]}
       >
         <VideoView
           player={player}
@@ -152,7 +166,7 @@ export default function Login() {
           locations={[0, 0.45]}
           style={StyleSheet.absoluteFill}
         />
-        {/* The wall's paper grain continues over the painting — without it the
+        {/* The wall's paper grain continues over the painting; without it the
             reel reads as a pasted-on rectangle. */}
         <Grain tone="light" />
       </View>
@@ -170,7 +184,7 @@ export default function Login() {
           styles.center,
           {
             paddingTop: insets.top,
-            // Lift the frame off the painting — it hangs above, not on it.
+            // Lift the frame off the painting: it hangs above, not on it.
             paddingBottom: insets.bottom + Math.round(screenH * 0.12),
           },
         ]}
@@ -179,11 +193,11 @@ export default function Login() {
           entering={FadeInDown.springify().stiffness(200).damping(23)}
           style={styles.hang}
         >
-          {/* One quiet card on the wall — no moulding, just soft paper. */}
+          {/* One quiet card on the wall: no moulding, just soft paper. */}
           <View style={[styles.card, { backgroundColor: colors.surface, shadowColor: "#282018" }]}>
             <Grain radius={24} tone="light" />
 
-            {/* The wordmark — with the studio-doodled animation playing on
+            {/* The wordmark, with the studio-doodled animation playing on
                 and around it. Same square geometry as the drawing pad, so
                 every stroke lands exactly where it was drawn. */}
             {logo.length > 0 ? (
@@ -200,8 +214,8 @@ export default function Login() {
                 DOOEY<Text style={{ color: colors.zest }}>.</Text>
               </Text>
             )}
-            <Text style={[styles.greeting, type.sans, { color: colors.inkMuted }]}>
-              {mode === "in" ? "hey friend — good to see you." : "hey friend — lovely to meet you."}
+            <Text style={[styles.tagline, type.sans, { color: colors.inkMuted }]}>
+              make it yours
             </Text>
 
             <View style={styles.fields}>
@@ -296,24 +310,30 @@ export default function Login() {
                   </Animated.Text>
                 )}
 
-            <Animated.View layout={settle} style={styles.plateRow}>
-              <Plate
-                label={busy ? "…" : mode === "in" ? "Enter" : "Register"}
+            <Animated.View layout={settle} style={styles.stampRow}>
+              {/* The same postage stamp the rest of the app presses, inked zest.
+                  StampButton follows the app theme, so the label is pinned to the
+                  lit palette by hand to match the wall. */}
+              <StampButton
+                color={colors.zest}
                 disabled={!canSubmit}
                 onPress={submit}
-                palette={colors}
-                style={styles.wide}
-              />
+                style={styles.enter}
+              >
+                <Text style={[styles.enterLabel, type.sansSemiBold, { color: colors.paper }]}>
+                  {busy ? "…" : mode === "in" ? "Enter" : "Register"}
+                </Text>
+              </StampButton>
             </Animated.View>
           </View>
 
-          {/* The wall label beside the piece — and the way in the other door. */}
+          {/* The wall label beside the piece, and the way in the other door. */}
           <Pressable onPress={swap} hitSlop={8} style={styles.label}>
             <View style={[styles.labelDot, { backgroundColor: colors.zest }]} />
             <Text style={[styles.labelText, type.sansMedium, { color: colors.inkMuted }]}>
-              {mode === "in" ? "First time here? " : "Already a member? "}
+              {mode === "in" ? "New here? " : "Already have an account? "}
               <Text style={{ color: colors.ink }}>
-                {mode === "in" ? "Request admission" : "Sign in"}
+                {mode === "in" ? "Create an account" : "Sign in"}
               </Text>
             </Text>
           </Pressable>
@@ -342,7 +362,7 @@ function friendlyError(e: unknown, mode: "in" | "up"): string {
     return "That email and password don't match.";
   if (/email.*(taken|exists|unique)/i.test(msg) || /validation_not_unique/i.test(msg))
     return "There's already an account with that email.";
-  if (/network|fetch/i.test(msg)) return "Can't reach the server — check your connection.";
+  if (/network|fetch/i.test(msg)) return "Can't reach the server. Check your connection.";
   return msg || "Something went wrong. Try again.";
 }
 
@@ -381,7 +401,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 24,
   },
   hang: {
-    // A hung piece is portrait, never a banner — cap it on wide screens.
+    // A hung piece is portrait, never a banner, so cap it on wide screens.
     width: "100%",
     maxWidth: 400,
     alignSelf: "center",
@@ -398,23 +418,26 @@ const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: 14 },
     elevation: 9,
   },
-  // 200 square with the 40pt wordmark centered — the studio's WORDMARK_RATIO
-  // (0.2), so the animation overlays exactly as drawn.
+  // 200 square with the 40pt wordmark centered: the studio's WORDMARK_RATIO
+  // (0.2), so the animation overlays exactly as drawn. The doodle needs the full
+  // square, but the empty half below the wordmark must not push the tagline
+  // away, so the bottom margin collapses that slack back out of the layout.
   stage: {
     alignSelf: "center",
     height: 200,
     width: 200,
     alignItems: "center",
     justifyContent: "center",
-    marginVertical: -42,
+    marginTop: -42,
+    marginBottom: -76,
   },
   wordmark: {
     textAlign: "center",
     fontSize: 40,
     letterSpacing: 1,
   },
-  greeting: {
-    marginTop: 8,
+  tagline: {
+    marginTop: 4,
     textAlign: "center",
     fontSize: 13,
   },
@@ -475,14 +498,20 @@ const styles = StyleSheet.create({
     lineHeight: 17,
     textAlign: "center",
   },
-  plateRow: {
+  stampRow: {
     marginTop: 26,
-    alignItems: "stretch",
+    alignItems: "center",
   },
-  wide: {
-    alignSelf: "stretch",
-    borderRadius: 14,
-    paddingVertical: 15,
+  enter: {
+    justifyContent: "center",
+    minWidth: 170,
+    paddingHorizontal: 30,
+    paddingVertical: 14,
+  },
+  enterLabel: {
+    fontSize: 13,
+    letterSpacing: 3,
+    textTransform: "uppercase",
   },
   label: {
     marginTop: 20,

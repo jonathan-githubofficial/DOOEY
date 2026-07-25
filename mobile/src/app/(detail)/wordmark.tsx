@@ -69,6 +69,19 @@ export default function Wordmark() {
   return (
     <View style={[styles.screen, { backgroundColor: colors.paper, paddingTop: insets.top + 12 }]}>
       <Grain />
+      {/* Pinned above the scroller: the way back and the page's name stay put
+          while the frames run under them. */}
+      <View style={styles.headRow}>
+        <PressableScale
+          scaleTo={0.85}
+          accessibilityLabel="Back to Account"
+          onPress={() => router.back()}
+          style={styles.back}
+        >
+          <ChevronLeft size={22} color={colors.inkMuted} />
+        </PressableScale>
+        <Masthead title="Wordmark" />
+      </View>
       <ScrollView
         showsVerticalScrollIndicator={false}
         contentContainerStyle={[
@@ -76,18 +89,6 @@ export default function Wordmark() {
           { paddingBottom: Math.max(16, insets.bottom) + 96 },
         ]}
       >
-        <View style={styles.headRow}>
-          <PressableScale
-            scaleTo={0.85}
-            accessibilityLabel="Back to Account"
-            onPress={() => router.back()}
-            style={styles.back}
-          >
-            <ChevronLeft size={22} color={colors.inkMuted} />
-          </PressableScale>
-          <Masthead title="Wordmark" />
-        </View>
-
         {/* The door, previewed: exactly what the login page will show — the
             wordmark with your doodle playing over and around it. */}
         <Panel style={styles.preview}>
@@ -248,9 +249,10 @@ const styles = StyleSheet.create({
   },
   scrollContent: {
     paddingHorizontal: 16,
-    paddingTop: 8,
   },
   headRow: {
+    paddingHorizontal: 16,
+    paddingTop: 8,
     flexDirection: "row",
     alignItems: "center",
     gap: 2,

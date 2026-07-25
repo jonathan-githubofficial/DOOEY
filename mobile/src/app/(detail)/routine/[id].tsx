@@ -1,5 +1,5 @@
 import { useLocalSearchParams, useRouter } from "expo-router";
-import { ChevronDown, ChevronLeft, ChevronUp, Plus, Trash2, X } from "lucide-react-native";
+import { ChevronDown, ChevronLeft, ChevronUp, Play, Plus, Trash2, X } from "lucide-react-native";
 import { useEffect, useRef, useState } from "react";
 import {
   Image,
@@ -13,7 +13,6 @@ import {
 import Animated, { FadeIn, LinearTransition } from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Grain } from "@/components/grain";
-import { Plate } from "@/components/plate";
 import { PressableScale } from "@/components/pressable-scale";
 import { Eyebrow, Panel } from "@/components/surface";
 import {
@@ -23,7 +22,11 @@ import {
   useStartWorkout,
   useWorkouts,
 } from "@/features/workouts/api";
+import { Watermark } from "@/features/workouts/components/card-parts";
 import { ExercisePicker, type PickedExercise } from "@/features/workouts/components/ExercisePicker";
+import { useEmblem } from "@/features/workouts/emblem";
+import { focusOf, hueOf } from "@/features/workouts/focus";
+import { useCardInk } from "@/features/workouts/hues";
 import { exerciseGif, libraryExercise } from "@/features/workouts/library";
 import { formatRest, useWorkoutPrefs } from "@/features/workouts/store";
 import type { RoutineItem } from "@/features/workouts/types";
@@ -62,6 +65,14 @@ export default function RoutineEditor() {
   const effDescription = description ?? routine?.description ?? "";
   const effItems = items ?? routine?.items ?? [];
 
+  // The page wears the card you tapped to reach it: same colour field, same
+  // drawing, same focus tag — one object at two sizes.
+  const hue = hueOf({ hue: routine?.hue ?? "", items: effItems });
+  const ink = useCardInk()(hue);
+  const emblem = useEmblem(routine?.emblem ?? []);
+  const focus = focusOf(effItems);
+  const totalSets = effItems.reduce((n, it) => n + it.sets, 0);
+
   // Debounced autosave — the editor never has a save button.
   const dirty = useRef(false);
   useEffect(() => {
@@ -99,7 +110,7 @@ export default function RoutineEditor() {
         kind: p.kind,
         libId: p.libId,
         sets: 3,
-        target_reps: p.kind === "duration" ? 30 : 8,
+        target_reps: 8,
         target_weight: 0,
         rest: defaultRest,
       })),
@@ -127,6 +138,18 @@ export default function RoutineEditor() {
   return (
     <View style={[styles.screen, { backgroundColor: colors.paper, paddingTop: insets.top + 12 }]}>
       <Grain />
+      {/* Pinned above the scroller: the way back stays put while the routine
+          runs under it. */}
+      <View style={styles.headRow}>
+        <PressableScale
+          scaleTo={0.85}
+          accessibilityLabel="Back to Gym"
+          onPress={() => router.back()}
+          style={styles.back}
+        >
+          <ChevronLeft size={22} color={colors.inkMuted} />
+        </PressableScale>
+      </View>
       <ScrollView
         showsVerticalScrollIndicator={false}
         contentContainerStyle={[
@@ -134,40 +157,51 @@ export default function RoutineEditor() {
           { paddingBottom: Math.max(16, insets.bottom) + 96 },
         ]}
       >
-        <View style={styles.headRow}>
-          <PressableScale
-            scaleTo={0.85}
-            accessibilityLabel="Back to Gym"
-            onPress={() => router.back()}
-            style={styles.back}
-          >
-            <ChevronLeft size={22} color={colors.inkMuted} />
-          </PressableScale>
-          <TextInput
-            value={effName}
-            onChangeText={setName}
-            placeholder="Routine name"
-            placeholderTextColor={alpha(colors.inkMuted, 0.5)}
-            style={[styles.nameInput, type.displayBlack, { color: colors.ink }]}
-          />
-        </View>
-
-        <TextInput
-          value={effDescription}
-          onChangeText={setDescription}
-          placeholder="A line about what this is for…"
-          placeholderTextColor={alpha(colors.inkMuted, 0.5)}
-          style={[styles.descInput, type.sans, { color: colors.inkMuted }]}
-        />
-
-        <View style={styles.startRow}>
-          <Plate
-            label={live ? "Resume workout" : "Start workout"}
-            onPress={startWorkout}
-            disabled={start.isPending}
-            style={styles.startPlate}
-          />
-        </View>
+        <Panel style={[styles.hero, { backgroundColor: ink.field }]}>
+          <Watermark strokes={emblem} tint={ink.mark} size={132} />
+          <View style={styles.heroRow}>
+            {/* A paper disc on the colour field, the same treatment the card's
+                ⋯ gets — so the zest glyph reads on clay, sky or leaf alike. */}
+            <PressableScale
+              scaleTo={0.9}
+              accessibilityLabel={live ? "Resume workout" : "Start workout"}
+              disabled={start.isPending}
+              onPress={startWorkout}
+              style={[styles.playDisc, { backgroundColor: alpha(colors.surface, 0.85) }]}
+            >
+              <Play size={21} color={colors.zest} fill={colors.zest} />
+            </PressableScale>
+            <View style={styles.heroText}>
+              <TextInput
+                value={effName}
+                onChangeText={setName}
+                placeholder="Routine name"
+                placeholderTextColor={alpha(colors.inkMuted, 0.5)}
+                style={[styles.nameInput, type.displayBlack, { color: colors.ink }]}
+              />
+              <TextInput
+                value={effDescription}
+                onChangeText={setDescription}
+                placeholder="A line about what this is for…"
+                placeholderTextColor={alpha(colors.inkMuted, 0.5)}
+                style={[styles.descInput, type.sans, { color: colors.inkMuted }]}
+              />
+            </View>
+          </View>
+          <View style={styles.metaRow}>
+            {focus && (
+              <View style={[styles.tag, { borderColor: ink.stamp }]}>
+                <Text style={[styles.tagText, type.sansSemiBold, { color: ink.stamp }]}>
+                  {focus.label}
+                </Text>
+              </View>
+            )}
+            <Text style={[styles.heroMeta, type.sans, { color: colors.inkMuted }]}>
+              {effItems.length} {effItems.length === 1 ? "exercise" : "exercises"} · {totalSets}{" "}
+              {totalSets === 1 ? "set" : "sets"}
+            </Text>
+          </View>
+        </Panel>
 
         <Eyebrow style={styles.section}>exercises</Eyebrow>
         <View style={styles.list}>
@@ -255,7 +289,7 @@ function ItemThumb({ libId }: { libId?: string }) {
   if (!ex) return null;
   return (
     <Image
-      source={{ uri: exerciseGif(ex) }}
+      source={{ uri: exerciseGif(ex, 180) }}
       resizeMode="cover"
       style={[styles.thumb, { backgroundColor: "#ffffff", borderColor: alpha(colors.rule, 0.7) }]}
     />
@@ -383,9 +417,10 @@ const styles = StyleSheet.create({
   },
   scrollContent: {
     paddingHorizontal: 16,
-    paddingTop: 8,
   },
   headRow: {
+    paddingHorizontal: 16,
+    paddingTop: 8,
     flexDirection: "row",
     alignItems: "center",
     gap: 2,
@@ -396,26 +431,38 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
   },
-  nameInput: {
-    flex: 1,
-    fontSize: 26,
-    letterSpacing: -0.5,
-    paddingVertical: 4,
+  hero: {
+    marginTop: 10,
+    padding: 16,
+    overflow: "hidden",
   },
-  descInput: {
-    marginTop: 4,
-    marginLeft: 38,
-    fontSize: 13.5,
+  heroRow: { flexDirection: "row", alignItems: "center", gap: 13 },
+  playDisc: {
+    width: 52,
+    height: 52,
+    borderRadius: 999,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  heroText: { flex: 1, minWidth: 0 },
+  nameInput: {
+    fontSize: 24,
+    letterSpacing: -0.5,
     paddingVertical: 2,
   },
-  startRow: {
-    marginTop: 16,
+  descInput: {
+    fontSize: 13,
+    paddingVertical: 1,
   },
-  startPlate: {
-    alignSelf: "stretch",
-    borderRadius: 14,
-    paddingVertical: 15,
+  metaRow: { flexDirection: "row", alignItems: "center", gap: 10, marginTop: 12 },
+  tag: {
+    borderWidth: 1.5,
+    borderRadius: 7,
+    paddingHorizontal: 9,
+    paddingVertical: 4,
   },
+  tagText: { fontSize: 10, letterSpacing: 1.4, textTransform: "uppercase" },
+  heroMeta: { fontSize: 12 },
   section: {
     marginTop: 20,
   },

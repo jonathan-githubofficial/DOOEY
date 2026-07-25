@@ -6,7 +6,7 @@ import { Grain } from "@/components/grain";
 import { Masthead } from "@/components/Masthead";
 import { PressableScale } from "@/components/pressable-scale";
 import { Panel } from "@/components/surface";
-import { formatRest, useWorkoutPrefs, type WeightUnit } from "@/features/workouts/store";
+import { formatRest, useWorkoutPrefs, type Gender, type WeightUnit } from "@/features/workouts/store";
 import { hapticTap } from "@/lib/haptics";
 import { alpha } from "@/lib/theme";
 import { usePalette, useType } from "@/stores/theme";
@@ -21,6 +21,19 @@ export default function Preferences() {
   return (
     <View style={[styles.screen, { backgroundColor: colors.paper, paddingTop: insets.top + 12 }]}>
       <Grain />
+      {/* Pinned above the scroller: the way back and the page's name stay put
+          while the settings run under them. */}
+      <View style={styles.headRow}>
+        <PressableScale
+          scaleTo={0.85}
+          accessibilityLabel="Back to Account"
+          onPress={() => router.back()}
+          style={styles.back}
+        >
+          <ChevronLeft size={22} color={colors.inkMuted} />
+        </PressableScale>
+        <Masthead title="Preferences" />
+      </View>
       <ScrollView
         showsVerticalScrollIndicator={false}
         contentContainerStyle={[
@@ -28,18 +41,6 @@ export default function Preferences() {
           { paddingBottom: Math.max(16, insets.bottom) + 96 },
         ]}
       >
-        <View style={styles.headRow}>
-          <PressableScale
-            scaleTo={0.85}
-            accessibilityLabel="Back to Account"
-            onPress={() => router.back()}
-            style={styles.back}
-          >
-            <ChevronLeft size={22} color={colors.inkMuted} />
-          </PressableScale>
-          <Masthead title="Preferences" />
-        </View>
-
         <GymPrefs />
       </ScrollView>
     </View>
@@ -52,6 +53,8 @@ function GymPrefs() {
   const type = useType();
   const unit = useWorkoutPrefs((s) => s.unit);
   const setUnit = useWorkoutPrefs((s) => s.setUnit);
+  const gender = useWorkoutPrefs((s) => s.gender);
+  const setGender = useWorkoutPrefs((s) => s.setGender);
   const restSeconds = useWorkoutPrefs((s) => s.restSeconds);
   const setRestSeconds = useWorkoutPrefs((s) => s.setRestSeconds);
   const autoStartRest = useWorkoutPrefs((s) => s.autoStartRest);
@@ -82,6 +85,21 @@ function GymPrefs() {
             onChange={(u) => {
               hapticTap();
               setUnit(u);
+            }}
+          />
+        </Row>
+
+        <Divider />
+
+        {/* The figure the muscle map draws for each exercise. */}
+        <Row label="Body" hint="The figure the muscle map uses.">
+          <Segmented
+            options={["male", "female"] as Gender[]}
+            value={gender}
+            label={(g) => (g === "male" ? "Male" : "Female")}
+            onChange={(g) => {
+              hapticTap();
+              setGender(g);
             }}
           />
         </Row>
@@ -158,14 +176,16 @@ function Divider() {
   return <View style={[styles.divider, { backgroundColor: alpha(colors.rule, 0.5) }]} />;
 }
 
-function Segmented({
+function Segmented<T extends string>({
   options,
   value,
+  label,
   onChange,
 }: {
-  options: WeightUnit[];
-  value: WeightUnit;
-  onChange: (v: WeightUnit) => void;
+  options: T[];
+  value: T;
+  label?: (v: T) => string;
+  onChange: (v: T) => void;
 }) {
   const colors = usePalette();
   const type = useType();
@@ -177,7 +197,7 @@ function Segmented({
           <Pressable
             key={o}
             accessibilityRole="button"
-            accessibilityLabel={o}
+            accessibilityLabel={label ? label(o) : o}
             onPress={() => onChange(o)}
             style={[styles.segment, active && { backgroundColor: colors.surface }]}
           >
@@ -188,7 +208,7 @@ function Segmented({
                 { color: active ? colors.ink : colors.inkMuted },
               ]}
             >
-              {o}
+              {label ? label(o) : o}
             </Text>
           </Pressable>
         );
@@ -245,9 +265,10 @@ const styles = StyleSheet.create({
   },
   scrollContent: {
     paddingHorizontal: 16,
-    paddingTop: 8,
   },
   headRow: {
+    paddingHorizontal: 16,
+    paddingTop: 8,
     flexDirection: "row",
     alignItems: "center",
     gap: 2,

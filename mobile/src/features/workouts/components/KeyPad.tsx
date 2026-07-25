@@ -15,6 +15,8 @@ export function KeyPad({
   caption,
   draft,
   nextLabel,
+  bumps,
+  onBump,
   onDigit,
   onBackspace,
   onNext,
@@ -23,6 +25,8 @@ export function KeyPad({
   caption: string;
   draft: string;
   nextLabel: string;
+  bumps?: number[];
+  onBump?: (n: number) => void;
   onDigit: (d: string) => void;
   onBackspace: () => void;
   onNext: () => void;
@@ -50,6 +54,25 @@ export function KeyPad({
           <Text style={[styles.doneText, type.sansMedium, { color: colors.inkMuted }]}>Done</Text>
         </PressableScale>
       </View>
+
+      {bumps && bumps.length > 0 && onBump && (
+        <View style={styles.bumps}>
+          {bumps.map((b) => (
+            <PressableScale
+              key={b}
+              scaleTo={0.9}
+              accessibilityLabel={`Add ${b}`}
+              onPress={() => {
+                hapticTap();
+                onBump(b);
+              }}
+              style={[styles.bump, { backgroundColor: alpha(colors.zest, 0.12) }]}
+            >
+              <Text style={[styles.bumpText, type.sansSemiBold, { color: colors.zest }]}>+{b}</Text>
+            </PressableScale>
+          ))}
+        </View>
+      )}
 
       <View style={styles.keys}>
         {KEYS.map((k) => (
@@ -140,6 +163,21 @@ const styles = StyleSheet.create({
   },
   doneText: {
     fontSize: 12.5,
+  },
+  bumps: {
+    flexDirection: "row",
+    gap: 8,
+    paddingHorizontal: 4,
+    paddingBottom: 10,
+  },
+  bump: {
+    borderRadius: 999,
+    paddingVertical: 7,
+    paddingHorizontal: 16,
+  },
+  bumpText: {
+    fontSize: 13.5,
+    letterSpacing: 0.3,
   },
   keys: {
     flexDirection: "row",

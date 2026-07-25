@@ -38,13 +38,9 @@ export default function ProjectPage() {
   return (
     <View style={[styles.screen, { backgroundColor: colors.paper, paddingTop: insets.top + 12 }]}>
       <Grain />
-      <ScrollView
-        showsVerticalScrollIndicator={false}
-        contentContainerStyle={[
-          styles.scrollContent,
-          { paddingBottom: Math.max(16, insets.bottom) + 96 },
-        ]}
-      >
+      {/* Pinned above the scroller: the way back stays put while the program
+          runs under it. */}
+      <View style={styles.headRow}>
         <PressableScale
           scaleTo={0.85}
           accessibilityLabel="Back to Projects"
@@ -53,7 +49,14 @@ export default function ProjectPage() {
         >
           <ChevronLeft size={22} color={colors.inkMuted} />
         </PressableScale>
-
+      </View>
+      <ScrollView
+        showsVerticalScrollIndicator={false}
+        contentContainerStyle={[
+          styles.scrollContent,
+          { paddingBottom: Math.max(16, insets.bottom) + 96 },
+        ]}
+      >
         {program && (
           <Animated.View entering={FadeIn.duration(200)}>
             <View style={[styles.header, { borderLeftColor: alpha(accent, 0.5) }]}>
@@ -195,7 +198,8 @@ function SessionRow({ task }: { task: Task }) {
 
 const styles = StyleSheet.create({
   screen: { flex: 1 },
-  scrollContent: { paddingHorizontal: 16, paddingTop: 8 },
+  scrollContent: { paddingHorizontal: 16 },
+  headRow: { paddingHorizontal: 16, paddingTop: 8, flexDirection: "row", alignItems: "center" },
   back: {
     height: 40,
     width: 30,

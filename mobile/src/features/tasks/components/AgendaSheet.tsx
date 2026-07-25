@@ -46,6 +46,7 @@ const ROW_H = 56;
 const CHECK_LINE_H = 26; // one checklist line tucked under the title
 const REVEAL_W = 72; // how far a row swipes left to bare its delete
 const FLY_T = 96; // rightward pull past this and the row flies to tomorrow
+const FLY_MAX = Math.round(FLY_T * 1.35); // the deepest the pull itself goes
 const FLY_X = 400; // how far off the page the paper plane sails
 const DAY_MS = 86_400_000;
 const LIFT = { stiffness: 420, damping: 34 };
@@ -446,7 +447,7 @@ function DraggableRow({
       revealed.value = id;
     })
     .onUpdate((e) => {
-      shift.value = Math.max(-REVEAL_W, Math.min(FLY_T * 1.35, shiftStart.value + e.translationX));
+      shift.value = Math.max(-REVEAL_W, Math.min(FLY_MAX, shiftStart.value + e.translationX));
     })
     .onEnd(() => {
       if (shift.value > FLY_T) {
@@ -499,7 +500,9 @@ function DraggableRow({
         }
       : {
           top: withSpring(top, LIFT),
-          zIndex: 0,
+          // A row mid-swipe rides over its neighbours, so the banking card
+          // isn't crossed by the next row's hairline on its way out.
+          zIndex: shift.value === 0 ? 0 : 10,
           backgroundColor: "transparent",
           shadowOpacity: 0,
           elevation: 0,
@@ -541,7 +544,7 @@ function DraggableRow({
         exiting={FadeOut.duration(150)}
         style={[styles.row, { height: h }, rowStyle, { shadowColor: "#282018" }]}
       >
-        <View style={styles.rowClip}>
+        <View style={styles.rowLayer}>
           {!web && (
             <Animated.View style={[styles.deleteUnder, underStyle]}>
               <Pressable
@@ -561,7 +564,10 @@ function DraggableRow({
               <View style={[styles.deleteBtn, { backgroundColor: alpha(colors.zest, 0.14) }]}>
                 <Send size={16} color={colors.zest} />
               </View>
-              <Text style={[styles.planeLabel, type.sansMedium, { color: colors.zest }]}>
+              <Text
+                numberOfLines={1}
+                style={[styles.planeLabel, type.sansMedium, { color: colors.zest }]}
+              >
                 tomorrow
               </Text>
             </Animated.View>
@@ -799,10 +805,11 @@ const styles = StyleSheet.create({
     shadowRadius: 12,
     shadowOffset: { width: 0, height: 6 },
   },
-  rowClip: {
+  // The swipe underlays and the card that slides over them. It must NOT clip:
+  // the paper plane banks past the row's own edges, and the page it's written
+  // on is what should finally hide it — not an invisible wall one row wide.
+  rowLayer: {
     ...StyleSheet.absoluteFillObject,
-    borderRadius: 14,
-    overflow: "hidden",
   },
   rowCard: {
     flex: 1,
@@ -817,12 +824,14 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
   },
+  // As wide as the pull actually goes — at FLY_T the disc and the word had to
+  // share 96px, and "tomorrow" wrapped onto a second line to fit.
   planeUnder: {
     position: "absolute",
     left: 0,
     top: 0,
     bottom: 0,
-    width: FLY_T,
+    width: FLY_MAX,
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",

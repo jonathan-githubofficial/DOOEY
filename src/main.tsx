@@ -6,6 +6,7 @@ import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
 import { RouterProvider } from "@tanstack/react-router";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { MotionConfig } from "motion/react";
 import { router } from "./router";
 import { applyTheme, useThemeStore } from "@/stores";
 import { initSession } from "@/features/auth";
@@ -21,7 +22,12 @@ const queryClient = new QueryClient();
 createRoot(document.getElementById("root")!).render(
   <StrictMode>
     <QueryClientProvider client={queryClient}>
-      <RouterProvider router={router} />
+      {/* Honours prefers-reduced-motion for every motion/react animation in the
+          app: transforms are dropped, opacity still crossfades. Components get
+          it for free and must not re-implement the check. */}
+      <MotionConfig reducedMotion="user">
+        <RouterProvider router={router} />
+      </MotionConfig>
     </QueryClientProvider>
   </StrictMode>,
 );

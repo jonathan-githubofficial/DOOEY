@@ -174,7 +174,8 @@ export function useCardRadius(): number {
   return Math.round(useStyleStore((s) => s.radius) * 16);
 }
 
-/** Shadow-strength multiplier — every shadowed surface scales through this. */
+/** Shadow-strength multiplier — every shadowed surface scales through this.
+ * For a complete shadow style, use `useElevation` from `@/stores/theme`. */
 export function useShadow(): number {
   return useStyleStore((s) => s.shadow);
 }

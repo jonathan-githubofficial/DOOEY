@@ -6,8 +6,20 @@ import { usePalette } from "@/stores/theme";
 
 /** Render strokes over whatever this is absolutely positioned against.
  * Widths live in viewBox units, so the drawing scales as one piece — right
- * for square art shown at many sizes (the avatar, the editor pad). */
-export function DoodleSvg({ strokes, strokeWidth = 1.8 }: { strokes: Stroke[]; strokeWidth?: number }) {
+ * for square art shown at many sizes (the avatar, the editor pad). `tint`
+ * overrides every stroke's own ink, for when the drawing is being used as a
+ * card's watermark rather than shown as itself. */
+export function DoodleSvg({
+  strokes,
+  strokeWidth = 1.8,
+  tint,
+  opacity = 0.85,
+}: {
+  strokes: Stroke[];
+  strokeWidth?: number;
+  tint?: string;
+  opacity?: number;
+}) {
   const colors = usePalette();
   if (strokes.length === 0) return null;
   return (
@@ -22,11 +34,11 @@ export function DoodleSvg({ strokes, strokeWidth = 1.8 }: { strokes: Stroke[]; s
           key={i}
           d={strokePath(s.points)}
           fill="none"
-          stroke={colors[s.color as keyof Palette] ?? colors.ink}
+          stroke={tint ?? colors[s.color as keyof Palette] ?? colors.ink}
           strokeWidth={strokeWidth}
           strokeLinecap="round"
           strokeLinejoin="round"
-          opacity={0.85}
+          opacity={opacity}
         />
       ))}
     </Svg>

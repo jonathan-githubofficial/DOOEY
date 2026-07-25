@@ -1,22 +1,26 @@
 import { Alert, Platform } from "react-native";
+import { openSheet } from "@/stores/sheet";
 
-/** A destructive confirm that works on web too. React Native Web's Alert only
- * shows a single-button box — multi-button confirms silently do nothing — so
- * on web we fall back to the browser's own confirm. */
+/** A destructive confirm. The phones get the OS dialog, which is what a
+ * "sure?" looks like on both of them. The web gets the app's own centred card:
+ * React Native Web's Alert only shows a single-button box, so a multi-button
+ * confirm there would silently do nothing. */
 export function confirmDestructive(
   title: string,
   message: string,
   confirmLabel: string,
   onConfirm: () => void,
 ) {
-  if (Platform.OS === "web") {
-    const ok =
-      typeof window !== "undefined" && window.confirm(message ? `${title}\n\n${message}` : title);
-    if (ok) onConfirm();
+  if (Platform.OS !== "web") {
+    Alert.alert(title, message || undefined, [
+      { text: "Cancel", style: "cancel" },
+      { text: confirmLabel, style: "destructive", onPress: onConfirm },
+    ]);
     return;
   }
-  Alert.alert(title, message || undefined, [
-    { text: "Cancel", style: "cancel" },
-    { text: confirmLabel, style: "destructive", onPress: onConfirm },
-  ]);
+  openSheet({
+    title,
+    message,
+    actions: [{ label: confirmLabel, destructive: true, onPress: onConfirm }],
+  });
 }

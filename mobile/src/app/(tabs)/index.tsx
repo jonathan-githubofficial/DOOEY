@@ -20,8 +20,10 @@ import { WeekStrip } from "@/features/tasks/components/WeekStrip";
 import { PX_DEFAULT, PX_MAX, PX_MIN, clampPx } from "@/features/tasks/timeGrid";
 import { localDate } from "@/lib/dates";
 import { hapticTap } from "@/lib/haptics";
+import { DOCK_GAP, useDockTop } from "@/lib/shell";
 import { alpha } from "@/lib/theme";
 import { usePalette, useType } from "@/stores/theme";
+import { useLiveBarInset } from "@/features/workouts/live-bar";
 
 const settle = LinearTransition.springify().stiffness(380).damping(34);
 
@@ -56,6 +58,8 @@ const MODES: { key: Mode; label: string }[] = [
 export default function Planner() {
   const colors = usePalette();
   const insets = useSafeAreaInsets();
+  const dockTop = useDockTop();
+  const liveInset = useLiveBarInset();
   const shadow = useShadow();
   const router = useRouter();
 
@@ -148,7 +152,7 @@ export default function Planner() {
             styles.body,
             {
               paddingTop: PAGE_TOP_GAP,
-              paddingBottom: Math.max(16, insets.bottom) + PAGE_BOTTOM_CLEARANCE,
+              paddingBottom: Math.max(16 + liveInset, insets.bottom) + PAGE_BOTTOM_CLEARANCE,
             },
           ]}
           onLayout={(e) => setVh(e.nativeEvent.layout.height)}
@@ -195,7 +199,7 @@ export default function Planner() {
           style={[
             styles.zoom,
             {
-              bottom: Math.max(16, insets.bottom) + 64,
+              bottom: dockTop + DOCK_GAP,
               backgroundColor: alpha(colors.surface, 0.95),
               borderColor: alpha(colors.rule, 0.7),
               shadowOpacity: 0.1 * shadow,

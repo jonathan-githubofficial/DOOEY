@@ -1,6 +1,6 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useMemo } from "react";
-import type { TextStyle } from "react-native";
+import type { TextStyle, ViewStyle } from "react-native";
 import { create } from "zustand";
 import { createJSONStorage, persist } from "zustand/middleware";
 import { useStyleStore } from "@/features/style/store";
@@ -90,5 +90,30 @@ export function useType(): Type {
       displayBlack: fontStyle(display, "900"),
     }),
     [sans, display],
+  );
+}
+
+/** A complete shadow style, scaled by the user's shadow slider and tinted from
+ * their own ink. Two levels and no more:
+ *
+ * - `rest`: a card sitting on the page. Nearly everything.
+ * - `lifted`: an object the finger is holding. A drag, a reorder, the live block.
+ *
+ * The tint is the point. A hardcoded `shadowColor` stays warm brown when the
+ * user picks a cool palette, which leaves a corner of the app they cannot
+ * reach. Deriving it from `ink` means their theme goes all the way down. */
+export function useElevation(level: "rest" | "lifted" = "rest"): ViewStyle {
+  const shadow = useStyleStore((s) => s.shadow);
+  const { ink } = usePalette();
+  const lifted = level === "lifted";
+  return useMemo(
+    () => ({
+      shadowColor: ink,
+      shadowOpacity: (lifted ? 0.22 : 0.08) * shadow,
+      shadowRadius: lifted ? 18 : 8,
+      shadowOffset: { width: 0, height: lifted ? 6 : 3 },
+      elevation: Math.round((lifted ? 8 : 2) * shadow),
+    }),
+    [ink, shadow, lifted],
   );
 }

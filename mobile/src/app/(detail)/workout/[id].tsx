@@ -1,5 +1,5 @@
 import { useLocalSearchParams, useRouter } from "expo-router";
-import { Check as CheckIcon, ChevronLeft, Flag, Play, Plus, Square, Trash2, X } from "lucide-react-native";
+import { Check as CheckIcon, ChevronLeft, Pause as PauseIcon, Play, Plus, Square, Timer, Trash2, X } from "lucide-react-native";
 import { useEffect, useRef, useState } from "react";
 import {
   Image,
@@ -10,7 +10,7 @@ import {
   TextInput,
   View,
 } from "react-native";
-import Animated, { FadeIn, LinearTransition, SlideInDown, SlideOutDown } from "react-native-reanimated";
+import Animated, { FadeIn, LinearTransition, SlideInDown, SlideOutDown, ZoomIn } from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Grain } from "@/components/grain";
 import { PressableScale } from "@/components/pressable-scale";
@@ -18,12 +18,16 @@ import { Panel } from "@/components/surface";
 import { fontStyle } from "@/features/style/tokens";
 import {
   emptySet,
+  personalRecords,
   previousLookup,
   restLookup,
   useDeleteWorkout,
+  useFinishWorkout,
+  useTogglePause,
   useUpdateWorkout,
   useWorkout,
   useWorkouts,
+  type ExerciseRecord,
 } from "@/features/workouts/api";
 import { useNow } from "@/features/workouts/clock";
 import { ExercisePicker, type PickedExercise } from "@/features/workouts/components/ExercisePicker";
@@ -31,7 +35,9 @@ import { KeyPad } from "@/features/workouts/components/KeyPad";
 import { exerciseGif, libraryExercise } from "@/features/workouts/library";
 import { formatRest, useWorkoutPrefs } from "@/features/workouts/store";
 import {
+  epley1RM,
   formatElapsed,
+  workoutElapsed,
   workoutSetsDone,
   workoutVolume,
   type WorkoutEntry,
@@ -74,6 +80,8 @@ export default function WorkoutPage() {
   const { data: workout } = useWorkout(id);
   const { data: workouts } = useWorkouts();
   const update = useUpdateWorkout(id);
+  const finishWorkout = useFinishWorkout();
+  const pause = useTogglePause();
   const del = useDeleteWorkout();
 
   const [entries, setEntries] = useState<WorkoutEntry[] | null>(null);
@@ -82,6 +90,8 @@ export default function WorkoutPage() {
   const [focus, setFocus] = useState<Focus | null>(null);
   const [editStr, setEditStr] = useState("");
   const [running, setRunning] = useState<string | null>(null); // "ei:si"
+  // Exercises opted into timed sets (Start→Stop); the default is one-tap done.
+  const [timedMode, setTimedMode] = useState<Set<number>>(new Set());
   // Rest countdown: an end timestamp + which exercise it belongs to (so ±15s
   // updates that exercise's remembered rest). Background-safe.
   const [rest, setRest] = useState<{ until: number; total: number; ei: number } | null>(null);
@@ -92,6 +102,7 @@ export default function WorkoutPage() {
   const others = (workouts ?? []).filter((w) => w.id !== id);
   const prev = previousLookup(others);
   const restMem = restLookup(others);
+  const records = personalRecords(others);
 
   const now = useNow(live ? 500 : 60_000);
   const resting = rest !== null && now < rest.until;
@@ -146,31 +157,58 @@ export default function WorkoutPage() {
       setFocus(null);
     }
   };
-
-  // --- start / stop drives rest ---
-  const startSet = (ei: number, si: number) => {
-    hapticTap();
-    setFocus(null);
-    setRunning(`${ei}:${si}`);
+  // Quick weight bumps on the keypad — progression is one tap, off whatever's
+  // showing (your draft, the seeded target, or last time's number).
+  const bumpWeight = (n: number) => {
+    if (!focus) return;
+    const entry = effEntries[focus.ei];
+    const base =
+      parseNum(editStr) ||
+      entry.sets[focus.si].weight ||
+      prev.get(entry.name)?.[focus.si]?.weight ||
+      0;
+    const nextStr = sanitize(String(base + n));
+    setEditStr(nextStr);
+    patchSet(focus.ei, focus.si, { weight: parseNum(nextStr) });
   };
-  const stopSet = (ei: number, si: number) => {
-    hapticSuccess();
+
+  // Log a set. One tap by default; the opt-in timed mode splits it into Start
+  // (mark it running) then Stop, which lands here too. Blank fields adopt last
+  // time's numbers, so repeating a set needs no typing at all.
+  const finishSet = (ei: number, si: number) => {
     const entry = effEntries[ei];
     const set = entry.sets[si];
     const ghost = prev.get(entry.name)?.[si];
-    // Empty fields adopt last time's numbers — Start/Stop with no typing works.
     const filled: WorkoutSet = {
       weight: set.weight || ghost?.weight || 0,
       reps: set.reps || ghost?.reps || 0,
       done: true,
     };
     commit(effEntries.map((e, i) => (i === ei ? { ...e, sets: e.sets.map((s, j) => (j === si ? filled : s)) } : e)));
-    setRunning(null);
+    setRunning((r) => (r === `${ei}:${si}` ? null : r));
+    // Beating your best estimated-1RM is a PR — celebrate a touch louder.
+    const rec = records.get(entry.name);
+    if (rec && rec.oneRM > 0 && epley1RM(filled.weight, filled.reps) > rec.oneRM) playFlip();
+    hapticSuccess();
     if (autoStartRest) setRest({ until: now + entryRest(entry) * 1000, total: entryRest(entry), ei });
+  };
+  const startSet = (ei: number, si: number) => {
+    hapticTap();
+    setFocus(null);
+    setRunning(`${ei}:${si}`);
   };
   const undoSet = (ei: number, si: number) => {
     patchSet(ei, si, { done: false });
     setRunning((r) => (r === `${ei}:${si}` ? null : r));
+  };
+  const toggleTimed = (ei: number) => {
+    hapticTap();
+    setTimedMode((cur) => {
+      const next = new Set(cur);
+      if (next.has(ei)) next.delete(ei);
+      else next.add(ei);
+      return next;
+    });
   };
 
   const addSet = (ei: number) =>
@@ -212,10 +250,9 @@ export default function WorkoutPage() {
     const close = () => {
       hapticSuccess();
       playFlip();
-      const kept = effEntries
-        .map((e) => ({ ...e, sets: e.sets.filter((s) => s.done) }))
-        .filter((e) => e.sets.length > 0);
-      update.mutate({ entries: kept, ended_at: new Date().toISOString() });
+      // The record still holds what was last committed; hand the mutation the
+      // entries on screen so a set ticked a moment ago isn't dropped.
+      finishWorkout.mutate({ ...workout, entries: effEntries });
       router.back();
     };
     if (done === 0) {
@@ -230,14 +267,63 @@ export default function WorkoutPage() {
     }
   };
 
-  const started = new Date(workout.started_at).getTime();
-  const duration = live ? now - started : new Date(workout.ended_at).getTime() - started;
+  const paused = !!workout.paused_at;
+  const duration = workoutElapsed(workout, now);
   const volume = workoutVolume(effEntries);
   const focusEntry = focus ? effEntries[focus.ei] : null;
 
   return (
     <View style={[styles.screen, { backgroundColor: colors.paper, paddingTop: insets.top + 12 }]}>
       <Grain />
+      {/* Pinned above the scroller: the way back, the session's name and its
+          two controls stay put while the log runs under them. */}
+      <View style={styles.headRow}>
+        <PressableScale
+          scaleTo={0.85}
+          accessibilityLabel="Back to Gym"
+          onPress={() => router.back()}
+          style={styles.back}
+        >
+          <ChevronLeft size={22} color={colors.inkMuted} />
+        </PressableScale>
+        {live ? (
+          <TextInput
+            value={effTitle}
+            onChangeText={setTitle}
+            onEndEditing={() => update.mutate({ title: effTitle.trim() || "Workout" })}
+            placeholder="Workout"
+            placeholderTextColor={alpha(colors.inkMuted, 0.5)}
+            style={[styles.titleInput, type.displayBlack, { color: colors.ink }]}
+          />
+        ) : (
+          <Text numberOfLines={1} style={[styles.titleInput, type.displayBlack, { color: colors.ink }]}>
+            {effTitle}
+          </Text>
+        )}
+        {/* The same two discs the live bar carries, in the same tints — the
+            bar stands down on this page, so its controls surface up here. */}
+        {live && (
+          <View style={styles.headTools}>
+            <Disc
+              label={paused ? "Resume workout" : "Pause workout"}
+              tint={colors.zest}
+              onPress={() => {
+                hapticTap();
+                pause.mutate(workout);
+              }}
+            >
+              {paused ? (
+                <Play size={15} color={colors.zest} fill={colors.zest} />
+              ) : (
+                <PauseIcon size={15} color={colors.zest} fill={colors.zest} />
+              )}
+            </Disc>
+            <Disc label="Finish workout" tint={colors.clay} onPress={finish}>
+              <Square size={13} color={colors.clay} fill={colors.clay} />
+            </Disc>
+          </View>
+        )}
+      </View>
       <ScrollView
         showsVerticalScrollIndicator={false}
         keyboardShouldPersistTaps="handled"
@@ -246,46 +332,12 @@ export default function WorkoutPage() {
           { paddingBottom: Math.max(16, insets.bottom) + (focus ? 360 : 150) },
         ]}
       >
-        <View style={styles.headRow}>
-          <PressableScale
-            scaleTo={0.85}
-            accessibilityLabel="Back to Gym"
-            onPress={() => router.back()}
-            style={styles.back}
-          >
-            <ChevronLeft size={22} color={colors.inkMuted} />
-          </PressableScale>
-          {live ? (
-            <TextInput
-              value={effTitle}
-              onChangeText={setTitle}
-              onEndEditing={() => update.mutate({ title: effTitle.trim() || "Workout" })}
-              placeholder="Workout"
-              placeholderTextColor={alpha(colors.inkMuted, 0.5)}
-              style={[styles.titleInput, type.displayBlack, { color: colors.ink }]}
-            />
-          ) : (
-            <Text numberOfLines={1} style={[styles.titleInput, type.displayBlack, { color: colors.ink }]}>
-              {effTitle}
-            </Text>
-          )}
-          {/* Finish (stop) rides up top beside the timer — start happened on
-              the routine page; this ends it. */}
-          {live && (
-            <PressableScale
-              scaleTo={0.94}
-              accessibilityLabel="Finish workout"
-              onPress={finish}
-              style={[styles.finishBtn, { backgroundColor: colors.leaf }]}
-            >
-              <Flag size={13} color="#fff" />
-              <Text style={[styles.finishBtnText, type.sansSemiBold, { color: "#fff" }]}>Finish</Text>
-            </PressableScale>
-          )}
-        </View>
-
         <View style={[styles.stats, { borderBottomColor: alpha(colors.rule, 0.5) }]}>
-          <Stat label="duration" value={formatElapsed(duration)} tone={live ? colors.zest : colors.ink} />
+          <Stat
+            label={paused ? "paused" : "duration"}
+            value={formatElapsed(duration)}
+            tone={live && !paused ? colors.zest : colors.inkMuted}
+          />
           <Stat
             label="volume"
             value={volume > 0 ? `${Math.round(volume).toLocaleString()} ${unit}` : "—"}
@@ -309,14 +361,24 @@ export default function WorkoutPage() {
                     </Text>
                   </View>
                   {live && (
-                    <PressableScale
-                      scaleTo={0.8}
-                      accessibilityLabel={`Remove ${entry.name}`}
-                      onPress={() => removeExercise(ei)}
-                      style={styles.entryRemove}
-                    >
-                      <X size={14} color={colors.inkMuted} />
-                    </PressableScale>
+                    <View style={styles.entryTools}>
+                      <PressableScale
+                        scaleTo={0.8}
+                        accessibilityLabel={timedMode.has(ei) ? "Timed sets on" : "Time these sets"}
+                        onPress={() => toggleTimed(ei)}
+                        style={styles.entryRemove}
+                      >
+                        <Timer size={15} color={timedMode.has(ei) ? colors.zest : alpha(colors.inkMuted, 0.7)} />
+                      </PressableScale>
+                      <PressableScale
+                        scaleTo={0.8}
+                        accessibilityLabel={`Remove ${entry.name}`}
+                        onPress={() => removeExercise(ei)}
+                        style={styles.entryRemove}
+                      >
+                        <X size={14} color={colors.inkMuted} />
+                      </PressableScale>
+                    </View>
                   )}
                 </View>
 
@@ -346,13 +408,16 @@ export default function WorkoutPage() {
                     index={si}
                     set={set}
                     prev={prev.get(entry.name)?.[si]}
+                    record={records.get(entry.name)}
                     live={live}
+                    timed={timedMode.has(ei)}
                     running={running === `${ei}:${si}`}
                     focusField={focus && focus.ei === ei && focus.si === si ? focus.field : null}
                     editStr={editStr}
                     onOpenCell={(field, current) => openCell(ei, si, field, current)}
+                    onComplete={() => finishSet(ei, si)}
                     onStart={() => startSet(ei, si)}
-                    onStop={() => stopSet(ei, si)}
+                    onStop={() => finishSet(ei, si)}
                     onUndo={() => undoSet(ei, si)}
                     onRemove={() => removeSet(ei, si)}
                   />
@@ -408,6 +473,8 @@ export default function WorkoutPage() {
           caption={`${focusEntry.name} · ${focus.field === "weight" ? unit : "reps"}`}
           draft={editStr}
           nextLabel={focus.field === "weight" ? "Next — reps" : "Done"}
+          bumps={focus.field === "weight" ? (unit === "kg" ? [2.5, 5] : [5, 10]) : undefined}
+          onBump={focus.field === "weight" ? bumpWeight : undefined}
           onDigit={typeDigit}
           onBackspace={backspace}
           onNext={keypadNext}
@@ -451,13 +518,39 @@ function Stat({ label, value, tone }: { label: string; value: string; tone: stri
   );
 }
 
+/** A session control: icon only, on a wash of its own accent. Same disc the
+ * live bar uses, so pause and finish read identically in both places. */
+function Disc({
+  label,
+  tint,
+  onPress,
+  children,
+}: {
+  label: string;
+  tint: string;
+  onPress: () => void;
+  children: React.ReactNode;
+}) {
+  return (
+    <PressableScale
+      scaleTo={0.88}
+      accessibilityLabel={label}
+      hitSlop={6}
+      onPress={onPress}
+      style={[styles.disc, { backgroundColor: alpha(tint, 0.14) }]}
+    >
+      {children}
+    </PressableScale>
+  );
+}
+
 function EntryThumb({ libId }: { libId?: string }) {
   const colors = usePalette();
   const ex = libraryExercise(libId);
   if (!ex) return null;
   return (
     <Image
-      source={{ uri: exerciseGif(ex) }}
+      source={{ uri: exerciseGif(ex, 180) }}
       resizeMode="cover"
       style={[styles.entryThumb, { backgroundColor: "#ffffff", borderColor: alpha(colors.rule, 0.7) }]}
     />
@@ -483,17 +576,21 @@ function RestButton({ label, onPress }: { label: string; onPress: () => void }) 
   );
 }
 
-/** One set: number · last-time ghost · weight/reps cells · a Start→Stop
- * action. Cells open the docked keypad; the ghost shows what you did last. */
+/** One set: number · last-time ghost (or a PR flash) · weight/reps cells · the
+ * log action. Default is a one-tap ✓; in an exercise's timed mode it's Start→
+ * Stop. A done set that matched or beat last time washes green. */
 function SetRow({
   index,
   set,
   prev,
+  record,
   live,
+  timed,
   running,
   focusField,
   editStr,
   onOpenCell,
+  onComplete,
   onStart,
   onStop,
   onUndo,
@@ -502,11 +599,14 @@ function SetRow({
   index: number;
   set: WorkoutSet;
   prev?: WorkoutSet;
+  record?: ExerciseRecord;
   live: boolean;
+  timed: boolean;
   running: boolean;
   focusField: "weight" | "reps" | null;
   editStr: string;
   onOpenCell: (field: "weight" | "reps", current: number) => void;
+  onComplete: () => void;
   onStart: () => void;
   onStop: () => void;
   onUndo: () => void;
@@ -515,6 +615,10 @@ function SetRow({
   const colors = usePalette();
   const type = useType();
   const ghost = prev ? `${prev.weight}×${prev.reps}` : "—";
+  // Did this done set match-or-beat last time, and is it a lifetime best (PR)?
+  const beat = set.done && prev ? epley1RM(set.weight, set.reps) >= epley1RM(prev.weight, prev.reps) : false;
+  const isPR =
+    set.done && !!record && record.oneRM > 0 && epley1RM(set.weight, set.reps) > record.oneRM;
 
   return (
     <Pressable
@@ -522,16 +626,28 @@ function SetRow({
       onLongPress={live ? onRemove : undefined}
       style={[
         styles.setRow,
-        set.done && { backgroundColor: alpha(colors.leaf, 0.16) },
+        // No prev to compare = a plain "done" green; below last time = neutral.
+        set.done && { backgroundColor: alpha(!prev || beat ? colors.leaf : colors.ink, !prev || beat ? 0.16 : 0.06) },
         running && !set.done && { backgroundColor: alpha(colors.zest, 0.12) },
       ]}
     >
       <Text style={[styles.colSet, styles.setIndex, type.sansMedium, { color: colors.inkMuted }]}>
         {index + 1}
       </Text>
-      <Text numberOfLines={1} style={[styles.colPrev, styles.prevText, type.sans, { color: alpha(colors.inkMuted, 0.8) }]}>
-        {ghost}
-      </Text>
+      <View style={styles.colPrev}>
+        {isPR ? (
+          <Animated.View
+            entering={ZoomIn.springify().stiffness(320).damping(26)}
+            style={[styles.prBadge, { backgroundColor: colors.zest }]}
+          >
+            <Text style={[styles.prText, type.sansSemiBold, { color: "#fff" }]}>PR</Text>
+          </Animated.View>
+        ) : (
+          <Text numberOfLines={1} style={[styles.prevText, type.sans, { color: alpha(colors.inkMuted, 0.8) }]}>
+            {ghost}
+          </Text>
+        )}
+      </View>
       <Cell
         value={set.weight}
         ghost={prev?.weight}
@@ -557,18 +673,19 @@ function SetRow({
           <PressableScale scaleTo={0.8} accessibilityLabel="Undo set" onPress={onUndo} style={[styles.actionBtn, { backgroundColor: colors.leaf }]}>
             <CheckIcon size={15} color="#fff" />
           </PressableScale>
-        ) : running ? (
-          <PressableScale scaleTo={0.85} accessibilityLabel="Stop set — start rest" onPress={onStop} style={[styles.actionBtn, { backgroundColor: colors.zest }]}>
-            <Square size={12} color="#fff" fill="#fff" />
-          </PressableScale>
+        ) : timed ? (
+          running ? (
+            <PressableScale scaleTo={0.85} accessibilityLabel="Stop set — start rest" onPress={onStop} style={[styles.actionBtn, { backgroundColor: colors.zest }]}>
+              <Square size={12} color="#fff" fill="#fff" />
+            </PressableScale>
+          ) : (
+            <PressableScale scaleTo={0.85} accessibilityLabel="Start set" onPress={onStart} style={[styles.actionBtn, styles.startBtn, { borderColor: colors.zest }]}>
+              <Play size={13} color={colors.zest} fill={colors.zest} />
+            </PressableScale>
+          )
         ) : (
-          <PressableScale
-            scaleTo={0.85}
-            accessibilityLabel="Start set"
-            onPress={onStart}
-            style={[styles.actionBtn, styles.startBtn, { borderColor: colors.zest }]}
-          >
-            <Play size={13} color={colors.zest} fill={colors.zest} />
+          <PressableScale scaleTo={0.85} accessibilityLabel="Complete set" onPress={onComplete} style={[styles.actionBtn, styles.startBtn, { borderColor: colors.leaf }]}>
+            <CheckIcon size={15} color={colors.leaf} />
           </PressableScale>
         )}
       </View>
@@ -626,22 +743,22 @@ function Cell({
 
 const styles = StyleSheet.create({
   screen: { flex: 1 },
-  scrollContent: { paddingHorizontal: 16, paddingTop: 8 },
-  headRow: { flexDirection: "row", alignItems: "center", gap: 8 },
+  scrollContent: { paddingHorizontal: 16 },
+  headRow: { paddingHorizontal: 16, paddingTop: 8, flexDirection: "row", alignItems: "center", gap: 8 },
   back: { height: 40, width: 36, alignItems: "center", justifyContent: "center" },
   titleInput: { flex: 1, minWidth: 0, fontSize: 24, letterSpacing: -0.5, paddingVertical: 4 },
-  finishBtn: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 6,
+  headTools: { flexDirection: "row", alignItems: "center", gap: 8 },
+  disc: {
+    width: 36,
+    height: 36,
     borderRadius: 999,
-    paddingVertical: 8,
-    paddingHorizontal: 16,
+    alignItems: "center",
+    justifyContent: "center",
   },
-  finishBtnText: { fontSize: 13, letterSpacing: 0.3 },
   stats: {
     marginTop: 10,
     flexDirection: "row",
+    alignItems: "center",
     gap: 22,
     paddingBottom: 12,
     borderBottomWidth: 1,
@@ -657,6 +774,7 @@ const styles = StyleSheet.create({
   entryName: { fontSize: 15.5, textTransform: "capitalize" },
   entryRest: { marginTop: 1, fontSize: 11.5 },
   entryRemove: { height: 28, width: 28, alignItems: "center", justifyContent: "center", borderRadius: 999 },
+  entryTools: { flexDirection: "row", alignItems: "center", gap: 2 },
   notes: {
     marginTop: 2,
     fontSize: 12.5,
@@ -672,6 +790,8 @@ const styles = StyleSheet.create({
   setRow: { flexDirection: "row", alignItems: "center", gap: 8, paddingVertical: 5, paddingHorizontal: 4, borderRadius: 10 },
   setIndex: { fontSize: 12.5, fontVariant: ["tabular-nums"] },
   prevText: { fontSize: 12, fontVariant: ["tabular-nums"] },
+  prBadge: { alignSelf: "flex-start", borderRadius: 999, paddingVertical: 2, paddingHorizontal: 9 },
+  prText: { fontSize: 10, letterSpacing: 0.8 },
   cell: {
     height: 36,
     borderRadius: 9,

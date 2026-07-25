@@ -78,6 +78,18 @@ export function useUpdateBoard() {
   });
 }
 
+/** Retitling from the wall of boards. Separate from useUpdateBoard because the
+ * canvas path deliberately never refetches, and a new name has to reach the
+ * list the card was renamed on. */
+export function useRenameBoard() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, title }: { id: string; title: string }) =>
+      pb.collection("moodboards").update(id, { title }, { requestKey: null }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: boardKeys.all }),
+  });
+}
+
 export function useDeleteBoard() {
   const qc = useQueryClient();
   return useMutation({

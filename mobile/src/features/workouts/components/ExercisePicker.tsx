@@ -23,15 +23,16 @@ import { alpha } from "@/lib/theme";
 import { usePalette, useType } from "@/stores/theme";
 import {
   exerciseGif,
-  GROUPS,
   kindOf,
   libraryExercise,
+  MUSCLE_GROUPS,
   prettyName,
   searchLibrary,
   type LibraryExercise,
-  type LibraryGroup,
 } from "../library";
+import { useWorkoutPrefs } from "../store";
 import type { ExerciseKind } from "../types";
+import { MuscleMap } from "./MuscleMap";
 
 export interface PickedExercise {
   name: string;
@@ -57,12 +58,32 @@ export function ExercisePicker({
   const type = useType();
   const insets = useSafeAreaInsets();
   const [query, setQuery] = useState("");
-  const [group, setGroup] = useState<LibraryGroup>("all");
+  const [openGroup, setOpenGroup] = useState<string | null>(null);
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [detail, setDetail] = useState<LibraryExercise | null>(null);
 
-  const matches = useMemo(() => searchLibrary(query, group), [query, group]);
   const trimmed = query.trim();
+  // A search cuts across everything; otherwise you're inside the opened muscle
+  // group — or browsing the groups themselves, when neither is set.
+  const matches = useMemo(() => {
+    if (trimmed) return searchLibrary(query, "all");
+    if (openGroup) return searchLibrary("", openGroup);
+    return [];
+  }, [query, trimmed, openGroup]);
+  const browsingGroups = !trimmed && !openGroup;
+
+  // Each muscle group with its exercise count — the card art is the muscle map.
+  const groupsData = useMemo(
+    () =>
+      MUSCLE_GROUPS.filter((g) => g.key !== "all").map((g) => ({
+        key: g.key,
+        label: g.label,
+        count: searchLibrary("", g.key).length,
+      })),
+    [],
+  );
+  const openLabel = MUSCLE_GROUPS.find((g) => g.key === openGroup)?.label ?? "";
+
   const isNew =
     !!onAdd &&
     trimmed.length > 1 &&
@@ -71,6 +92,7 @@ export function ExercisePicker({
   const reset = () => {
     setSelected(new Set());
     setQuery("");
+    setOpenGroup(null);
     setDetail(null);
   };
 
@@ -111,7 +133,9 @@ export function ExercisePicker({
       visible={visible}
       animationType="slide"
       presentationStyle={Platform.OS === "ios" ? "pageSheet" : "fullScreen"}
-      onRequestClose={() => (detail ? setDetail(null) : close())}
+      onRequestClose={() =>
+        detail ? setDetail(null) : openGroup && !trimmed ? setOpenGroup(null) : close()
+      }
     >
       <View
         style={[
@@ -145,41 +169,6 @@ export function ExercisePicker({
           ]}
         />
 
-        <View style={styles.groups}>
-          {GROUPS.map((g) => {
-            const active = group === g;
-            return (
-              <PressableScale
-                key={g}
-                scaleTo={0.92}
-                accessibilityRole="button"
-                accessibilityLabel={`${g} exercises`}
-                onPress={() => {
-                  hapticTap();
-                  setGroup(g);
-                }}
-                style={[
-                  styles.groupChip,
-                  {
-                    backgroundColor: active ? alpha(colors.zest, 0.15) : colors.surface,
-                    borderColor: active ? colors.zest : alpha(colors.rule, 0.8),
-                  },
-                ]}
-              >
-                <Text
-                  style={[
-                    styles.groupLabel,
-                    type.sansMedium,
-                    { color: active ? colors.ink : colors.inkMuted },
-                  ]}
-                >
-                  {g}
-                </Text>
-              </PressableScale>
-            );
-          })}
-        </View>
-
         {isNew && (
           <View style={styles.customRow}>
             <PressableScale
@@ -195,35 +184,74 @@ export function ExercisePicker({
           </View>
         )}
 
-        <FlatList
-          data={matches}
-          keyExtractor={(e) => e.id}
-          numColumns={3}
-          keyboardShouldPersistTaps="handled"
-          showsVerticalScrollIndicator={false}
-          columnWrapperStyle={styles.gridRow}
-          contentContainerStyle={[styles.grid, { paddingBottom: insets.bottom + (onAdd ? 96 : 24) }]}
-          initialNumToRender={12}
-          maxToRenderPerBatch={12}
-          windowSize={7}
-          renderItem={({ item, index }) => (
-            <ExerciseTile
-              exercise={item}
-              index={index}
-              picking={!!onAdd}
-              selected={selected.has(item.id)}
-              onPress={() => (onAdd ? toggle(item) : setDetail(item))}
-              onInfo={() => setDetail(item)}
+        {browsingGroups ? (
+          <FlatList
+            data={groupsData}
+            keyExtractor={(g) => g.key}
+            numColumns={2}
+            keyboardShouldPersistTaps="handled"
+            showsVerticalScrollIndicator={false}
+            columnWrapperStyle={styles.groupGridRow}
+            contentContainerStyle={[styles.grid, { paddingBottom: insets.bottom + (onAdd ? 96 : 24) }]}
+            renderItem={({ item }) => (
+              <GroupCard
+                group={item}
+                onPress={() => {
+                  hapticTap();
+                  setOpenGroup(item.key);
+                }}
+              />
+            )}
+          />
+        ) : (
+          <>
+            {openGroup && !trimmed && (
+              <PressableScale
+                scaleTo={0.98}
+                accessibilityLabel="Back to muscle groups"
+                onPress={() => setOpenGroup(null)}
+                style={styles.backRow}
+              >
+                <ChevronLeft size={18} color={colors.inkMuted} />
+                <Text numberOfLines={1} style={[styles.backText, type.display, { color: colors.ink }]}>
+                  {openLabel}
+                </Text>
+                <Text style={[styles.backCount, type.sans, { color: colors.inkMuted }]}>
+                  {matches.length}
+                </Text>
+              </PressableScale>
+            )}
+            <FlatList
+              data={matches}
+              keyExtractor={(e) => e.id}
+              numColumns={3}
+              keyboardShouldPersistTaps="handled"
+              showsVerticalScrollIndicator={false}
+              columnWrapperStyle={styles.gridRow}
+              contentContainerStyle={[styles.grid, { paddingBottom: insets.bottom + (onAdd ? 96 : 24) }]}
+              initialNumToRender={12}
+              maxToRenderPerBatch={12}
+              windowSize={7}
+              renderItem={({ item, index }) => (
+                <ExerciseTile
+                  exercise={item}
+                  index={index}
+                  picking={!!onAdd}
+                  selected={selected.has(item.id)}
+                  onPress={() => (onAdd ? toggle(item) : setDetail(item))}
+                  onInfo={() => setDetail(item)}
+                />
+              )}
+              ListEmptyComponent={
+                <Text style={[styles.empty, type.sans, { color: colors.inkMuted }]}>
+                  {onAdd
+                    ? "Nothing here by that name — keep typing to add it as your own."
+                    : "Nothing here by that name."}
+                </Text>
+              }
             />
-          )}
-          ListEmptyComponent={
-            <Text style={[styles.empty, type.sans, { color: colors.inkMuted }]}>
-              {onAdd
-                ? "Nothing here by that name — keep typing to add it as your own."
-                : "Nothing here by that name."}
-            </Text>
-          }
-        />
+          </>
+        )}
 
         {/* The batch bar — rides in once something's picked. */}
         {onAdd && selected.size > 0 && (
@@ -249,6 +277,41 @@ export function ExercisePicker({
         )}
       </View>
     </Modal>
+  );
+}
+
+/** A muscle group as a board-style card: the anatomical figure with this
+ * group's muscle lit (male/female per prefs), the group name, and how many
+ * exercises it holds. Tapping opens the group. */
+function GroupCard({
+  group,
+  onPress,
+}: {
+  group: { key: string; label: string; count: number };
+  onPress: () => void;
+}) {
+  const colors = usePalette();
+  const type = useType();
+  const gender = useWorkoutPrefs((s) => s.gender);
+  return (
+    <PressableScale
+      scaleTo={0.96}
+      accessibilityRole="button"
+      accessibilityLabel={`${group.label}, ${group.count} exercises`}
+      onPress={onPress}
+      style={[styles.groupCard, { backgroundColor: colors.surface, borderColor: alpha(colors.rule, 0.7) }]}
+    >
+      <Grain radius={9} />
+      <View style={[styles.groupCardThumb, { backgroundColor: alpha(colors.ink, 0.04) }]}>
+        <MuscleMap targets={[group.key]} gender={gender} scale={0.3} />
+      </View>
+      <Text numberOfLines={1} style={[styles.groupCardName, type.display, { color: colors.ink }]}>
+        {group.label}
+      </Text>
+      <Text style={[styles.groupCardCount, type.sans, { color: colors.inkMuted }]}>
+        {group.count} exercises
+      </Text>
+    </PressableScale>
   );
 }
 
@@ -336,6 +399,7 @@ function ExerciseDetail({
   const colors = usePalette();
   const type = useType();
   const insets = useSafeAreaInsets();
+  const gender = useWorkoutPrefs((s) => s.gender);
   return (
     <Animated.View
       entering={FadeIn.duration(160)}
@@ -369,12 +433,15 @@ function ExerciseDetail({
           <Image source={{ uri: exerciseGif(exercise) }} resizeMode="contain" style={styles.detailGif} />
         </View>
 
-        <View style={styles.muscleRow}>
-          {[...exercise.targets, ...exercise.equip].map((m) => (
-            <View key={m} style={[styles.muscleChip, { backgroundColor: alpha(colors.clay, 0.12) }]}>
-              <Text style={[styles.muscleText, type.sansMedium, { color: colors.clay }]}>{m}</Text>
-            </View>
-          ))}
+        <View style={styles.anatomy}>
+          <MuscleMap targets={exercise.targets} gender={gender} scale={0.5} />
+          <View style={styles.anatomyChips}>
+            {[...exercise.targets, ...exercise.equip].map((m) => (
+              <View key={m} style={[styles.muscleChip, { backgroundColor: alpha(colors.clay, 0.12) }]}>
+                <Text style={[styles.muscleText, type.sansMedium, { color: colors.clay }]}>{m}</Text>
+              </View>
+            ))}
+          </View>
         </View>
 
         <Eyebrow style={styles.stepsHead}>how to</Eyebrow>
@@ -426,44 +493,58 @@ const styles = StyleSheet.create({
     paddingVertical: 8,
     fontSize: 16,
   },
-  groups: {
-    marginTop: 12,
-    flexDirection: "row",
-    flexWrap: "wrap",
-    gap: 7,
+  groupGridRow: {
+    gap: 12,
+    marginBottom: 12,
   },
-  groupChip: {
+  groupCard: {
+    flex: 1,
     borderWidth: 1,
-    borderRadius: 999,
-    paddingVertical: 6,
-    paddingHorizontal: 13,
+    borderRadius: 14,
+    padding: 8,
+    paddingBottom: 10,
+    shadowColor: "#282018",
+    shadowOpacity: 0.1,
+    shadowRadius: 6,
+    shadowOffset: { width: 0, height: 3 },
+    elevation: 2,
   },
-  groupLabel: {
-    fontSize: 11.5,
-    letterSpacing: 0.5,
-    textTransform: "capitalize",
+  groupCardThumb: {
+    height: 132,
+    borderRadius: 9,
+    alignItems: "center",
+    justifyContent: "center",
+    overflow: "hidden",
+  },
+  groupCardName: {
+    marginTop: 8,
+    fontSize: 15,
+    letterSpacing: -0.2,
+  },
+  groupCardCount: {
+    marginTop: 1,
+    fontSize: 11,
+  },
+  backRow: {
+    marginTop: 14,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    paddingVertical: 4,
+  },
+  backText: {
+    flex: 1,
+    minWidth: 0,
+    fontSize: 18,
+    letterSpacing: -0.3,
+  },
+  backCount: {
+    fontSize: 12.5,
+    fontVariant: ["tabular-nums"],
   },
   customRow: {
     marginTop: 12,
     gap: 8,
-  },
-  kinds: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    gap: 7,
-  },
-  kindChip: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 6,
-    borderWidth: 1,
-    borderRadius: 999,
-    paddingVertical: 6,
-    paddingHorizontal: 11,
-  },
-  kindLabel: {
-    fontSize: 11,
-    letterSpacing: 0.4,
   },
   create: {
     borderRadius: 12,
@@ -584,11 +665,18 @@ const styles = StyleSheet.create({
     aspectRatio: 1,
     backgroundColor: "#ffffff",
   },
-  muscleRow: {
-    marginTop: 12,
+  anatomy: {
+    marginTop: 14,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 16,
+  },
+  anatomyChips: {
+    flex: 1,
     flexDirection: "row",
     flexWrap: "wrap",
     gap: 7,
+    alignContent: "center",
   },
   muscleChip: {
     borderRadius: 999,

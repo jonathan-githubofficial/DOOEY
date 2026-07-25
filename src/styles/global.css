@@ -19,8 +19,28 @@
   --color-sky: hsl(var(--sky));
   --color-clay: hsl(var(--clay));
   --color-honey: hsl(var(--honey));
+  /* The modal dim. Every scrim uses this one value: `bg-scrim`. */
+  --color-scrim: hsl(var(--ink) / 0.28);
 
+  /* Corner scale. card = panels/sheets · control = inputs/buttons/tiles
+     · chip = tags and micro-labels. Circles stay `rounded-full`. */
   --radius-card: var(--app-radius-card);
+  --radius-control: 0.875rem;
+  --radius-chip: 0.5rem;
+
+  /* Stacking order, named. Never write a raw `z-<number>` or `z-[…]`. */
+  --z-index-raised: 10;
+  --z-index-sticky: 20;
+  --z-index-float: 30;
+  --z-index-dock: 40;
+  --z-index-scrim: 50;
+  --z-index-overlay: 60;
+  --z-index-toast: 70;
+
+  /* Bare `transition` / `transition-colors` classes inherit these, so CSS
+     transitions land on the same "fast" tier as lib/motion.ts `dur.fast`. */
+  --default-transition-duration: 180ms;
+  --default-transition-timing-function: cubic-bezier(0.32, 0.72, 0, 1);
 }
 
 :root {
@@ -45,6 +65,9 @@
   --soft-shadow:
     0 1px 1px rgb(40 32 24 / calc(0.04 * var(--shadow-strength, 1))),
     0 3px 8px -4px rgb(40 32 24 / calc(0.06 * var(--shadow-strength, 1)));
+  --lift-shadow: 0 6px 18px -6px rgb(40 32 24 / calc(0.35 * var(--shadow-strength, 1)));
+  --cutout-shadow: drop-shadow(0 1.5px 2px rgb(40 32 24 / calc(0.28 * var(--shadow-strength, 1))));
+  --cutout-shadow-lg: drop-shadow(0 3px 5px rgb(40 32 24 / calc(0.3 * var(--shadow-strength, 1))));
   --grain: url("data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20width='160'%20height='160'%3E%3Cfilter%20id='n'%3E%3CfeTurbulence%20type='fractalNoise'%20baseFrequency='0.85'%20numOctaves='2'%20stitchTiles='stitch'/%3E%3C/filter%3E%3Crect%20width='100%25'%20height='100%25'%20filter='url(%23n)'/%3E%3C/svg%3E");
   color-scheme: light;
 }
@@ -63,6 +86,9 @@
   --soft-shadow:
     0 1px 1px rgb(0 0 0 / calc(0.25 * var(--shadow-strength, 1))),
     0 3px 8px -4px rgb(0 0 0 / calc(0.35 * var(--shadow-strength, 1)));
+  --lift-shadow: 0 6px 18px -6px rgb(0 0 0 / calc(0.6 * var(--shadow-strength, 1)));
+  --cutout-shadow: drop-shadow(0 1.5px 2px rgb(0 0 0 / calc(0.5 * var(--shadow-strength, 1))));
+  --cutout-shadow-lg: drop-shadow(0 3px 5px rgb(0 0 0 / calc(0.55 * var(--shadow-strength, 1))));
   color-scheme: dark;
 }
 
@@ -86,9 +112,25 @@ body::before {
   mix-blend-mode: multiply;
 }
 
-/* Soft, layered elevation for the card system. */
+/* Elevation, in two steps. `shadow-soft` is every resting card and panel;
+   `shadow-lift` is the one an object wears while it's picked up (dragging,
+   the active time block). There is no third step: reach for one of these
+   rather than an arbitrary `shadow-[…]`, so dark mode inverts with you. */
 .shadow-soft {
   box-shadow: var(--soft-shadow);
+}
+.shadow-lift {
+  box-shadow: var(--lift-shadow);
+}
+
+/* Elevation for shapes with no box: masked, rotated, or SVG objects (stamps,
+   stickers, folder tabs). box-shadow squares them off; drop-shadow follows
+   the silhouette. */
+.cutout {
+  filter: var(--cutout-shadow);
+}
+.cutout-lg {
+  filter: var(--cutout-shadow-lg);
 }
 
 /* Printed-paper grain on a card. Sits over the surface, under nothing
@@ -145,15 +187,27 @@ body::before {
   mask-composite: intersect;
 }
 
-/* Drop-shadow that follows the stamp silhouette (box-shadow can't). */
+/* A stamp is a cut-out shape, so it takes the silhouette shadow. */
 .stamp-btn {
-  filter: drop-shadow(0 1.5px 1.5px rgb(40 32 24 / 0.2));
-}
-.dark .stamp-btn {
-  filter: drop-shadow(0 1.5px 1.5px rgb(0 0 0 / 0.5));
+  filter: var(--cutout-shadow);
 }
 
 ::selection {
   background: hsl(var(--zest) / 0.25);
   color: hsl(var(--ink));
+}
+
+/* Reduced motion, centrally. <MotionConfig reducedMotion="user"> in main.tsx
+   covers everything motion/react drives; this covers the CSS side (transition
+   utilities, tw-animate-css keyframes) so no component has to opt in. Opacity
+   still crossfades: the state change stays legible, the movement stops. */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
 }

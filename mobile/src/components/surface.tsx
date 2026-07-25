@@ -80,12 +80,16 @@ export function Stamp({
 export function StampButton({
   onPress,
   accent,
+  color,
   disabled,
   style,
   children,
 }: PropsWithChildren<{
   onPress: () => void;
   accent?: boolean;
+  /** An explicit stamp colour, for callers that already own a hue — beats
+   * `accent`, which is the shorthand for zest. */
+  color?: string;
   disabled?: boolean;
   style?: StyleProp<ViewStyle>;
 }>) {
@@ -100,15 +104,20 @@ export function StampButton({
         styles.stampBtn,
         // iOS shadows trace the layer's alpha, so the soft shadow follows the
         // perforated silhouette; Android's elevation stays rectangular; the
-        // web gets the legacy .stamp-btn drop-shadow filter.
-        { shadowOpacity: 0.2 * shadow, elevation: Math.round(2 * shadow) },
-        Platform.OS === "web" &&
-          ({ filter: "drop-shadow(0 1.5px 1.5px rgb(40 32 24 / 0.2))" } as unknown as ViewStyle),
+        // web gets the legacy .stamp-btn drop-shadow filter INSTEAD of shadow*
+        // props, which RNW would turn into a rectangular box-shadow behind
+        // the teeth.
+        Platform.OS === "web"
+          ? ({ filter: "drop-shadow(0 1.5px 1.5px rgb(40 32 24 / 0.2))" } as unknown as ViewStyle)
+          : [
+              styles.stampShadow,
+              { shadowOpacity: 0.2 * shadow, elevation: Math.round(2 * shadow) },
+            ],
         disabled && { opacity: 0.4 },
         style,
       ]}
     >
-      <StampEdge color={accent ? colors.zest : colors.surface} />
+      <StampEdge color={color ?? (accent ? colors.zest : colors.surface)} />
       {children}
     </PressableScale>
   );
@@ -149,6 +158,8 @@ const styles = StyleSheet.create({
     gap: 8,
     paddingHorizontal: 16,
     paddingVertical: 9,
+  },
+  stampShadow: {
     shadowColor: "#282018",
     shadowRadius: 1.5,
     shadowOffset: { width: 0, height: 1.5 },

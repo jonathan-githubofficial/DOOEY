@@ -15,6 +15,7 @@ import { alpha } from "@/lib/theme";
 import { useAuthStore } from "@/stores/auth";
 import { useGardenStore } from "@/stores/garden";
 import { usePalette, useThemeStore, useType } from "@/stores/theme";
+import { useLiveBarInset } from "@/features/workouts/live-bar";
 
 /** The account space: your doodled self, email, appearance, the door to the
  * Style studio, and sign-out. The tab guard guarantees a session. */
@@ -22,21 +23,25 @@ export default function Account() {
   const colors = usePalette();
   const type = useType();
   const insets = useSafeAreaInsets();
+  const liveInset = useLiveBarInset();
   const router = useRouter();
   const user = useAuthStore((s) => s.user);
 
   return (
     <View style={[styles.screen, { backgroundColor: colors.paper, paddingTop: insets.top + 12 }]}>
       <Grain />
+      {/* Pinned above the scroller: the space's name stays put while its
+          contents run under it. */}
+      <View style={styles.head}>
+        <Masthead avatar={<PageDoodle page="account" />} title="Account" />
+      </View>
       <ScrollView
         showsVerticalScrollIndicator={false}
         contentContainerStyle={[
           styles.scrollContent,
-          { paddingBottom: Math.max(16, insets.bottom) + 96 },
+          { paddingBottom: Math.max(16, insets.bottom) + 96 + liveInset },
         ]}
       >
-        <Masthead avatar={<PageDoodle page="account" />} title="Account" />
-
         <Panel style={styles.panel}>
           <Eyebrow>account</Eyebrow>
           <View style={styles.identity}>
@@ -112,7 +117,8 @@ export default function Account() {
 
         <GardenPanel />
 
-        {/* The way out, at the very bottom — one wide stamp across the page. */}
+        {/* The way out, at the very bottom. Stamp-sized, not stretched: pulled
+            across the page the perforations read as a torn bar, not a stamp. */}
         <StampButton onPress={signOut} style={styles.signOut}>
           <LogOut size={16} color={colors.inkMuted} />
           <Text style={[styles.signOutLabel, type.sansMedium, { color: colors.inkMuted }]}>
@@ -201,9 +207,12 @@ const styles = StyleSheet.create({
   screen: {
     flex: 1,
   },
-  scrollContent: {
+  head: {
     paddingHorizontal: 16,
     paddingTop: 8,
+  },
+  scrollContent: {
+    paddingHorizontal: 16,
   },
   panel: {
     marginTop: 24,
@@ -259,9 +268,10 @@ const styles = StyleSheet.create({
   },
   signOut: {
     marginTop: 28,
-    alignSelf: "stretch",
+    alignSelf: "center",
     justifyContent: "center",
-    paddingVertical: 14,
+    paddingHorizontal: 20,
+    paddingVertical: 11,
   },
   signOutLabel: {
     fontSize: 13,

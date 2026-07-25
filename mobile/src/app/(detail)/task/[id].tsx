@@ -13,7 +13,6 @@ import {
 } from "lucide-react-native";
 import { useState } from "react";
 import {
-  Alert,
   Linking,
   Pressable,
   ScrollView,
@@ -30,6 +29,7 @@ import { PressableScale } from "@/components/pressable-scale";
 import { Eyebrow, Panel, Stamp } from "@/components/surface";
 import { attachmentUrl, useDeleteTask, useTask, useUpdateTask } from "@/features/tasks/api";
 import type { ChecklistItem, Resource, Task } from "@/features/tasks/types";
+import { confirmDestructive } from "@/lib/confirm";
 import { dateOnly, toLocalNoon } from "@/lib/dates";
 import { hapticTap } from "@/lib/haptics";
 import { alpha } from "@/lib/theme";
@@ -50,6 +50,32 @@ export default function TaskPage() {
   return (
     <View style={[styles.screen, { backgroundColor: colors.paper, paddingTop: insets.top + 12 }]}>
       <Grain />
+      {/* Pinned above the scroller: the way back and the bin stay put while
+          the task's page runs under them. */}
+      <View style={styles.headRow}>
+        <PressableScale
+          scaleTo={0.85}
+          accessibilityLabel="Back"
+          onPress={() => router.back()}
+          style={styles.back}
+        >
+          <ChevronLeft size={22} color={colors.inkMuted} />
+        </PressableScale>
+        {task && (
+          <Pressable
+            accessibilityLabel="Delete task"
+            hitSlop={8}
+            onPress={() =>
+              confirmDestructive("Delete task?", task.title, "Delete task", () => {
+                del.mutate(task.id);
+                router.back();
+              })
+            }
+          >
+            <Trash2 size={16} color={alpha(colors.inkMuted, 0.7)} />
+          </Pressable>
+        )}
+      </View>
       <ScrollView
         showsVerticalScrollIndicator={false}
         contentContainerStyle={[
@@ -58,38 +84,6 @@ export default function TaskPage() {
         ]}
         keyboardShouldPersistTaps="handled"
       >
-        <View style={styles.headRow}>
-          <PressableScale
-            scaleTo={0.85}
-            accessibilityLabel="Back"
-            onPress={() => router.back()}
-            style={styles.back}
-          >
-            <ChevronLeft size={22} color={colors.inkMuted} />
-          </PressableScale>
-          {task && (
-            <Pressable
-              accessibilityLabel="Delete task"
-              hitSlop={8}
-              onPress={() =>
-                Alert.alert("Delete task", `Delete "${task.title}"?`, [
-                  { text: "Cancel", style: "cancel" },
-                  {
-                    text: "Delete",
-                    style: "destructive",
-                    onPress: () => {
-                      del.mutate(task.id);
-                      router.back();
-                    },
-                  },
-                ])
-              }
-            >
-              <Trash2 size={16} color={alpha(colors.inkMuted, 0.7)} />
-            </Pressable>
-          )}
-        </View>
-
         {task && <TaskBody task={task} />}
       </ScrollView>
     </View>
@@ -457,8 +451,10 @@ function AttachmentsSection({ task }: { task: Task }) {
 
 const styles = StyleSheet.create({
   screen: { flex: 1 },
-  scrollContent: { paddingHorizontal: 16, paddingTop: 8 },
+  scrollContent: { paddingHorizontal: 16 },
   headRow: {
+    paddingHorizontal: 16,
+    paddingTop: 8,
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",

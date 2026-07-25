@@ -11,6 +11,7 @@ import { PageDoodle } from "@/features/style/components/PageDoodle";
 import { useProjectTasks } from "@/features/tasks/api";
 import { alpha } from "@/lib/theme";
 import { usePalette, useType } from "@/stores/theme";
+import { useLiveBarInset } from "@/features/workouts/live-bar";
 
 /** Projects: learning programs as file-folder cards. Building a new program
  * happens on the web (learning-architect + push-program); here the folders
@@ -19,20 +20,24 @@ export default function Projects() {
   const colors = usePalette();
   const type = useType();
   const insets = useSafeAreaInsets();
+  const liveInset = useLiveBarInset();
   const { data: programs, isPending } = usePrograms();
 
   return (
     <View style={[styles.screen, { backgroundColor: colors.paper, paddingTop: insets.top + 12 }]}>
       <Grain />
+      {/* Pinned above the scroller: the space's name stays put while its
+          contents run under it. */}
+      <View style={styles.head}>
+        <Masthead avatar={<PageDoodle page="learning" />} title="Projects" />
+      </View>
       <ScrollView
         showsVerticalScrollIndicator={false}
         contentContainerStyle={[
           styles.scrollContent,
-          { paddingBottom: Math.max(16, insets.bottom) + 96 },
+          { paddingBottom: Math.max(16, insets.bottom) + 96 + liveInset },
         ]}
       >
-        <Masthead avatar={<PageDoodle page="learning" />} title="Projects" />
-
         {programs?.length === 0 && !isPending && (
           <Panel style={styles.emptyPanel}>
             <Eyebrow>projects</Eyebrow>
@@ -112,7 +117,8 @@ function FolderCard({ program }: { program: Program }) {
 
 const styles = StyleSheet.create({
   screen: { flex: 1 },
-  scrollContent: { paddingHorizontal: 16, paddingTop: 8 },
+  head: { paddingHorizontal: 16, paddingTop: 8 },
+  scrollContent: { paddingHorizontal: 16 },
   emptyPanel: { marginTop: 24, padding: 28 },
   emptyTitle: { marginTop: 8, fontSize: 24, letterSpacing: -0.5 },
   emptyBody: { marginTop: 8, fontSize: 14, lineHeight: 21 },

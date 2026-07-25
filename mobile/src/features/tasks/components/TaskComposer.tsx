@@ -31,6 +31,7 @@ import { Eyebrow } from "@/components/surface";
 import { useShadow, useStyleStore } from "@/features/style/store";
 import { addDays, dayTitle, localDate, pad2, toLocalNoon, toPbDate } from "@/lib/dates";
 import { hapticSuccess, hapticTap } from "@/lib/haptics";
+import { DOCK_GAP, useDockTop } from "@/lib/shell";
 import { alpha } from "@/lib/theme";
 import { usePalette, useType } from "@/stores/theme";
 import { useCreateTask } from "../api";
@@ -89,7 +90,7 @@ function whenSummary(date: string, start: number | null, repeat: RepeatRule): st
 export function TaskComposer({ date }: { date: string }) {
   const colors = usePalette();
   const shadow = useShadow();
-  const insets = useSafeAreaInsets();
+  const dockTop = useDockTop();
   const router = useRouter();
   const [open, setOpen] = useState(false);
   const isToday = date === localDate();
@@ -121,14 +122,21 @@ export function TaskComposer({ date }: { date: string }) {
         }}
         style={[
           styles.stampFab,
-          {
-            bottom: Math.max(16, insets.bottom) + 64,
-            shadowOpacity: 0.25 * shadow,
-            elevation: Math.round(4 * shadow),
-          },
-          // Web: shadow the stamp's perforated silhouette, like .stamp-btn.
-          Platform.OS === "web" &&
-            ({ filter: "drop-shadow(0 1.5px 1.5px rgb(40 32 24 / 0.25))" } as unknown as ViewStyle),
+          // One dock, one clearance: the stamp rides the same height above the
+          // bar on every device instead of guessing at the web island's.
+          { bottom: dockTop + DOCK_GAP },
+          // A stamp's shadow has to follow its perforated edge. iOS traces the
+          // layer's alpha; the web gets the same silhouette from a drop-shadow
+          // filter, and must NOT also carry shadow* props — RNW turns those
+          // into a box-shadow, a rectangle hanging behind the teeth.
+          Platform.OS === "web"
+            ? ({
+                filter: "drop-shadow(0 1.5px 1.5px rgb(40 32 24 / 0.25))",
+              } as unknown as ViewStyle)
+            : [
+                styles.fabShadow,
+                { shadowOpacity: 0.25 * shadow, elevation: Math.round(4 * shadow) },
+              ],
         ]}
       >
         {/* The stamp is always the accent (orange), grained like real paper. */}
@@ -736,6 +744,8 @@ const styles = StyleSheet.create({
     width: 56,
     alignItems: "center",
     justifyContent: "center",
+  },
+  fabShadow: {
     shadowColor: "#282018",
     shadowRadius: 4,
     shadowOffset: { width: 0, height: 2 },

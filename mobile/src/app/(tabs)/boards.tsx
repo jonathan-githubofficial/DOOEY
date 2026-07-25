@@ -1,21 +1,31 @@
 import { useRouter } from "expo-router";
-import { MoreHorizontal, Plus } from "lucide-react-native";
-import { Alert, Image, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+import { Pencil, Plus, Trash2 } from "lucide-react-native";
+import { Image, ScrollView, StyleSheet, Text, View } from "react-native";
 import Animated, { FadeInDown } from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import Svg, { Path } from "react-native-svg";
+import { DotsButton } from "@/components/dots-button";
 import { Grain } from "@/components/grain";
 import { Masthead } from "@/components/Masthead";
 import { PressableScale } from "@/components/pressable-scale";
 import { Panel } from "@/components/surface";
-import { boardPhotoUrl, useBoards, useCreateBoard, useDeleteBoard } from "@/features/boards/api";
+import {
+  boardPhotoUrl,
+  useBoards,
+  useCreateBoard,
+  useDeleteBoard,
+  useRenameBoard,
+} from "@/features/boards/api";
 import type { BoardItem, Moodboard } from "@/features/boards/types";
 import { useCardRadius } from "@/features/style/store";
 import { PageDoodle } from "@/features/style/components/PageDoodle";
 import { fontStyle } from "@/features/style/tokens";
+import { confirmDestructive } from "@/lib/confirm";
 import { strokePath } from "@/lib/doodle";
 import { alpha, type Palette } from "@/lib/theme";
+import { openPrompt, type Menu } from "@/stores/sheet";
 import { usePalette, useType } from "@/stores/theme";
+import { useLiveBarInset } from "@/features/workouts/live-bar";
 
 /** The wall of boards: a folder-ish card per board — title, edit date, and a
  * fan of the board's actual pieces spilling up from the bottom edge — plus a
@@ -24,6 +34,7 @@ export default function Boards() {
   const colors = usePalette();
   const type = useType();
   const insets = useSafeAreaInsets();
+  const liveInset = useLiveBarInset();
   const router = useRouter();
   const radius = useCardRadius();
   const { data: boards, isPending } = useBoards();
@@ -37,15 +48,18 @@ export default function Boards() {
   return (
     <View style={[styles.screen, { backgroundColor: colors.paper, paddingTop: insets.top + 12 }]}>
       <Grain />
+      {/* Pinned above the scroller: the space's name stays put while its
+          contents run under it. */}
+      <View style={styles.head}>
+        <Masthead avatar={<PageDoodle page="boards" />} title="Boards" />
+      </View>
       <ScrollView
         showsVerticalScrollIndicator={false}
         contentContainerStyle={[
           styles.scrollContent,
-          { paddingBottom: Math.max(16, insets.bottom) + 96 },
+          { paddingBottom: Math.max(16, insets.bottom) + 96 + liveInset },
         ]}
       >
-        <Masthead avatar={<PageDoodle page="boards" />} title="Boards" />
-
         <View style={styles.grid}>
           <PressableScale
             scaleTo={0.97}
@@ -83,10 +97,43 @@ function BoardCard({ board }: { board: Moodboard }) {
   const router = useRouter();
   const radius = useCardRadius();
   const del = useDeleteBoard();
+  const rename = useRenameBoard();
   const tiles = pickFanTiles(board.items);
   const edited = new Date(board.updated).toLocaleDateString("en", {
     month: "short",
     day: "numeric",
+  });
+
+  const menu = (): Menu => ({
+    title: board.title,
+    actions: [
+      {
+        label: "Rename",
+        symbol: "pencil",
+        icon: <Pencil size={17} color={colors.ink} />,
+        onPress: () =>
+          openPrompt({
+            title: "Rename board",
+            initial: board.title,
+            placeholder: "Board name",
+            confirmLabel: "Save",
+            onSubmit: (title) => rename.mutate({ id: board.id, title }),
+          }),
+      },
+      {
+        label: "Delete board",
+        symbol: "trash",
+        destructive: true,
+        icon: <Trash2 size={17} color={colors.clay} />,
+        onPress: () =>
+          confirmDestructive(
+            `Delete “${board.title}”?`,
+            "The board and every piece pinned to it go for good.",
+            "Delete board",
+            () => del.mutate(board.id),
+          ),
+      },
+    ],
   });
 
   return (
@@ -114,23 +161,7 @@ function BoardCard({ board }: { board: Moodboard }) {
             )}
           </View>
         </View>
-        <Pressable
-          accessibilityLabel="Board options"
-          hitSlop={6}
-          onPress={() =>
-            Alert.alert(board.title, undefined, [
-              {
-                text: "Delete board",
-                style: "destructive",
-                onPress: () => del.mutate(board.id),
-              },
-              { text: "Cancel", style: "cancel" },
-            ])
-          }
-          style={styles.menuBtn}
-        >
-          <MoreHorizontal size={16} color={colors.inkMuted} />
-        </Pressable>
+        <DotsButton label={`${board.title} options`} menu={menu} style={styles.menuBtn} />
       </Panel>
     </PressableScale>
   );
@@ -252,7 +283,8 @@ function FanContent({ item, boardId, colors }: { item: BoardItem; boardId: strin
 
 const styles = StyleSheet.create({
   screen: { flex: 1 },
-  scrollContent: { paddingHorizontal: 16, paddingTop: 8 },
+  head: { paddingHorizontal: 16, paddingTop: 8 },
+  scrollContent: { paddingHorizontal: 16 },
   grid: { marginTop: 24, gap: 16 },
   newTile: {
     aspectRatio: 16 / 9,

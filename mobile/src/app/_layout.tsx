@@ -20,9 +20,13 @@ import { StatusBar } from "expo-status-bar";
 import { useEffect, useState } from "react";
 import { Appearance, Platform, StyleSheet, View } from "react-native";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
+import { SafeAreaProvider } from "react-native-safe-area-context";
 import { BootIntro } from "@/components/BootIntro";
 import { Grain } from "@/components/grain";
+import { SheetHost } from "@/components/sheet";
 import { initSession } from "@/features/auth/api";
+import { LiveBarHost } from "@/features/workouts/components/LiveBarHost";
+import { FRAME_W } from "@/lib/shell";
 import { LIGHT_PALETTE, usePalette, useThemeStore } from "@/stores/theme";
 
 SplashScreen.preventAutoHideAsync();
@@ -91,6 +95,9 @@ export default function RootLayout() {
       {/* The gutters beside the tablet frame are paper too — grain them, or
           the texture visibly stops at the frame's edges. */}
       {Platform.OS === "web" && <Grain tone={gallery ? "light" : undefined} />}
+      {/* Navigators bring their own provider, but the live bar hangs outside
+          them and still has to clear the home indicator. */}
+      <SafeAreaProvider style={styles.fill}>
       <QueryClientProvider client={queryClient}>
         {/* On the web the app sits in a tablet-width frame instead of
             stretching wall-to-wall — room for a sidebar later. */}
@@ -119,9 +126,16 @@ export default function RootLayout() {
           </Stack>
         </View>
         <StatusBar style={theme === "dark" && !gallery ? "light" : "dark"} />
+        {/* Above the navigator, so an open session follows you between spaces
+            and stays put when a detail page pushes over the tabs. */}
+        <LiveBarHost />
+        {/* Menus, prompts and confirms all rise from here — after the live
+            bar, so a sheet is never opened underneath it. */}
+        <SheetHost />
         {/* The front-door flourish, over everything, once per launch. */}
         <BootIntro onDone={() => {}} />
       </QueryClientProvider>
+      </SafeAreaProvider>
     </GestureHandlerRootView>
   );
 }
@@ -132,7 +146,7 @@ const styles = StyleSheet.create({
   },
   tabletFrame: {
     width: "100%",
-    maxWidth: 840,
+    maxWidth: FRAME_W,
     alignSelf: "center",
   },
 });
