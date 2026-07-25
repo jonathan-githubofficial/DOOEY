@@ -1,4 +1,11 @@
 {
+  "permissions": {
+    "allow": [
+      "Bash(npm install *)",
+      "Bash(npx tsc *)",
+      "Bash(npx expo *)"
+    ]
+  },
   "enabledPlugins": {
     "lynx-debug@lynx-agent-skills": true,
     "reactlynx@lynx-agent-skills": true
