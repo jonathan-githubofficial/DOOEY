@@ -47,8 +47,9 @@ export default function Compose() {
   if (!isAuthenticated) return <Redirect href="/login" />;
   // On the web the composer lives at /compose; a page reload would land on a
   // contextless sheet with nothing behind it. If there's no history to close
-  // back into, send them home instead.
-  if (Platform.OS === "web" && !router.canGoBack()) return <Redirect href="/" />;
+  // back into, send them back to the Planner — the composer is its drill-in,
+  // not Home's.
+  if (Platform.OS === "web" && !router.canGoBack()) return <Redirect href="/planner" />;
 
   return (
     <View style={[styles.sheet, { paddingBottom: Math.max(12, insets.bottom) }]}>

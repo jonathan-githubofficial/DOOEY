@@ -88,12 +88,14 @@ export function Dock({ state, navigation }: TabBarProps) {
   const dockKey = dockSpaces.map((s) => s.route).join(",");
 
   useEffect(() => {
-    // Tabs were added/removed/reordered: drop stale stops and re-seat the pill
-    // without animating — the bar itself just reflowed under it.
+    // Tabs were added/removed/reordered: drop stale stops and mark the pill
+    // unplaced. The next onLayout measure of the active stop re-seats it on
+    // the reflowed geometry via the non-animated branch of `place` — calling
+    // `place` here would both animate across the reflow and seat the pill on
+    // stale pre-reflow coordinates for a frame.
     const live = new Set([...dockSpaces.map((s) => s.route), "account"]);
     for (const key of Object.keys(stops.current)) if (!live.has(key)) delete stops.current[key];
     placed.current = false;
-    place(active, false);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [dockKey]);
 

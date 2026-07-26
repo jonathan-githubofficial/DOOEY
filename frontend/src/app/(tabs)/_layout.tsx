@@ -10,6 +10,7 @@ import { useDock } from "@/features/home/store";
 import { useStyleStore } from "@/features/style/store";
 import { fontStyle } from "@/features/style/tokens";
 import { strokePath, type Stroke } from "@/lib/doodle";
+import { SPACES } from "@/lib/spaces";
 import { alpha, type Palette } from "@/lib/theme";
 import { useAuthStore } from "@/stores/auth";
 import { usePalette } from "@/stores/theme";
@@ -41,6 +42,13 @@ export default function TabsLayout() {
         if (strokes?.length) doodles[space.route] = strokes;
       }
     }
+
+    // Every space needs a Trigger, hidden or not: the native tab bar throws
+    // (dev) or silently refocuses (prod) if navigation ever lands on a route
+    // that has none — a real risk once a user can hide a space from the dock
+    // and something (a deep link, a Home widget) still points at it.
+    const dockRoutes = new Set(dock.map((space) => space.route));
+    const hiddenSpaces = SPACES.filter((space) => !dockRoutes.has(space.route));
 
     return (
       <>
@@ -81,6 +89,9 @@ export default function TabsLayout() {
               </NativeTabs.Trigger>
             );
           })}
+          {hiddenSpaces.map((space) => (
+            <NativeTabs.Trigger key={space.route} name={space.route} hidden />
+          ))}
         </NativeTabs>
       </>
     );
