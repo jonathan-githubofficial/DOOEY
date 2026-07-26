@@ -46,7 +46,7 @@ export function resolveDock(
 
 /** Which space a drill-in belongs to, so its parent stop stays lit: a task
  * page is the planner's, a board is Boards', a workout is the gym's. */
-const DRILL: ReadonlyArray<readonly [string, SpaceRoute]> = [
+const DRILL: readonly (readonly [string, SpaceRoute])[] = [
   ["task", "planner"],
   ["compose", "planner"],
   ["board", "boards"],

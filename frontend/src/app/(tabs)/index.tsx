@@ -49,6 +49,7 @@ export default function Home() {
             accessibilityRole="button"
             accessibilityLabel={editing ? "Done arranging" : "Arrange Home"}
             onPress={() => setEditing(!editing)}
+            hitSlop={8}
           >
             {editing ? (
               <CheckIcon size={20} color={colors.zest} />
