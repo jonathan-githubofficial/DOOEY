@@ -21,11 +21,25 @@ This file is the canonical entry point. Deeper docs live in [docs/](docs/) and
 **Keep this section true.** Update it before you end a session. It is the only place that records
 where things actually stand, and it is what spares the next session from re-reading the repo.
 
-- **Branch** `feat/expo-migration`, with a large uncommitted working tree (about 37 files, mostly
-  gym plus its docs).
-- **Shipped in `frontend/`**: auth and onboarding, Planner (tasks, week/month/agenda views,
-  timeboxing, compose sheet), Boards, Projects (learning programs as folders), Account, the Style
-  studio (runtime palette, fonts, backdrops, doodle icons), and Gym.
+- **Branch** `feat/expo-migration`, working tree clean.
+- **Shipped in `frontend/`**: auth and onboarding, Home (a user-arranged widget stack), Planner
+  (week/month/agenda views, timeboxing, compose sheet), Boards, Projects (learning programs as
+  folders), Account, the Style studio (runtime palette, fonts, backdrops, doodle icons), and Gym.
+- **Home is now the first tab** (`frontend/src/app/(tabs)/index.tsx`): a user-arranged widget stack
+  (schedule, tasks, gym) with an arrange mode off the masthead pencil (hold to reorder, tap the eye
+  to hide — the same convention as `ArrangeList`'s dock editor) and the compose FAB. Planner moved
+  to `(tabs)/planner.tsx` and now opens on Week; its old today view is retired in Home's favour, no
+  planner capability lost. The dock is user-configurable from Account's **"Your dock"** panel:
+  reorder or hide any space except Home and Account, which stay pinned so you can never lock
+  yourself out. Order and hidden set live in the `users.shell` JSON field (migration 029), synced
+  like the Style store; both tab bars render from the same resolved list (`useDock()`), and native
+  builds register a `NativeTabs.Trigger` for every space even when it's hidden from the dock, plus a
+  focused-space guard, since a route the tab navigator can't find a trigger for throws. Full spec:
+  [docs/superpowers/specs/2026-07-26-home-dock-food-journal-design.md](docs/superpowers/specs/2026-07-26-home-dock-food-journal-design.md) —
+  phase 1 (this work) is done; phase 2 (capture bar, inbox, search) and phase 3 (the Food Journal
+  widget) are next.
+- **A jest-expo test rig now exists**: `cd frontend && npm test` runs 15 tests (pure shell-layout
+  arithmetic, plus `SPACES`/`resolveDock`/`spaceFor`). First tests in `frontend/`.
 - **Boards was rebuilt on 2026-07-25** to replace the old web version: every web feature except
   folders, direct-manipulation editing with no dialogs, undo/redo, and a Skia ink layer so drawing
   keeps up with a hand. Architecture and the reasoning behind each tool:
@@ -62,21 +76,30 @@ where things actually stand, and it is what spares the next session from re-read
 
 ## The spaces
 
-Five spaces behind the tab bar, declared in
-[frontend/src/app/(tabs)/_layout.tsx](frontend/src/app/(tabs)/_layout.tsx):
+Six spaces behind the tab bar, declared in
+[frontend/src/lib/spaces.ts](frontend/src/lib/spaces.ts) (`SPACES`) and rendered by both tab bars
+from [frontend/src/app/(tabs)/_layout.tsx](frontend/src/app/(tabs)/_layout.tsx):
 
-1. **Planner** (`index`): everything due today in one glance, plus week, month and agenda views.
-2. **Boards**: free-form mood boards (notes, text, links, photos, stickers, doodles, sections) on
+1. **Home** (`index`): the front door. A user-arranged widget stack (schedule, tasks, gym today) —
+   everything due today, actionable in place, no drill-in required.
+2. **Planner**: week, month and agenda views, timeboxing, opens on Week. Its old today view moved
+   to Home; nothing else about it changed.
+3. **Boards**: free-form mood boards (notes, text, links, photos, stickers, doodles, sections) on
    a pannable, zoomable canvas with a freehand ink layer. See
    [frontend/docs/boards.md](frontend/docs/boards.md).
-3. **Projects**: learning programs as file-folder cards.
-4. **Gym**: programs, routines, live logging, history.
-5. **Account**.
+4. **Projects**: learning programs as file-folder cards.
+5. **Gym**: programs, routines, live logging, history.
+6. **Account**.
 
-Native builds get the platform's own tab bar (`NativeTabs` from
-`expo-router/unstable-native-tabs`), and the hand-drawn page doodles are rasterized off-screen into
-bitmap icons when "doodle icons in dock" is on. The web build keeps the DOOEY dock island
-(`frontend/src/components/Dock.tsx`).
+**The dock is user-composable**, not fixed. Reorder or hide any space but Home and Account from
+Account's "Your dock" panel (`frontend/src/features/home/components/DockPanel.tsx`); the resolved
+order comes from `useDock()` in `frontend/src/features/home/store.ts`. Native builds get the
+platform's own tab bar (`NativeTabs` from `expo-router/unstable-native-tabs`) — every space
+registers a trigger whether it's in the dock or not, so a hidden space stays reachable by deep link
+or from a Home widget — and the hand-drawn page doodles are rasterized off-screen into bitmap icons
+when "doodle icons in dock" is on. The web build keeps the DOOEY dock island
+(`frontend/src/components/Dock.tsx`) behind a `Tabs` that likewise registers all six screens
+regardless of dock membership.
 
 **Tasks are pages, not rows.** Every task opens its own page with fixed, well-designed sections:
 notes, checklist, resources (links and video embeds), attachments. Notion-ish depth, but structured,
@@ -126,6 +149,14 @@ cd frontend && npm run lint
 
 `frontend/src/lib/pb.ts` derives the API host from Expo's `hostUri` in dev, so phones, emulators and
 the web all find PocketBase with no config. Production builds set `EXPO_PUBLIC_PB_URL`.
+
+**`frontend/.expo/types/router.d.ts` goes stale after a route rename or move** (it's expo-router's
+own gitignored typed-routes cache, and a debounced regeneration can land mid-edit). When that
+happens `npm run typecheck` fails with `Type '"/"' is not assignable to type ...` at `<Redirect>`/
+`router.replace` call sites in `login.tsx`, `onboarding.tsx` or `compose.tsx` that were never
+touched. It is not a code bug: delete the file (or all of `frontend/.expo/`) and run `npx expo
+start` once to let Metro regenerate it, then re-run typecheck. Recurred twice moving Planner to
+`/planner` and adding Home during the Home/dock work above.
 
 **`backend/pb_data` is live user data.** Never delete, reset or hand-edit it. Schema changes go through
 `backend/pb_migrations/`.
@@ -240,7 +271,7 @@ once `mobile/` started shipping the web build too. Renamed 2026-07-26; the conta
 image is still `/pb`, because that is PocketBase's own convention and the volume mount depends on
 it.
 
-Routes in `frontend/src/app/`: `(tabs)/` for the five spaces, `(detail)/` for `task/[id]`,
+Routes in `frontend/src/app/`: `(tabs)/` for the six spaces, `(detail)/` for `task/[id]`,
 `project/[id]`, `routine/[id]`, `workout/[id]`, `board/[id]`, `preferences`, `style`, `wordmark`,
 and at the root `compose`, `login`, `onboarding`.
 
