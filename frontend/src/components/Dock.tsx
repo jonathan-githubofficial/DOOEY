@@ -2,6 +2,7 @@ import { Tabs } from "expo-router";
 import {
   Dumbbell,
   FolderOpen,
+  House,
   NotebookPen,
   Shapes,
   UserRound,
@@ -20,6 +21,7 @@ import Animated, {
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { DoodleSvg } from "@/components/DoodleSvg";
 import { Grain } from "@/components/grain";
+import { useDock } from "@/features/home/store";
 import { useShadow, useStyleStore } from "@/features/style/store";
 import { fontStyle } from "@/features/style/tokens";
 import type { Stroke } from "@/lib/doodle";
@@ -27,23 +29,24 @@ import { alpha } from "@/lib/theme";
 import { useAuthStore } from "@/stores/auth";
 import { usePalette, useType } from "@/stores/theme";
 import { settle } from "@/lib/motion";
-import { SPACES, spaceFor, type SpaceRoute } from "@/lib/spaces";
+import { spaceFor, type SpaceRoute } from "@/lib/spaces";
 
 // A pure deceleration curve — the pill glides and stops dead, no overshoot.
 const GLIDE = { duration: 260, easing: Easing.bezier(0.2, 0, 0, 1) };
 
 type TabBarProps = Parameters<NonNullable<React.ComponentProps<typeof Tabs>["tabBar"]>>[0];
 
-/** The dock's glyphs. The list of spaces itself lives in `lib/spaces`; only
- * the icons are the dock's own business. Account is absent on purpose — your
- * doodled self at the left end of the island is its door. */
+/** The dock's glyphs. The list of spaces itself lives in `lib/spaces` and the
+ * user's arrangement in features/home/store; only the icons are the dock's
+ * own business. Account is absent on purpose — your doodled self at the left
+ * end of the island is its door. */
 const DOCK_ICONS: Partial<Record<SpaceRoute, LucideIcon>> = {
-  index: NotebookPen,
+  index: House,
+  planner: NotebookPen,
   boards: Shapes,
   projects: FolderOpen,
   gym: Dumbbell,
 };
-const DOCK_SPACES = SPACES.filter((s) => DOCK_ICONS[s.route]);
 
 /** The dock: a floating island. The wordmark anchors the left end (its zest
  * full-stop toggles light/dark), your doodled self beside it is the door to
@@ -80,6 +83,19 @@ export function Dock({ state, navigation }: TabBarProps) {
     stops.current[key] = { x: e.nativeEvent.layout.x, width: e.nativeEvent.layout.width };
     if (key === active) place(key, true);
   };
+
+  const dockSpaces = useDock().filter((s) => s.route !== "account");
+  const dockKey = dockSpaces.map((s) => s.route).join(",");
+
+  useEffect(() => {
+    // Tabs were added/removed/reordered: drop stale stops and re-seat the pill
+    // without animating — the bar itself just reflowed under it.
+    const live = new Set([...dockSpaces.map((s) => s.route), "account"]);
+    for (const key of Object.keys(stops.current)) if (!live.has(key)) delete stops.current[key];
+    placed.current = false;
+    place(active, false);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [dockKey]);
 
   useEffect(() => {
     place(active, true);
@@ -122,7 +138,7 @@ export function Dock({ state, navigation }: TabBarProps) {
           onPress={() => navigation.navigate("account")}
         />
         <View style={[styles.divider, { backgroundColor: alpha(colors.rule, 0.8) }]} />
-        {DOCK_SPACES.map((space) => (
+        {dockSpaces.map((space) => (
           <DockTab
             key={space.route}
             label={space.label}

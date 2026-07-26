@@ -6,11 +6,11 @@ import Svg, { Path } from "react-native-svg";
 import ViewShot from "react-native-view-shot";
 import { MaterialIcons } from "@expo/vector-icons";
 import { Dock } from "@/components/Dock";
+import { useDock } from "@/features/home/store";
 import { useStyleStore } from "@/features/style/store";
 import { fontStyle } from "@/features/style/tokens";
 import { strokePath, type Stroke } from "@/lib/doodle";
 import { alpha, type Palette } from "@/lib/theme";
-import { SPACES } from "@/lib/spaces";
 import { useAuthStore } from "@/stores/auth";
 import { usePalette } from "@/stores/theme";
 
@@ -27,6 +27,7 @@ export default function TabsLayout() {
   const pageDoodles = useStyleStore((s) => s.pageDoodles);
   const dockDoodles = useStyleStore((s) => s.dockDoodles);
   const [icons, setIcons] = useState<Record<string, string>>({});
+  const dock = useDock();
   if (!isAuthenticated) return <Redirect href="/login" />;
 
   if (Platform.OS !== "web") {
@@ -35,7 +36,7 @@ export default function TabsLayout() {
     // as-is (the patched Icon keeps it from being tinted as a template).
     const doodles: Record<string, Stroke[]> = {};
     if (dockDoodles) {
-      for (const space of SPACES) {
+      for (const space of dock) {
         const strokes = pageDoodles[space.doodle];
         if (strokes?.length) doodles[space.route] = strokes;
       }
@@ -60,7 +61,7 @@ export default function TabsLayout() {
             ? { backgroundColor: colors.surface }
             : { blurEffect: "systemChromeMaterial" as const })}
         >
-          {SPACES.map((space) => {
+          {dock.map((space) => {
             const uri = doodles[space.route] ? icons[space.route] : undefined;
             return (
               <NativeTabs.Trigger key={space.route} name={space.route}>
@@ -93,9 +94,11 @@ export default function TabsLayout() {
         sceneStyle: { backgroundColor: colors.paper },
       }}
     >
-      <Tabs.Screen name="index" options={{ title: "Planner" }} />
+      <Tabs.Screen name="index" options={{ title: "Home" }} />
+      <Tabs.Screen name="planner" options={{ title: "Planner" }} />
       <Tabs.Screen name="boards" options={{ title: "Boards" }} />
       <Tabs.Screen name="projects" options={{ title: "Projects" }} />
+      <Tabs.Screen name="gym" options={{ title: "Gym" }} />
       <Tabs.Screen name="account" options={{ title: "Account" }} />
     </Tabs>
   );

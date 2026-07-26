@@ -1,8 +1,10 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import type { RecordModel } from "pocketbase";
+import { useMemo } from "react";
 import { create } from "zustand";
 import { createJSONStorage, persist } from "zustand/middleware";
 import { pb } from "@/lib/pb";
+import { resolveDock, spaceOf, type Space } from "@/lib/spaces";
 import { useAuthStore } from "@/stores/auth";
 import {
   DOCK_CHOICES,
@@ -102,3 +104,11 @@ syncFromUser(useAuthStore.getState().user);
 useAuthStore.subscribe((state, prev) => {
   if (state.user !== prev.user) syncFromUser(state.user);
 });
+
+/** The dock, resolved and joined with each space's facts, ready for either
+ * tab bar to render. Pinned ends included. */
+export function useDock(): Space[] {
+  const order = useHomeStore((s) => s.dockOrder);
+  const hidden = useHomeStore((s) => s.dockHidden);
+  return useMemo(() => resolveDock(order, hidden).map(spaceOf), [order, hidden]);
+}

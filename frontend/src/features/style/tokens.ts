@@ -227,6 +227,7 @@ export type BackdropKey = (typeof BACKDROPS)[number]["key"];
 /** Pages that can wear a hand-drawn icon — keys shared with the web app's
  * user record, so doodles drawn on either client appear on both. */
 export const DOODLE_PAGES = [
+  { key: "home", label: "Home" },
   { key: "planner", label: "Planner" },
   { key: "calendar", label: "Calendar" },
   { key: "boards", label: "Boards" },
