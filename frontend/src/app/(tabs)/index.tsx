@@ -3,7 +3,7 @@ import { Minus, Plus } from "lucide-react-native";
 import { useRef, useState } from "react";
 import { Platform, ScrollView, StyleSheet, Text, View } from "react-native";
 import { Gesture, GestureDetector } from "react-native-gesture-handler";
-import Animated, { FadeIn, LinearTransition } from "react-native-reanimated";
+import Animated, { FadeIn } from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Grain } from "@/components/grain";
 import { PressableScale } from "@/components/pressable-scale";
@@ -20,12 +20,12 @@ import { WeekStrip } from "@/features/tasks/components/WeekStrip";
 import { PX_DEFAULT, PX_MAX, PX_MIN, clampPx } from "@/features/tasks/timeGrid";
 import { localDate } from "@/lib/dates";
 import { hapticTap } from "@/lib/haptics";
-import { DOCK_GAP, useDockTop } from "@/lib/shell";
+import { DOCK_GAP, useDockTop, usePagePadding } from "@/lib/shell";
 import { alpha } from "@/lib/theme";
 import { usePalette, useType } from "@/stores/theme";
 import { useLiveBarInset } from "@/features/workouts/live-bar";
+import { settle } from "@/lib/motion";
 
-const settle = LinearTransition.springify().stiffness(380).damping(34);
 
 // ── TUNING KNOBS ────────────────────────────────────────────────────────────
 // The gap (px) between the date shelf and the top of the notebook. SMALLER =
@@ -60,6 +60,7 @@ export default function Planner() {
   const insets = useSafeAreaInsets();
   const dockTop = useDockTop();
   const liveInset = useLiveBarInset();
+  const page = usePagePadding(liveInset);
   const shadow = useShadow();
   const router = useRouter();
 
@@ -103,7 +104,7 @@ export default function Planner() {
   const pageH = Math.max(240, Math.round((vh - 34) * PAGE_HEIGHT_SCALE));
 
   return (
-    <View style={[styles.screen, { backgroundColor: colors.paper, paddingTop: insets.top + 20 }]}>
+    <View style={[styles.screen, { backgroundColor: colors.paper, paddingTop: page.paddingTop }]}>
       <Grain />
       <Animated.View layout={settle} style={styles.strip}>
         <Panel style={styles.stripPanel}>

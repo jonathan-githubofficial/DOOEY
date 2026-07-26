@@ -12,7 +12,7 @@ export type FolderHue = "sky" | "zest" | "leaf" | "clay" | "honey";
 /** A learning program as the mobile app needs it: the goal/why, the folder
  * dress-up, and the source files kept as reference. Its actual work lives in
  * ordinary tasks with `project` pointing here. */
-export interface Program {
+export interface LearningProgram {
   id: string;
   goal: string;
   why: string;
@@ -26,7 +26,7 @@ export interface Program {
 
 const HUES: FolderHue[] = ["sky", "zest", "leaf", "clay", "honey"];
 
-function toProgram(r: RecordModel, index: number): Program {
+function toProgram(r: RecordModel, index: number): LearningProgram {
   const folder = (r.folder ?? {}) as { hue?: FolderHue };
   return {
     id: r.id,
@@ -45,7 +45,7 @@ export function programCoverUrl(id: string, filename: string): string {
   return `${pb.baseURL}/api/files/learning_programs/${id}/${encodeURIComponent(filename)}`;
 }
 
-export function usePrograms() {
+export function useLearningPrograms() {
   const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
   return useQuery({
     queryKey: ["programs"] as const,
@@ -57,7 +57,7 @@ export function usePrograms() {
   });
 }
 
-export function useProgram(id: string) {
+export function useLearningProgram(id: string) {
   const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
   return useQuery({
     queryKey: ["programs", id] as const,
@@ -126,7 +126,7 @@ export async function materializeProgram(id: string, files: Record<string, strin
  *
  * Mount it once, where programs are listed.
  */
-export function useMaterializePrograms(programs: Program[] | undefined) {
+export function useMaterializePrograms(programs: LearningProgram[] | undefined) {
   const qc = useQueryClient();
   useEffect(() => {
     const pending = (programs ?? []).filter((p) => !p.materialized);

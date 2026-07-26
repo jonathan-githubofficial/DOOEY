@@ -11,7 +11,7 @@ import {
   TextInput,
   View,
 } from "react-native";
-import Animated, { FadeInDown } from "react-native-reanimated";
+import Animated from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { DoodleEditor } from "@/components/DoodleEditor";
 import { Grain } from "@/components/grain";
@@ -21,6 +21,7 @@ import { useStyleStore } from "@/features/style/store";
 import { BACKDROPS, fontStyle } from "@/features/style/tokens";
 import type { Stroke } from "@/lib/doodle";
 import { hapticSuccess, hapticTap } from "@/lib/haptics";
+import { arrive } from "@/lib/motion";
 import { pb } from "@/lib/pb";
 import { alpha, type Palette } from "@/lib/theme";
 import { useAuthStore } from "@/stores/auth";
@@ -85,7 +86,7 @@ export default function Onboarding() {
       >
         {!greeted && (
           <Animated.View
-            entering={FadeInDown.springify().stiffness(200).damping(23)}
+            entering={arrive()}
             style={styles.room}
           >
             <WelcomeLetter
@@ -116,7 +117,7 @@ export default function Onboarding() {
         {greeted && (
         <Animated.View
           key={step}
-          entering={FadeInDown.springify().stiffness(220).damping(24)}
+          entering={arrive()}
           style={styles.room}
         >
           <Text style={[styles.eyebrow, type.sansMedium, { color: colors.inkMuted }]}>

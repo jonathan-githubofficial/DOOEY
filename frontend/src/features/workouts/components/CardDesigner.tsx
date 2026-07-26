@@ -72,7 +72,7 @@ export function CardDesigner({
 
             <Text style={[type.sansMedium, styles.label, { color: colors.inkMuted }]}>Colour</Text>
             <View style={styles.swatches}>
-              <Swatch
+              <ColorTile
                 label="Auto"
                 color={colors[auto]}
                 selected={hue === ""}
@@ -80,7 +80,7 @@ export function CardDesigner({
                 onPress={() => setHue("")}
               />
               {CARD_HUES.map((h) => (
-                <Swatch
+                <ColorTile
                   key={h}
                   label={h}
                   color={colors[h]}
@@ -153,7 +153,7 @@ export function CardDesigner({
   );
 }
 
-function Swatch({
+function ColorTile({
   label,
   color,
   selected,

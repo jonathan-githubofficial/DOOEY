@@ -14,12 +14,7 @@ import {
   View,
   type ViewStyle,
 } from "react-native";
-import Animated, {
-  FadeIn,
-  FadeInDown,
-  FadeOut,
-  LinearTransition,
-} from "react-native-reanimated";
+import Animated, { FadeIn, FadeOut } from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { DoodleFlipbook } from "@/components/DoodleFlipbook";
 import { Grain } from "@/components/grain";
@@ -31,8 +26,8 @@ import { hapticSuccess, hapticTap, hapticWarn } from "@/lib/haptics";
 import { alpha, type Palette } from "@/lib/theme";
 import { useAuthStore } from "@/stores/auth";
 import { LIGHT_PALETTE, useThemeStore, useType } from "@/stores/theme";
+import { arrive, settle } from "@/lib/motion";
 
-const settle = LinearTransition.springify().stiffness(400).damping(32);
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 // The peasant reel rises from the bottom edge: cover-fit, muted, played once,
@@ -190,7 +185,7 @@ export default function Login() {
         ]}
       >
         <Animated.View
-          entering={FadeInDown.springify().stiffness(200).damping(23)}
+          entering={arrive()}
           style={styles.hang}
         >
           {/* One quiet card on the wall: no moulding, just soft paper. */}

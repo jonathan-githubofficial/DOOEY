@@ -1,7 +1,7 @@
 import { ChevronLeft } from "lucide-react-native";
 import { useRouter } from "expo-router";
 import { ScrollView, StyleSheet, View } from "react-native";
-import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { usePagePadding } from "@/lib/shell";
 import { Grain } from "@/components/grain";
 import { Masthead } from "@/components/Masthead";
 import { PressableScale } from "@/components/pressable-scale";
@@ -11,11 +11,11 @@ import { usePalette } from "@/stores/theme";
 /** The Style studio page — a drill-in of Account, with the dock underfoot. */
 export default function Style() {
   const colors = usePalette();
-  const insets = useSafeAreaInsets();
+  const page = usePagePadding();
   const router = useRouter();
 
   return (
-    <View style={[styles.screen, { backgroundColor: colors.paper, paddingTop: insets.top + 12 }]}>
+    <View style={[styles.screen, { backgroundColor: colors.paper, paddingTop: page.paddingTop }]}>
       <Grain />
       {/* Pinned above the scroller: the way back and the page's name stay put
           while the studio runs under them. */}
@@ -34,7 +34,7 @@ export default function Style() {
         showsVerticalScrollIndicator={false}
         contentContainerStyle={[
           styles.scrollContent,
-          { paddingBottom: Math.max(16, insets.bottom) + 96 },
+          { paddingBottom: page.paddingBottom },
         ]}
       >
         <View style={styles.studio}>

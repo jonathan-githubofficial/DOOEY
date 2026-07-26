@@ -1,4 +1,14 @@
-import { Easing, ReduceMotion, type WithSpringConfig, type WithTimingConfig } from "react-native-reanimated";
+import {
+  Easing,
+  FadeInDown,
+  LinearTransition,
+  ReduceMotion,
+  SlideInDown,
+  SlideOutDown,
+  ZoomIn,
+  type WithSpringConfig,
+  type WithTimingConfig,
+} from "react-native-reanimated";
 
 /** DOOEY's motion vocabulary.
  *
@@ -82,6 +92,55 @@ export const gesture = {
    * it momentum. */
   track: { stiffness: 420, damping: 34, reduceMotion: ReduceMotion.System },
 } satisfies Record<string, WithSpringConfig>;
+
+/* ---------------------------------------------------------------- entrances */
+
+/** How things arrive and leave.
+ *
+ * Nobody is holding a panel that is sliding up, so by the rule at the top of
+ * this file an entrance is *explaining a change* and gets a duration, not a
+ * spring. These were hand-written as `.springify()` in seven places anyway —
+ * a keypad, a rest bar, a batch bar, three page entrances and a badge — and
+ * the softest of them overshot visibly. A panel that bounces when it docks
+ * reads as a toy.
+ *
+ * Builders rather than constants: a builder carries `.delay()`, and the same
+ * instance shared between two mounted components would share its config.
+ *
+ * `rise`/`fall` are a pair — anything that docks to the bottom edge uses both,
+ * so it leaves the way it came. */
+export const rise = () =>
+  SlideInDown.duration(dur.moved).easing(ease.out).reduceMotion(ReduceMotion.System);
+export const fall = () =>
+  SlideOutDown.duration(dur.quick).easing(ease.in).reduceMotion(ReduceMotion.System);
+
+/** A page's content settling in from just below. The whole screen changed, so
+ * this one is allowed the long duration. */
+export const arrive = () =>
+  FadeInDown.duration(dur.moved).easing(ease.out).reduceMotion(ReduceMotion.System);
+
+/** Something small appearing in place: a badge, a tick. Confirmation, so it is
+ * over almost before you see it. */
+export const appear = () =>
+  ZoomIn.duration(dur.instant).easing(ease.out).reduceMotion(ReduceMotion.System);
+
+/* ------------------------------------------------------------------- layout */
+
+/** The one layout transition: what a list does when its contents reflow.
+ *
+ * There was one of these hand-written in thirteen files, with six different
+ * values between them — four springs at 400/32, four at 420/32, two at 400/34,
+ * one at 380/34, a bezier, and a timing curve. Nobody chose six; they were
+ * copied and drifted. This is the value.
+ *
+ * A curve, not a spring. Nothing is holding a reflowing list, so by the rule
+ * above it is explaining a change, and a change is explained with a duration.
+ *
+ * Use it as `layout={settle}` on any `Animated.View` whose position depends on
+ * its siblings. */
+export const settle = LinearTransition.duration(dur.quick)
+  .easing(ease.out)
+  .reduceMotion(ReduceMotion.System);
 
 /* ------------------------------------------------------------------ ambient */
 

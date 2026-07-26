@@ -3,22 +3,22 @@ import {
   ChevronDown,
   ChevronRight,
   Copy,
+  BookOpen,
   Dumbbell,
   Palette,
-  Pencil,
   Plus,
   Trash2,
 } from "lucide-react-native";
 import { useEffect, useMemo, useState } from "react";
-import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
-import Animated, { FadeInDown, LinearTransition } from "react-native-reanimated";
-import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
+import Animated, { FadeInDown } from "react-native-reanimated";
+import { usePagePadding } from "@/lib/shell";
 import { DotsButton } from "@/components/dots-button";
 import { Grain } from "@/components/grain";
 import { Masthead } from "@/components/Masthead";
 import { Plate } from "@/components/plate";
 import { PressableScale } from "@/components/pressable-scale";
-import { Eyebrow, Panel } from "@/components/surface";
+import { Panel } from "@/components/surface";
 import { PageDoodle } from "@/features/style/components/PageDoodle";
 import { useCardRadius } from "@/features/style/store";
 import {
@@ -27,7 +27,7 @@ import {
   useDeleteProgram,
   useDeleteRoutine,
   useDeleteWorkout,
-  usePrograms,
+  useWorkoutPrograms,
   useRoutines,
   useSaveLooseRoutine,
   useSaveProgram,
@@ -43,15 +43,16 @@ import { ProgramsExplorer } from "@/features/workouts/components/ProgramsExplore
 import { RoutineCard } from "@/features/workouts/components/RoutineCard";
 import { UpNextCard } from "@/features/workouts/components/UpNextCard";
 import { WeekPanel } from "@/features/workouts/components/WeekPanel";
-import type { Program, ProgramRoutine } from "@/features/workouts/programs";
+import type { CatalogProgram, ProgramRoutine } from "@/features/workouts/programs";
 import {
+  journeyWeeks,
   lastDoneAt,
   nextUp,
   restedLongest,
-  weekRhythm,
   weekTargets,
 } from "@/features/workouts/rotation";
 import { STARTER_PROGRAM } from "@/features/workouts/starters";
+import { NewProgramDeck } from "@/features/workouts/components/NewProgramDeck";
 import { useWorkoutPrefs } from "@/features/workouts/store";
 import {
   type Routine,
@@ -62,20 +63,18 @@ import {
 import { confirmDestructive } from "@/lib/confirm";
 import { hapticTap } from "@/lib/haptics";
 import { alpha } from "@/lib/theme";
-import { openPrompt, type Menu } from "@/stores/sheet";
+import type { Menu } from "@/stores/sheet";
 import { usePalette, useType } from "@/stores/theme";
 import { useLiveBarInset } from "@/features/workouts/live-bar";
+import { settle } from "@/lib/motion";
 
-const settle = LinearTransition.springify().stiffness(400).damping(32);
 const ADD_TILE_H = 96;
 /** Late cards shouldn't wait out a stagger nobody's watching. */
 const MAX_STAGGER = 8;
 
+/** What the page is showing below the week panel: the routines you'd train, or
+ * the sessions you did. Opening the panel out is what moves between them. */
 type Tab = "workout" | "history";
-const TABS: { key: Tab; label: string }[] = [
-  { key: "workout", label: "Workout" },
-  { key: "history", label: "History" },
-];
 
 /** A routine card or the tile that makes another one — both ride the masonry. */
 type CardItem = { kind: "routine"; routine: Routine } | { kind: "add" };
@@ -85,10 +84,10 @@ type CardItem = { kind: "routine"; routine: Routine } | { kind: "add" };
 export default function Gym() {
   const colors = usePalette();
   const type = useType();
-  const insets = useSafeAreaInsets();
   const liveInset = useLiveBarInset();
+  const page = usePagePadding(liveInset);
   const router = useRouter();
-  const { data: programs } = usePrograms();
+  const { data: programs } = useWorkoutPrograms();
   const { data: routines } = useRoutines();
   const { data: workouts } = useWorkouts();
   const saveProgram = useSaveProgram();
@@ -101,8 +100,10 @@ export default function Gym() {
   const start = useStartWorkout();
   const seededFlag = useWorkoutPrefs((s) => s.seededRoutines);
   const markSeeded = useWorkoutPrefs((s) => s.markSeeded);
+  const defaultRest = useWorkoutPrefs((s) => s.restSeconds);
   const [tab, setTab] = useState<Tab>("workout");
   const [exploring, setExploring] = useState(false);
+  const [creating, setCreating] = useState(false);
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
   const [designing, setDesigning] = useState<Routine | null>(null);
 
@@ -113,7 +114,7 @@ export default function Gym() {
     () => nextUp(routines ?? [], programs ?? [], workouts ?? []),
     [routines, programs, workouts],
   );
-  const rhythm = useMemo(() => weekRhythm(workouts ?? []), [workouts]);
+  const journey = useMemo(() => journeyWeeks(workouts ?? []), [workouts]);
   const painted = useMemo(() => weekTargets(workouts ?? []), [workouts]);
   const rested = useMemo(() => restedLongest(workouts ?? []), [workouts]);
   const programsReady = !!programs;
@@ -154,13 +155,7 @@ export default function Gym() {
     });
   };
 
-  const newProgram = () =>
-    openPrompt({
-      title: "New program",
-      placeholder: "e.g. Upper / Lower",
-      confirmLabel: "Create program",
-      onSubmit: (name) => saveProgram.mutate({ name }),
-    });
+  const newProgram = () => setCreating(true);
 
   const addRoutine = (program: WorkoutProgram) =>
     saveRoutine.mutate(
@@ -171,19 +166,6 @@ export default function Gym() {
   const programMenu = (program: WorkoutProgram): Menu => ({
     title: program.name,
     actions: [
-      {
-        label: "Rename",
-        symbol: "pencil",
-        icon: <Pencil size={17} color={colors.ink} />,
-        onPress: () =>
-          openPrompt({
-            title: "Rename program",
-            initial: program.name,
-            placeholder: "Program name",
-            confirmLabel: "Save",
-            onSubmit: (name) => saveProgram.mutate({ id: program.id, name }),
-          }),
-      },
       {
         label: "Delete program",
         symbol: "trash",
@@ -258,7 +240,7 @@ export default function Gym() {
     ],
   });
 
-  const addWholeProgram = (program: Program) =>
+  const addWholeProgram = (program: CatalogProgram) =>
     addProgram.mutate({
       name: program.name,
       description: program.split,
@@ -287,35 +269,39 @@ export default function Gym() {
   };
 
   return (
-    <View style={[styles.screen, { backgroundColor: colors.paper, paddingTop: insets.top + 12 }]}>
+    <View style={[styles.screen, { backgroundColor: colors.paper, paddingTop: page.paddingTop }]}>
       <Grain />
       {/* Pinned above the scroller: the space's name and its Workout/History
           keys stay put while the page runs under them. */}
+      {/* Just the space's name. The switch between what's ahead and what's
+          behind lives in the week panel, which is already a calendar of both. */}
       <View style={styles.head}>
-        <Masthead avatar={<PageDoodle page="gym" />} title="Gym">
-          <TabToggle tab={tab} onChange={setTab} />
-        </Masthead>
+        <Masthead avatar={<PageDoodle page="gym" />} title="Gym" />
       </View>
       <ScrollView
         showsVerticalScrollIndicator={false}
         contentContainerStyle={[
           styles.scrollContent,
-          { paddingBottom: Math.max(16, insets.bottom) + 96 + liveInset },
+          { paddingBottom: page.paddingBottom },
         ]}
       >
+        {/* The week is context, not an action — it belongs on screen even
+            mid-session, and in both modes, because opening it out *is* the
+            switch. Only "up next" steps aside, since you're already training
+            the thing it would offer. */}
+        <View style={styles.weekWrap}>
+          <WeekPanel
+            journey={journey}
+            painted={painted}
+            rested={rested}
+            open={tab === "history"}
+            onToggle={() => setTab(tab === "history" ? "workout" : "history")}
+            onOpenSession={openWorkout}
+          />
+        </View>
+
         {tab === "workout" ? (
           <>
-            {/* The week is context, not an action — it belongs on screen even
-                mid-session. Only "up next" steps aside, since you're already
-                training the thing it would offer. */}
-            <View style={styles.weekWrap}>
-              <WeekPanel
-                rhythm={rhythm}
-                painted={painted}
-                rested={rested}
-                onBrowse={() => setExploring(true)}
-              />
-            </View>
             {!live && <View style={styles.heroWrap}>{hero()}</View>}
 
             {(programs ?? []).map((p) => (
@@ -326,12 +312,38 @@ export default function Gym() {
                   collapsed={collapsed.has(p.id)}
                   onToggleCollapse={() => toggleCollapsed(p.id)}
                   onOpenRoutine={openRoutine}
+                  onRename={(name) => saveProgram.mutate({ id: p.id, name })}
                   routineMenu={routineMenu}
                   programMenu={() => programMenu(p)}
                   onAddRoutine={() => addRoutine(p)}
                 />
               </Animated.View>
             ))}
+
+            {/* The shelf of proven splits, and where a program of your own
+                starts too. It used to sit in the week panel's top corner, on
+                screen every visit — but once you're following something, the
+                last thing you need offered is somebody else's plan. It waits
+                at the end of your own programs, where you'd go looking for it
+                only when you'd run out of them. */}
+            <PressableScale
+              scaleTo={0.97}
+              accessibilityRole="button"
+              accessibilityLabel="Browse programs"
+              onPress={() => {
+                hapticTap();
+                setExploring(true);
+              }}
+              style={[
+                styles.browse,
+                { backgroundColor: colors.surface, borderColor: alpha(colors.rule, 0.7) },
+              ]}
+            >
+              <BookOpen size={15} color={colors.inkMuted} />
+              <Text style={[styles.browseText, type.sansMedium, { color: colors.ink }]}>
+                Browse programs
+              </Text>
+            </PressableScale>
           </>
         ) : (
           <View style={styles.historyWrap}>
@@ -382,52 +394,21 @@ export default function Gym() {
         onClose={() => setExploring(false)}
       />
 
-      {designing && <CardDesigner routine={designing} onClose={() => setDesigning(null)} />}
-    </View>
-  );
-}
+      <NewProgramDeck
+        visible={creating}
+        defaultRest={defaultRest}
+        onCreate={({ name, routines }) => {
+          setCreating(false);
+          addProgram.mutate({
+            name,
+            description: "",
+            routines: routines.map((r) => ({ ...r, description: "" })),
+          });
+        }}
+        onClose={() => setCreating(false)}
+      />
 
-/** Workout / History as plain words in a pressed tray, the active one raised to
- * a paper key — the Planner's toggle, which needs no folder beneath it. */
-function TabToggle({ tab, onChange }: { tab: Tab; onChange: (t: Tab) => void }) {
-  const colors = usePalette();
-  const type = useType();
-  return (
-    <View style={[styles.toggleWell, { backgroundColor: alpha(colors.ink, 0.05) }]}>
-      {TABS.map(({ key, label }) => {
-        const active = tab === key;
-        return (
-          <PressableScale
-            key={key}
-            scaleTo={0.93}
-            accessibilityRole="tab"
-            accessibilityLabel={label}
-            accessibilityState={{ selected: active }}
-            onPress={() => {
-              hapticTap();
-              onChange(key);
-            }}
-            style={[
-              styles.toggleKey,
-              active && {
-                backgroundColor: colors.surface,
-                borderColor: alpha(colors.rule, 0.7),
-                borderWidth: 1,
-              },
-            ]}
-          >
-            <Text
-              style={[
-                styles.toggleLabel,
-                type.sansMedium,
-                { color: active ? colors.ink : colors.inkMuted },
-              ]}
-            >
-              {label}
-            </Text>
-          </PressableScale>
-        );
-      })}
+      {designing && <CardDesigner routine={designing} onClose={() => setDesigning(null)} />}
     </View>
   );
 }
@@ -467,12 +448,41 @@ function HeroEmpty({ onCreate }: { onCreate: () => void }) {
 /** One program: a quiet tracked rule you can fold, then its routines as a
  * two-column board. The rule stays Eyebrow-scale so program names never
  * outshout the routines under them. */
+/** The section title, editable in place. It commits on blur rather than on a
+ * button: there is nothing to confirm about a name, and a save button here
+ * would be the modal we just removed, wearing a smaller hat. */
+function ProgramTitle({ name, onRename }: { name: string; onRename: (name: string) => void }) {
+  const colors = usePalette();
+  const type = useType();
+  const [draft, setDraft] = useState<string | null>(null);
+
+  const commit = () => {
+    const next = (draft ?? "").trim();
+    if (draft !== null && next && next !== name) onRename(next);
+    setDraft(null);
+  };
+
+  return (
+    <TextInput
+      value={draft ?? name}
+      onChangeText={setDraft}
+      onBlur={commit}
+      onSubmitEditing={commit}
+      returnKeyType="done"
+      selectTextOnFocus
+      accessibilityLabel={`Rename ${name}`}
+      style={[styles.programName, type.sansMedium, { color: colors.inkMuted }]}
+    />
+  );
+}
+
 function ProgramSection({
   program,
   routines,
   collapsed,
   onToggleCollapse,
   onOpenRoutine,
+  onRename,
   routineMenu,
   programMenu,
   onAddRoutine,
@@ -482,6 +492,7 @@ function ProgramSection({
   collapsed: boolean;
   onToggleCollapse: () => void;
   onOpenRoutine: (id: string) => void;
+  onRename: (name: string) => void;
   routineMenu: (routine: Routine) => Menu;
   programMenu: () => Menu;
   onAddRoutine: () => void;
@@ -497,23 +508,25 @@ function ProgramSection({
   return (
     <View style={styles.program}>
       <View style={styles.programHead}>
+        {/* The chevron owns collapsing. The name is the name — tapping it puts
+            a cursor in it, which is what tapping a title should always mean. */}
         <Pressable
           accessibilityRole="button"
+          accessibilityLabel={collapsed ? `Expand ${program.name}` : `Collapse ${program.name}`}
           accessibilityState={{ expanded: !collapsed }}
-          accessibilityLabel={`${program.name}, ${routines.length} routines`}
+          hitSlop={8}
           onPress={onToggleCollapse}
-          style={styles.programHeadTap}
         >
           {collapsed ? (
             <ChevronRight size={13} color={colors.inkMuted} />
           ) : (
             <ChevronDown size={13} color={colors.inkMuted} />
           )}
-          <Eyebrow style={styles.programName}>{program.name}</Eyebrow>
-          <Text style={[styles.programCount, type.sansMedium, { color: alpha(colors.inkMuted, 0.8) }]}>
-            {routines.length}
-          </Text>
         </Pressable>
+        <ProgramTitle name={program.name} onRename={onRename} />
+        <Text style={[styles.programCount, type.sansMedium, { color: alpha(colors.inkMuted, 0.8) }]}>
+          {routines.length}
+        </Text>
         <DotsButton label={`${program.name} options`} menu={programMenu} />
       </View>
       <View style={[styles.programRule, { backgroundColor: alpha(colors.rule, 0.5) }]} />
@@ -573,9 +586,6 @@ const styles = StyleSheet.create({
   head: { paddingHorizontal: 16, paddingTop: 8 },
   scrollContent: { paddingHorizontal: 16 },
 
-  toggleWell: { flexDirection: "row", borderRadius: 999, padding: 3, gap: 2 },
-  toggleKey: { height: 30, justifyContent: "center", paddingHorizontal: 12, borderRadius: 999 },
-  toggleLabel: { fontSize: 11 },
 
   weekWrap: { marginTop: 22 },
   heroWrap: { marginTop: 14 },
@@ -588,7 +598,14 @@ const styles = StyleSheet.create({
   program: { marginTop: 24 },
   programHead: { flexDirection: "row", alignItems: "center", gap: 6 },
   programHeadTap: { flex: 1, minWidth: 0, flexDirection: "row", alignItems: "center", gap: 6 },
-  programName: { flexShrink: 1 },
+  programName: {
+    flex: 1,
+    minWidth: 0,
+    fontSize: 10,
+    letterSpacing: 1.8,
+    textTransform: "uppercase",
+    paddingVertical: 4,
+  },
   programCount: { fontSize: 11, fontVariant: ["tabular-nums"] },
   programRule: { marginTop: 7, height: 1, borderRadius: 1 },
   board: { marginTop: 14 },
@@ -611,6 +628,19 @@ const styles = StyleSheet.create({
     justifyContent: "center",
   },
   addText: { fontSize: 12.5 },
+
+  browse: {
+    marginTop: 26,
+    alignSelf: "center",
+    height: 36,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 7,
+    borderWidth: 1,
+    borderRadius: 999,
+    paddingHorizontal: 16,
+  },
+  browseText: { fontSize: 12.5 },
 
   historyWrap: { marginTop: 22 },
   empty: { fontSize: 12.5, textAlign: "center", paddingVertical: 20 },

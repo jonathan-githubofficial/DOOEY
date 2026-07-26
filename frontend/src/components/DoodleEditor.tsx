@@ -13,8 +13,9 @@ import { useCardRadius } from "@/features/style/store";
 import { alpha, type Palette } from "@/lib/theme";
 import { useElevation, usePalette, useType } from "@/stores/theme";
 
-/** How close (in % of the pad) the eraser has to pass to a point to remove it. */
-const ERASE_RADIUS = 5;
+/** How close the eraser must pass to a point to lift it, in percent of the
+ * pad — this drawing surface is measured 0-100, not in pixels. */
+const ERASE_PCT = 5;
 
 /** The little drawing card: pad, four inks, pen/eraser/undo, save. The parent
  * decides where it lives (typically inside a Modal). `underlay` ghosts a
@@ -72,7 +73,7 @@ export function DoodleEditor({
     } else {
       gestureStart.current = strokesRef.current;
       setEraserAt(p);
-      setStrokes(eraseNear(strokesRef.current, p[0], p[1], ERASE_RADIUS));
+      setStrokes(eraseNear(strokesRef.current, p[0], p[1], ERASE_PCT));
     }
   };
 
@@ -85,7 +86,7 @@ export function DoodleEditor({
       });
     } else if (gestureStart.current) {
       setEraserAt(p);
-      setStrokes((s) => eraseNear(s, p[0], p[1], ERASE_RADIUS));
+      setStrokes((s) => eraseNear(s, p[0], p[1], ERASE_PCT));
     }
   };
 
@@ -158,10 +159,10 @@ export function DoodleEditor({
               style={[
                 styles.eraserDot,
                 {
-                  left: `${eraserAt[0] - ERASE_RADIUS}%`,
-                  top: `${eraserAt[1] - ERASE_RADIUS}%`,
-                  width: `${ERASE_RADIUS * 2}%`,
-                  height: `${ERASE_RADIUS * 2}%`,
+                  left: `${eraserAt[0] - ERASE_PCT}%`,
+                  top: `${eraserAt[1] - ERASE_PCT}%`,
+                  width: `${ERASE_PCT * 2}%`,
+                  height: `${ERASE_PCT * 2}%`,
                   borderColor: alpha(colors.ink, 0.5),
                   backgroundColor: alpha(colors.ink, 0.1),
                 },

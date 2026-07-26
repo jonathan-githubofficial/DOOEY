@@ -29,3 +29,36 @@ export function useDockTop(docked = true): number {
     default: ANDROID_TABS,
   });
 }
+
+/** A page's own breathing room above the safe area. */
+const PAGE_TOP = 12;
+/** What a scroller leaves under its last row so the dock never covers it. */
+const PAGE_BOTTOM = 96;
+/** Floor for the bottom inset on hardware with no home indicator. */
+const PAGE_EDGE = 16;
+
+/** Padding for a standard page.
+ *
+ * These two numbers were written out by hand in a dozen files, and had drifted
+ * into five different top paddings — 12 in most places, then 8, 14, 20 and 24
+ * where somebody nudged one and the rest never followed. One page should not
+ * start eight pixels lower than the next for no reason anybody can name.
+ *
+ * `extra` is for whatever else is floating over the bottom of *this* page: pass
+ * `useLiveBarInset()` on the tabs, where a running workout parks a bar above
+ * the dock. It is a parameter rather than a lookup because `lib/` does not get
+ * to import from `features/`. */
+export function usePagePadding(extra = 0): { paddingTop: number; paddingBottom: number } {
+  const insets = useSafeAreaInsets();
+  return {
+    paddingTop: insets.top + PAGE_TOP,
+    paddingBottom: Math.max(PAGE_EDGE, insets.bottom) + PAGE_BOTTOM + extra,
+  };
+}
+
+/** Top padding for a full-screen sheet. iOS puts its own chrome above one, so
+ * the status bar is already accounted for; Android hands it the whole screen. */
+export function useSheetTop(): number {
+  const insets = useSafeAreaInsets();
+  return Platform.OS === "ios" ? 14 : insets.top + 14;
+}

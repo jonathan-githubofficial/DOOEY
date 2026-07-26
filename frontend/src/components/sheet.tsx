@@ -11,7 +11,6 @@ import {
 } from "react-native";
 import Animated, {
   FadeIn,
-  LinearTransition,
   SlideInDown,
   withTiming,
   type EntryExitAnimationFunction,
@@ -22,7 +21,7 @@ import { PressableScale } from "@/components/pressable-scale";
 import { Eyebrow } from "@/components/surface";
 import { useCardRadius, useShadow } from "@/features/style/store";
 import { hapticTap } from "@/lib/haptics";
-import { dur, ease, timing } from "@/lib/motion";
+import { dur, ease, settle, timing } from "@/lib/motion";
 import { alpha } from "@/lib/theme";
 import {
   closeSheet,
@@ -34,7 +33,6 @@ import {
 import { useElevation, usePalette, useType } from "@/stores/theme";
 
 const WEB = Platform.OS === "web";
-const settle = LinearTransition.duration(dur.quick).easing(ease.out);
 
 /** Geometry of the popped menu. A fixed row height means it can be placed
  * before it is drawn, so it never flashes in the wrong corner first. */

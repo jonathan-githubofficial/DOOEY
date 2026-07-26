@@ -5,7 +5,6 @@ import { Gesture, GestureDetector } from "react-native-gesture-handler";
 import Animated, {
   FadeIn,
   FadeOut,
-  LinearTransition,
   runOnJS,
   useAnimatedStyle,
   useSharedValue,
@@ -21,8 +20,8 @@ import { useDayTasks, useUpdateTask } from "../api";
 import { DAY_END, DAY_START, GUTTER, SNAP, clamp, fmtMin, layoutLanes, snap } from "../timeGrid";
 import type { Task } from "../types";
 import { PageSheet } from "./AgendaSheet";
+import { settle } from "@/lib/motion";
 
-const settle = LinearTransition.springify().stiffness(420).damping(32);
 
 /** The day as a ruled sheet of hours. Blocks are paper slips pinned to their
  * slots; unscheduled work waits on a shelf above. Tap a shelf slip, then an

@@ -79,7 +79,7 @@ export interface ProgramRoutine {
   items: RoutineItem[];
 }
 
-export interface Program {
+export interface CatalogProgram {
   key: string;
   name: string;
   split: string; // one-line structure
@@ -89,7 +89,7 @@ export interface Program {
   routines: ProgramRoutine[];
 }
 
-export const PROGRAMS: Program[] = [
+export const PROGRAMS: CatalogProgram[] = [
   {
     key: "ppl",
     name: "Push / Pull / Legs",

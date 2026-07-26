@@ -2,7 +2,7 @@ import { ChevronRight, Clapperboard, LogOut, Moon, Palette, SlidersHorizontal, S
 import { useRouter } from "expo-router";
 import { useEffect, useRef } from "react";
 import { Animated, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
-import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { usePagePadding } from "@/lib/shell";
 import { AvatarDoodle } from "@/components/AvatarDoodle";
 import { DoodleSvg } from "@/components/DoodleSvg";
 import { Grain } from "@/components/grain";
@@ -22,13 +22,13 @@ import { useLiveBarInset } from "@/features/workouts/live-bar";
 export default function Account() {
   const colors = usePalette();
   const type = useType();
-  const insets = useSafeAreaInsets();
   const liveInset = useLiveBarInset();
+  const page = usePagePadding(liveInset);
   const router = useRouter();
   const user = useAuthStore((s) => s.user);
 
   return (
-    <View style={[styles.screen, { backgroundColor: colors.paper, paddingTop: insets.top + 12 }]}>
+    <View style={[styles.screen, { backgroundColor: colors.paper, paddingTop: page.paddingTop }]}>
       <Grain />
       {/* Pinned above the scroller: the space's name stays put while its
           contents run under it. */}
@@ -39,7 +39,7 @@ export default function Account() {
         showsVerticalScrollIndicator={false}
         contentContainerStyle={[
           styles.scrollContent,
-          { paddingBottom: Math.max(16, insets.bottom) + 96 + liveInset },
+          { paddingBottom: page.paddingBottom },
         ]}
       >
         <Panel style={styles.panel}>

@@ -10,21 +10,12 @@ import { useStyleStore } from "@/features/style/store";
 import { fontStyle } from "@/features/style/tokens";
 import { strokePath, type Stroke } from "@/lib/doodle";
 import { alpha, type Palette } from "@/lib/theme";
+import { SPACES } from "@/lib/spaces";
 import { useAuthStore } from "@/stores/auth";
 import { usePalette } from "@/stores/theme";
 
 // The tab labels wear Outfit, not the platform's stock sans.
 const LABEL_FONT = fontStyle("outfit", "500").fontFamily;
-
-/** The five spaces: SF symbols on iOS, material glyphs on Android — replaced
- * by your hand-drawn page doodles when "doodle icons in dock" is on. */
-const SPACES = [
-  { name: "index", label: "Planner", sf: "checklist", md: "event-note", doodle: "planner" },
-  { name: "boards", label: "Boards", sf: "square.on.square", md: "dashboard", doodle: "boards" },
-  { name: "projects", label: "Projects", sf: "folder", md: "folder", doodle: "learning" },
-  { name: "gym", label: "Gym", sf: "dumbbell", md: "fitness-center", doodle: "gym" },
-  { name: "account", label: "Account", sf: "person.crop.circle", md: "person", doodle: "account" },
-] as const;
 
 /** Every space lives behind this guard — /login is the only public route.
  * Native gets the platform's own tab bar (system materials, fonts and
@@ -46,7 +37,7 @@ export default function TabsLayout() {
     if (dockDoodles) {
       for (const space of SPACES) {
         const strokes = pageDoodles[space.doodle];
-        if (strokes?.length) doodles[space.name] = strokes;
+        if (strokes?.length) doodles[space.route] = strokes;
       }
     }
 
@@ -70,9 +61,9 @@ export default function TabsLayout() {
             : { blurEffect: "systemChromeMaterial" as const })}
         >
           {SPACES.map((space) => {
-            const uri = doodles[space.name] ? icons[space.name] : undefined;
+            const uri = doodles[space.route] ? icons[space.route] : undefined;
             return (
-              <NativeTabs.Trigger key={space.name} name={space.name}>
+              <NativeTabs.Trigger key={space.route} name={space.route}>
                 {uri ? (
                   // __keepColor rides through our expo-router patch (see
                   // patches/) so the bar shows the doodle's real inks instead

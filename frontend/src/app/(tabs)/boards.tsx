@@ -1,7 +1,7 @@
 import { useRouter } from "expo-router";
 import { Pencil, Plus, Trash2 } from "lucide-react-native";
 import { Image, ScrollView, StyleSheet, Text, View, useWindowDimensions } from "react-native";
-import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { usePagePadding } from "@/lib/shell";
 import { DotsButton } from "@/components/dots-button";
 import { Grain } from "@/components/grain";
 import { Masthead } from "@/components/Masthead";
@@ -40,8 +40,8 @@ function columnsFor(width: number): number {
 export default function Boards() {
   const colors = usePalette();
   const type = useType();
-  const insets = useSafeAreaInsets();
   const liveInset = useLiveBarInset();
+  const page = usePagePadding(liveInset);
   const router = useRouter();
   const radius = useCardRadius();
   const { width } = useWindowDimensions();
@@ -57,7 +57,7 @@ export default function Boards() {
     });
 
   return (
-    <View style={[styles.screen, { backgroundColor: colors.paper, paddingTop: insets.top + 12 }]}>
+    <View style={[styles.screen, { backgroundColor: colors.paper, paddingTop: page.paddingTop }]}>
       <Grain />
       {/* Pinned above the scroller: the space's name stays put while its
           contents run under it. */}
@@ -68,7 +68,7 @@ export default function Boards() {
         showsVerticalScrollIndicator={false}
         contentContainerStyle={[
           styles.scrollContent,
-          { paddingBottom: Math.max(16, insets.bottom) + 96 + liveInset },
+          { paddingBottom: page.paddingBottom },
         ]}
       >
         <View style={styles.grid}>

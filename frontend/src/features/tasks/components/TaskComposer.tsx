@@ -18,7 +18,6 @@ import Animated, {
   Easing,
   FadeIn,
   FadeOut,
-  LinearTransition,
   SlideInDown,
   SlideOutDown,
 } from "react-native-reanimated";
@@ -36,6 +35,7 @@ import { alpha } from "@/lib/theme";
 import { usePalette, useType } from "@/stores/theme";
 import { useCreateTask } from "../api";
 import { fmtMin } from "../timeGrid";
+import { settle } from "@/lib/motion";
 
 const minsOf = (d: Date) => d.getHours() * 60 + d.getMinutes();
 const dateAtMin = (m: number) => {
@@ -364,7 +364,7 @@ export function ComposerForm({
       )}
 
       {showNotes && (
-        <Animated.View entering={FadeIn.duration(180)} layout={LinearTransition.springify().stiffness(400).damping(34)}>
+        <Animated.View entering={FadeIn.duration(180)} layout={settle}>
           <TextInput
             value={notes}
             onChangeText={setNotes}

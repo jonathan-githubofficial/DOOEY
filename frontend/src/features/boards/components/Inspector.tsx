@@ -81,7 +81,7 @@ export function Inspector({
         >
           {item.kind === "note" &&
             NOTE_COLORS.map((c) => (
-              <Swatch
+              <ColorDot
                 key={c}
                 color={colors[c]}
                 ring={colors.ink}
@@ -93,7 +93,7 @@ export function Inspector({
 
           {item.kind === "section" &&
             SECTION_COLORS.map((c) => (
-              <Swatch
+              <ColorDot
                 key={c}
                 color={colors[c]}
                 ring={colors.ink}
@@ -256,7 +256,7 @@ export function Inspector({
   );
 }
 
-function Swatch({
+function ColorDot({
   color,
   ring,
   on,
@@ -275,7 +275,7 @@ function Swatch({
       accessibilityLabel={label}
       accessibilityState={{ selected: on }}
       onPress={onPress}
-      style={[styles.swatch, { backgroundColor: color }, on && { borderWidth: 2, borderColor: alpha(ring, 0.45) }]}
+      style={[styles.dot, { backgroundColor: color }, on && { borderWidth: 2, borderColor: alpha(ring, 0.45) }]}
     />
   );
 }
@@ -321,7 +321,7 @@ const styles = StyleSheet.create({
     paddingLeft: 8,
   },
   row: { flexDirection: "row", alignItems: "center", gap: 4, paddingVertical: 6, paddingRight: 6 },
-  swatch: { height: 24, width: 24, borderRadius: 999 },
+  dot: { height: 24, width: 24, borderRadius: 999 },
   emoji: {
     height: 30,
     width: 30,

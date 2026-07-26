@@ -12,13 +12,15 @@ import {
   TextInput,
   View,
 } from "react-native";
-import Animated, { FadeIn, SlideInDown } from "react-native-reanimated";
+import Animated, { FadeIn } from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { useSheetTop } from "@/lib/shell";
 import { Grain } from "@/components/grain";
 import { Plate } from "@/components/plate";
 import { PressableScale } from "@/components/pressable-scale";
 import { Eyebrow } from "@/components/surface";
 import { hapticTap } from "@/lib/haptics";
+import { fall, rise } from "@/lib/motion";
 import { alpha } from "@/lib/theme";
 import { usePalette, useType } from "@/stores/theme";
 import {
@@ -57,6 +59,7 @@ export function ExercisePicker({
   const colors = usePalette();
   const type = useType();
   const insets = useSafeAreaInsets();
+  const sheetTop = useSheetTop();
   const [query, setQuery] = useState("");
   const [openGroup, setOpenGroup] = useState<string | null>(null);
   const [selected, setSelected] = useState<Set<string>>(new Set());
@@ -140,7 +143,7 @@ export function ExercisePicker({
       <View
         style={[
           styles.sheet,
-          { backgroundColor: colors.paper, paddingTop: Platform.OS === "ios" ? 14 : insets.top + 14 },
+          { backgroundColor: colors.paper, paddingTop: sheetTop },
         ]}
       >
         <Grain />
@@ -256,7 +259,8 @@ export function ExercisePicker({
         {/* The batch bar — rides in once something's picked. */}
         {onAdd && selected.size > 0 && (
           <Animated.View
-            entering={SlideInDown.springify().stiffness(300).damping(28)}
+            entering={rise()}
+            exiting={fall()}
             style={[styles.addBar, { paddingBottom: insets.bottom + 12 }]}
           >
             <Plate
@@ -468,6 +472,25 @@ function ExerciseDetail({
         )}
       </ScrollView>
     </Animated.View>
+  );
+}
+
+/** The same exercise page the library shows, on its own, for anywhere outside
+ * the picker that has a `libId` and a reason to show it — the session log's
+ * thumbnails, mainly. Renders nothing for an exercise that isn't in the
+ * library, which is how a hand-typed exercise ends up with no page. */
+export function ExerciseSheet({ libId, onClose }: { libId?: string; onClose: () => void }) {
+  const exercise = libraryExercise(libId);
+  if (!exercise) return null;
+  return (
+    <Modal
+      visible
+      animationType="slide"
+      presentationStyle={Platform.OS === "ios" ? "pageSheet" : "fullScreen"}
+      onRequestClose={onClose}
+    >
+      <ExerciseDetail exercise={exercise} selected={false} onBack={onClose} />
+    </Modal>
   );
 }
 

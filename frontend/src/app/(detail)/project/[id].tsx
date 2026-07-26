@@ -2,31 +2,31 @@ import { useLocalSearchParams, useRouter } from "expo-router";
 import { ChevronLeft, FileText } from "lucide-react-native";
 import { useState } from "react";
 import { Modal, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
-import Animated, { FadeIn, LinearTransition } from "react-native-reanimated";
-import { useSafeAreaInsets } from "react-native-safe-area-context";
+import Animated, { FadeIn } from "react-native-reanimated";
+import { usePagePadding } from "@/lib/shell";
 import { Check } from "@/components/Check";
 import { Grain } from "@/components/grain";
 import { PressableScale } from "@/components/pressable-scale";
 import { Eyebrow, Panel } from "@/components/surface";
-import { hueColor, useProgram } from "@/features/learning/api";
+import { hueColor, useLearningProgram } from "@/features/learning/api";
 import { fontStyle } from "@/features/style/tokens";
 import { useProjectTasks, useUpdateTask } from "@/features/tasks/api";
 import type { Task } from "@/features/tasks/types";
 import { dateOnly, toLocalNoon } from "@/lib/dates";
 import { alpha } from "@/lib/theme";
 import { usePalette, useType } from "@/stores/theme";
+import { settle } from "@/lib/motion";
 
-const settle = LinearTransition.springify().stiffness(420).damping(32);
 
 /** One program's folder, opened: the goal and why, the runway of sessions
  * (ordinary tasks — tick them here or anywhere), and the source files. */
 export default function ProjectPage() {
   const colors = usePalette();
   const type = useType();
-  const insets = useSafeAreaInsets();
+  const page = usePagePadding();
   const router = useRouter();
   const { id } = useLocalSearchParams<{ id: string }>();
-  const { data: program } = useProgram(id);
+  const { data: program } = useLearningProgram(id);
   const { data: tasks } = useProjectTasks(id);
   const [reading, setReading] = useState<string | null>(null);
 
@@ -36,7 +36,7 @@ export default function ProjectPage() {
   const files = Object.keys(program?.files ?? {});
 
   return (
-    <View style={[styles.screen, { backgroundColor: colors.paper, paddingTop: insets.top + 12 }]}>
+    <View style={[styles.screen, { backgroundColor: colors.paper, paddingTop: page.paddingTop }]}>
       <Grain />
       {/* Pinned above the scroller: the way back stays put while the program
           runs under it. */}
@@ -54,7 +54,7 @@ export default function ProjectPage() {
         showsVerticalScrollIndicator={false}
         contentContainerStyle={[
           styles.scrollContent,
-          { paddingBottom: Math.max(16, insets.bottom) + 96 },
+          { paddingBottom: page.paddingBottom },
         ]}
       >
         {program && (
@@ -124,7 +124,7 @@ export default function ProjectPage() {
 
       {/* A source file, readable full-screen. */}
       <Modal visible={!!reading} animationType="slide" onRequestClose={() => setReading(null)}>
-        <View style={[styles.reader, { backgroundColor: colors.paper, paddingTop: insets.top + 12 }]}>
+        <View style={[styles.reader, { backgroundColor: colors.paper, paddingTop: page.paddingTop }]}>
           <Grain />
           <View style={styles.readerHead}>
             <Text style={[styles.readerTitle, type.display, { color: colors.ink }]}>{reading}</Text>

@@ -10,8 +10,8 @@ import {
   TextInput,
   View,
 } from "react-native";
-import Animated, { FadeIn, LinearTransition } from "react-native-reanimated";
-import { useSafeAreaInsets } from "react-native-safe-area-context";
+import Animated, { FadeIn } from "react-native-reanimated";
+import { usePagePadding } from "@/lib/shell";
 import { Grain } from "@/components/grain";
 import { PressableScale } from "@/components/pressable-scale";
 import { Eyebrow, Panel } from "@/components/surface";
@@ -31,11 +31,12 @@ import { exerciseGif, libraryExercise } from "@/features/workouts/library";
 import { formatRest, useWorkoutPrefs } from "@/features/workouts/store";
 import type { RoutineItem } from "@/features/workouts/types";
 import { confirmDestructive } from "@/lib/confirm";
+import { Stepper } from "@/components/stepper";
 import { hapticTap } from "@/lib/haptics";
 import { alpha } from "@/lib/theme";
 import { usePalette, useType } from "@/stores/theme";
+import { settle } from "@/lib/motion";
 
-const settle = LinearTransition.springify().stiffness(400).damping(32);
 
 /** The routine editor: name the plan, stack exercises with their set/rep/
  * weight targets, reorder, done — every change saves itself. */
@@ -43,7 +44,7 @@ export default function RoutineEditor() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const colors = usePalette();
   const type = useType();
-  const insets = useSafeAreaInsets();
+  const page = usePagePadding();
   const router = useRouter();
   const unit = useWorkoutPrefs((s) => s.unit);
   const defaultRest = useWorkoutPrefs((s) => s.restSeconds);
@@ -136,7 +137,7 @@ export default function RoutineEditor() {
     );
 
   return (
-    <View style={[styles.screen, { backgroundColor: colors.paper, paddingTop: insets.top + 12 }]}>
+    <View style={[styles.screen, { backgroundColor: colors.paper, paddingTop: page.paddingTop }]}>
       <Grain />
       {/* Pinned above the scroller: the way back stays put while the routine
           runs under it. */}
@@ -154,7 +155,7 @@ export default function RoutineEditor() {
         showsVerticalScrollIndicator={false}
         contentContainerStyle={[
           styles.scrollContent,
-          { paddingBottom: Math.max(16, insets.bottom) + 96 },
+          { paddingBottom: page.paddingBottom },
         ]}
       >
         <Panel style={[styles.hero, { backgroundColor: ink.field }]}>
@@ -321,59 +322,6 @@ function IconTap({
   );
 }
 
-/** − n + with a tracked-caps label — targets set with taps, not typing. */
-function Stepper({
-  label,
-  value,
-  display,
-  min,
-  step = 1,
-  onChange,
-}: {
-  label: string;
-  value: number;
-  display?: string;
-  min: number;
-  step?: number;
-  onChange: (v: number) => void;
-}) {
-  const colors = usePalette();
-  const type = useType();
-  return (
-    <View style={styles.stepper}>
-      <Text style={[styles.stepperLabel, type.sansMedium, { color: colors.inkMuted }]}>{label}</Text>
-      <View style={[styles.stepperWell, { backgroundColor: alpha(colors.ink, 0.05) }]}>
-        <PressableScale
-          scaleTo={0.8}
-          accessibilityLabel={`Fewer ${label}`}
-          onPress={() => {
-            hapticTap();
-            onChange(Math.max(min, value - step));
-          }}
-          style={styles.stepBtn}
-        >
-          <Text style={[styles.stepSign, type.sansMedium, { color: colors.inkMuted }]}>−</Text>
-        </PressableScale>
-        <Text style={[styles.stepValue, type.sansSemiBold, { color: colors.ink }]}>
-          {display ?? value}
-        </Text>
-        <PressableScale
-          scaleTo={0.8}
-          accessibilityLabel={`More ${label}`}
-          onPress={() => {
-            hapticTap();
-            onChange(value + step);
-          }}
-          style={styles.stepBtn}
-        >
-          <Text style={[styles.stepSign, type.sansMedium, { color: colors.inkMuted }]}>+</Text>
-        </PressableScale>
-      </View>
-    </View>
-  );
-}
-
-/** Target weight — typed, since plates aren't stepped evenly. */
 function WeightField({
   unit,
   value,
@@ -515,26 +463,6 @@ const styles = StyleSheet.create({
     fontSize: 9.5,
     letterSpacing: 1.6,
     textTransform: "uppercase",
-  },
-  stepperWell: {
-    flexDirection: "row",
-    alignItems: "center",
-    borderRadius: 10,
-  },
-  stepBtn: {
-    height: 34,
-    width: 32,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  stepSign: {
-    fontSize: 16,
-  },
-  stepValue: {
-    minWidth: 28,
-    textAlign: "center",
-    fontSize: 14.5,
-    fontVariant: ["tabular-nums"],
   },
   weightInput: {
     height: 34,

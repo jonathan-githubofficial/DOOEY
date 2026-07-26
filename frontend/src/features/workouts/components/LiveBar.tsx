@@ -3,24 +3,23 @@ import { useEffect } from "react";
 import { Platform, StyleSheet, Text, View } from "react-native";
 import { Gesture, GestureDetector } from "react-native-gesture-handler";
 import Animated, {
-  Easing,
   FadeIn,
-  FadeInDown,
   FadeOut,
   interpolate,
   runOnJS,
   useAnimatedStyle,
   useSharedValue,
   withRepeat,
-  withSequence,
   withTiming,
 } from "react-native-reanimated";
+import Svg, { Rect } from "react-native-svg";
 import { Grain } from "@/components/grain";
 import { PressableScale } from "@/components/pressable-scale";
 import { useShadow } from "@/features/style/store";
 import { fontStyle } from "@/features/style/tokens";
 import { confirmDestructive } from "@/lib/confirm";
 import { hapticLift, hapticSuccess, hapticTap } from "@/lib/haptics";
+import { ambient, arrive, dur, timing } from "@/lib/motion";
 import { FRAME_W } from "@/lib/shell";
 import { alpha } from "@/lib/theme";
 import { usePalette, useType } from "@/stores/theme";
@@ -31,8 +30,6 @@ import { formatElapsed, workoutElapsed, workoutSetsDone, type Workout } from "..
 
 /** How far you have to fling before the bar tucks to that edge. */
 const TUCK_AT = 84;
-/** Motion settles, it never bounces — eased returns, no spring overshoot. */
-const EASE = { duration: 220, easing: Easing.out(Easing.cubic) };
 
 /** The session that follows you around: a floating island above the dock while
  * a workout is open, on every page. Pause and finish live on it, the clock is
@@ -44,12 +41,18 @@ export function LiveBar({
   onOpen,
   onPause,
   onFinish,
+  onDiscard,
 }: {
   workout: Workout;
   bottom: number;
   onOpen: () => void;
   onPause: () => void;
   onFinish: () => void;
+  /** Finishing a session with nothing in it. The session page offers to throw
+   * it away rather than file it; the bar has to make the same offer, or the
+   * same tap from two places gives two different results — and history fills
+   * with empty sessions that are the reason "last time" comes up blank. */
+  onDiscard: () => void;
 }) {
   const colors = usePalette();
   const type = useType();
@@ -83,8 +86,19 @@ export function LiveBar({
     opacity: interpolate(Math.abs(x.value), [0, TUCK_AT], [1, 0.72], "clamp"),
   }));
 
+  const done = workoutSetsDone(workout.entries);
+
   const finish = () => {
     hapticTap();
+    if (done === 0) {
+      confirmDestructive(
+        "Nothing logged yet",
+        "Finish anyway? This session will be discarded.",
+        "Discard session",
+        onDiscard,
+      );
+      return;
+    }
     confirmDestructive("Finish workout?", `${clock} logged.`, "Finish", () => {
       hapticSuccess();
       onFinish();
@@ -103,7 +117,7 @@ export function LiveBar({
         runOnJS(tuck)(x.value < 0 ? "left" : "right");
         x.value = 0;
       } else {
-        x.value = withTiming(0, EASE);
+        x.value = withTiming(0, timing(dur.moved));
       }
     });
 
@@ -112,7 +126,7 @@ export function LiveBar({
       <View pointerEvents="box-none" style={[styles.layer, { bottom }]}>
         <View pointerEvents="box-none" style={styles.frame}>
           <Animated.View
-            entering={FadeIn.duration(200)}
+            entering={FadeIn.duration(dur.moved)}
             style={[styles.puckRow, tucked === "left" ? styles.puckLeft : styles.puckRight]}
           >
             <PressableScale
@@ -125,7 +139,7 @@ export function LiveBar({
               style={[styles.puck, island]}
             >
               <Grain radius={999} />
-              <LiveDot color={accent} paused={paused} />
+              <LiftGlyph color={accent} paused={paused} />
               <Text style={[styles.puckClock, fontStyle("fraunces", "700"), { color: accent }]}>
                 {clock}
               </Text>
@@ -136,15 +150,13 @@ export function LiveBar({
     );
   }
 
-  const sets = workoutSetsDone(workout.entries);
-
   return (
     <View pointerEvents="box-none" style={[styles.layer, { bottom }]}>
       <View pointerEvents="box-none" style={styles.frame}>
         <GestureDetector gesture={fling}>
           <Animated.View
-            entering={FadeInDown.duration(260)}
-            exiting={FadeOut.duration(160)}
+            entering={arrive()}
+            exiting={FadeOut.duration(dur.quick)}
             style={[styles.bar, island, drag]}
           >
             <Grain radius={999} />
@@ -154,7 +166,7 @@ export function LiveBar({
               onPress={onOpen}
               style={styles.body}
             >
-              <LiveDot color={accent} paused={paused} />
+              <LiftGlyph color={accent} paused={paused} />
               <View style={styles.text}>
                 <Text
                   numberOfLines={1}
@@ -163,7 +175,7 @@ export function LiveBar({
                   {workout.title}
                 </Text>
                 <Text numberOfLines={1} style={[styles.sub, type.sans, { color: colors.inkMuted }]}>
-                  {paused ? "paused" : sets === 0 ? "nothing logged yet" : `${sets} sets logged`}
+                  {paused ? "paused" : done === 0 ? "nothing logged yet" : `${done} sets logged`}
                 </Text>
               </View>
               <Text style={[styles.clock, fontStyle("fraunces", "700"), { color: accent }]}>
@@ -197,26 +209,54 @@ export function LiveBar({
   );
 }
 
-/** Breathing while the clock runs, still while it doesn't — the one cue you
- * can read without looking straight at the bar. */
-function LiveDot({ color, paused }: { color: string; paused: boolean }) {
-  const pulse = useSharedValue(1);
+/** The glyph's box, and how far the bell travels inside it. */
+const GLYPH = 18;
+const BELL_H = 12;
+const TRAVEL = 5;
+
+/** A dumbbell doing slow reps while the clock runs, racked at the bottom of
+ * its travel while it doesn't.
+ *
+ * This was a pulsing dot, which is what every app in the world puts next to
+ * the word "live" — it told you a timer was going but nothing about what for.
+ * A bell lifting says *workout* at a glance, from the corner of your eye,
+ * without a word of label.
+ *
+ * The rep is a full `ambient.breath` each way, so a whole cycle is a bit over
+ * two seconds: the pace of something being lifted deliberately, not shaken.
+ * Nothing here overshoots at the top — the point of the eccentric half is that
+ * it comes down under control. */
+function LiftGlyph({ color, paused }: { color: string; paused: boolean }) {
+  // 0 racked, 1 at the top of the rep.
+  const lift = useSharedValue(0);
   useEffect(() => {
     if (paused) {
-      pulse.value = withTiming(1, { duration: 240 });
+      lift.value = withTiming(0, timing());
       return;
     }
-    pulse.value = withRepeat(
-      withSequence(
-        withTiming(0.55, { duration: 1100, easing: Easing.inOut(Easing.sin) }),
-        withTiming(1, { duration: 1100, easing: Easing.inOut(Easing.sin) }),
-      ),
-      -1,
-      false,
-    );
-  }, [paused, pulse]);
-  const style = useAnimatedStyle(() => ({ opacity: pulse.value }));
-  return <Animated.View style={[styles.dot, { backgroundColor: color }, style]} />;
+    lift.value = withRepeat(withTiming(1, ambient.breath), -1, true);
+  }, [paused, lift]);
+
+  // Animating the wrapper's transform rather than the SVG's own attributes
+  // keeps the whole thing on the UI thread and behaves the same on the web,
+  // where the SVG is a DOM node and its props are not shared values.
+  const rep = useAnimatedStyle(() => ({
+    transform: [{ translateY: TRAVEL * (0.5 - lift.value) }],
+  }));
+
+  return (
+    <View style={styles.glyph}>
+      <Animated.View style={rep}>
+        <Svg width={GLYPH} height={BELL_H} viewBox="0 0 18 12">
+          {/* Two bells and the bar between them. Three shapes is all that
+              survives being 18 points wide. */}
+          <Rect x={1.6} y={1.4} width={3.2} height={9.2} rx={1.3} fill={color} />
+          <Rect x={4.4} y={5.1} width={9.2} height={1.8} rx={0.9} fill={color} />
+          <Rect x={13.2} y={1.4} width={3.2} height={9.2} rx={1.3} fill={color} />
+        </Svg>
+      </Animated.View>
+    </View>
+  );
 }
 
 function Round({
@@ -270,8 +310,9 @@ const styles = StyleSheet.create({
     paddingRight: 8,
     gap: 8,
   },
-  body: { flex: 1, flexDirection: "row", alignItems: "center", gap: 11 },
-  dot: { width: 9, height: 9, borderRadius: 999 },
+  body: { flex: 1, flexDirection: "row", alignItems: "center", gap: 10 },
+  // A fixed box, so the bell travelling inside it never nudges the title.
+  glyph: { width: GLYPH, height: GLYPH, alignItems: "center", justifyContent: "center" },
   text: { flex: 1 },
   title: { fontSize: 14.5, letterSpacing: -0.2 },
   sub: { fontSize: 11, marginTop: 1 },

@@ -1,7 +1,7 @@
 import { useRouter } from "expo-router";
 import { ScrollView, StyleSheet, Text, View } from "react-native";
 import Animated, { FadeInDown } from "react-native-reanimated";
-import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { usePagePadding } from "@/lib/shell";
 import { Grain } from "@/components/grain";
 import { Masthead } from "@/components/Masthead";
 import { PressableScale } from "@/components/pressable-scale";
@@ -9,8 +9,8 @@ import { Eyebrow, Panel } from "@/components/surface";
 import {
   hueColor,
   useMaterializePrograms,
-  usePrograms,
-  type Program,
+  useLearningPrograms,
+  type LearningProgram,
 } from "@/features/learning/api";
 import { PageDoodle } from "@/features/style/components/PageDoodle";
 import { useProjectTasks } from "@/features/tasks/api";
@@ -24,15 +24,15 @@ import { useLiveBarInset } from "@/features/workouts/live-bar";
 export default function Projects() {
   const colors = usePalette();
   const type = useType();
-  const insets = useSafeAreaInsets();
   const liveInset = useLiveBarInset();
-  const { data: programs, isPending } = usePrograms();
+  const page = usePagePadding(liveInset);
+  const { data: programs, isPending } = useLearningPrograms();
   // A program pushed from a Claude Code session arrives as a record with no
   // tasks behind it. This is where its sessions become real work.
   useMaterializePrograms(programs);
 
   return (
-    <View style={[styles.screen, { backgroundColor: colors.paper, paddingTop: insets.top + 12 }]}>
+    <View style={[styles.screen, { backgroundColor: colors.paper, paddingTop: page.paddingTop }]}>
       <Grain />
       {/* Pinned above the scroller: the space's name stays put while its
           contents run under it. */}
@@ -43,7 +43,7 @@ export default function Projects() {
         showsVerticalScrollIndicator={false}
         contentContainerStyle={[
           styles.scrollContent,
-          { paddingBottom: Math.max(16, insets.bottom) + 96 + liveInset },
+          { paddingBottom: page.paddingBottom },
         ]}
       >
         {programs?.length === 0 && !isPending && (
@@ -73,7 +73,7 @@ export default function Projects() {
 
 /** A program as a file folder: the tab up top, the goal on the label, progress
  * across the bottom. */
-function FolderCard({ program }: { program: Program }) {
+function FolderCard({ program }: { program: LearningProgram }) {
   const colors = usePalette();
   const type = useType();
   const router = useRouter();

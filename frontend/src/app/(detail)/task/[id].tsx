@@ -21,8 +21,8 @@ import {
   TextInput,
   View,
 } from "react-native";
-import Animated, { FadeIn, FadeOut, LinearTransition } from "react-native-reanimated";
-import { useSafeAreaInsets } from "react-native-safe-area-context";
+import Animated, { FadeIn, FadeOut } from "react-native-reanimated";
+import { usePagePadding } from "@/lib/shell";
 import { Check } from "@/components/Check";
 import { Grain } from "@/components/grain";
 import { PressableScale } from "@/components/pressable-scale";
@@ -34,21 +34,21 @@ import { dateOnly, toLocalNoon } from "@/lib/dates";
 import { hapticTap } from "@/lib/haptics";
 import { alpha } from "@/lib/theme";
 import { usePalette, useType } from "@/stores/theme";
+import { settle } from "@/lib/motion";
 
-const settle = LinearTransition.springify().stiffness(420).damping(32);
 
 /** A task's page: the same fixed, structured sections as the web app — notes,
  * checklist, resources, attachments. Every edit saves as you leave the field. */
 export default function TaskPage() {
   const colors = usePalette();
-  const insets = useSafeAreaInsets();
+  const page = usePagePadding();
   const router = useRouter();
   const { id } = useLocalSearchParams<{ id: string }>();
   const { data: task } = useTask(id);
   const del = useDeleteTask();
 
   return (
-    <View style={[styles.screen, { backgroundColor: colors.paper, paddingTop: insets.top + 12 }]}>
+    <View style={[styles.screen, { backgroundColor: colors.paper, paddingTop: page.paddingTop }]}>
       <Grain />
       {/* Pinned above the scroller: the way back and the bin stay put while
           the task's page runs under them. */}
@@ -80,7 +80,7 @@ export default function TaskPage() {
         showsVerticalScrollIndicator={false}
         contentContainerStyle={[
           styles.scrollContent,
-          { paddingBottom: Math.max(16, insets.bottom) + 96 },
+          { paddingBottom: page.paddingBottom },
         ]}
         keyboardShouldPersistTaps="handled"
       >

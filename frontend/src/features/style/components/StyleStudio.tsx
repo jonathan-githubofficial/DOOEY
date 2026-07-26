@@ -5,7 +5,7 @@ import { LinearGradient } from "expo-linear-gradient";
 import { ImagePlus, Pencil, Plus, RotateCcw, X } from "lucide-react-native";
 import { useState } from "react";
 import { Image, Pressable, StyleSheet, Text, View } from "react-native";
-import Animated, { FadeIn, FadeOut, LinearTransition } from "react-native-reanimated";
+import Animated, { FadeIn, FadeOut } from "react-native-reanimated";
 import { DoodleEditor } from "@/components/DoodleEditor";
 import { DoodleSvg } from "@/components/DoodleSvg";
 import type { Stroke } from "@/lib/doodle";
@@ -14,6 +14,7 @@ import { PressableScale } from "@/components/pressable-scale";
 import { Eyebrow, Panel, Stamp, StampButton } from "@/components/surface";
 import { alpha, type Palette } from "@/lib/theme";
 import { usePalette, useThemeStore, useType } from "@/stores/theme";
+import { settle } from "@/lib/motion";
 import { BASE, useStyleStore } from "../store";
 import {
   BACKDROPS,
@@ -31,7 +32,6 @@ import {
   type Mode,
 } from "../tokens";
 
-const settle = LinearTransition.springify().stiffness(400).damping(34);
 
 /** The theme creator: recolour, refont and reshape the whole app, live —
  * the mobile counterpart of the web Style studio. (The photo backdrop stays

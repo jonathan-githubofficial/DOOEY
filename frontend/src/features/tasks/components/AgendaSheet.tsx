@@ -16,7 +16,6 @@ import Animated, {
   Easing,
   FadeIn,
   FadeOut,
-  LinearTransition,
   runOnJS,
   useAnimatedReaction,
   useAnimatedStyle,
@@ -40,8 +39,8 @@ import { usePalette, useType } from "@/stores/theme";
 import { useDayTasks, useDeleteTask, useUpdateTask } from "../api";
 import type { Task } from "../types";
 import { BINDING_INSET, RING_COUNT } from "./PlannerBook";
+import { settle } from "@/lib/motion";
 
-const settle = LinearTransition.springify().stiffness(420).damping(32);
 const ROW_H = 56;
 const CHECK_LINE_H = 26; // one checklist line tucked under the title
 const REVEAL_W = 72; // how far a row swipes left to bare its delete

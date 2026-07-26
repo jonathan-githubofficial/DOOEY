@@ -1,12 +1,13 @@
 import { useRouter } from "expo-router";
 import { ChevronLeft, Dumbbell } from "lucide-react-native";
 import { Pressable, ScrollView, StyleSheet, Switch, Text, View } from "react-native";
-import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { usePagePadding } from "@/lib/shell";
 import { Grain } from "@/components/grain";
 import { Masthead } from "@/components/Masthead";
 import { PressableScale } from "@/components/pressable-scale";
 import { Panel } from "@/components/surface";
 import { formatRest, useWorkoutPrefs, type Gender, type WeightUnit } from "@/features/workouts/store";
+import { Stepper } from "@/components/stepper";
 import { hapticTap } from "@/lib/haptics";
 import { alpha } from "@/lib/theme";
 import { usePalette, useType } from "@/stores/theme";
@@ -15,11 +16,11 @@ import { usePalette, useType } from "@/stores/theme";
  * other spaces can hang their settings here later. */
 export default function Preferences() {
   const colors = usePalette();
-  const insets = useSafeAreaInsets();
+  const page = usePagePadding();
   const router = useRouter();
 
   return (
-    <View style={[styles.screen, { backgroundColor: colors.paper, paddingTop: insets.top + 12 }]}>
+    <View style={[styles.screen, { backgroundColor: colors.paper, paddingTop: page.paddingTop }]}>
       <Grain />
       {/* Pinned above the scroller: the way back and the page's name stay put
           while the settings run under them. */}
@@ -38,7 +39,7 @@ export default function Preferences() {
         showsVerticalScrollIndicator={false}
         contentContainerStyle={[
           styles.scrollContent,
-          { paddingBottom: Math.max(16, insets.bottom) + 96 },
+          { paddingBottom: page.paddingBottom },
         ]}
       >
         <GymPrefs />
@@ -109,6 +110,7 @@ function GymPrefs() {
         {/* Default rest — the value a new exercise starts with. */}
         <Row label="Default rest" hint="New exercises start with this rest.">
           <Stepper
+            name="rest"
             value={restSeconds}
             display={formatRest(restSeconds)}
             step={15}
@@ -217,48 +219,6 @@ function Segmented<T extends string>({
   );
 }
 
-function Stepper({
-  value,
-  display,
-  step,
-  min,
-  onChange,
-}: {
-  value: number;
-  display: string;
-  step: number;
-  min: number;
-  onChange: (v: number) => void;
-}) {
-  const colors = usePalette();
-  const type = useType();
-  return (
-    <View style={[styles.stepper, { backgroundColor: alpha(colors.ink, 0.06) }]}>
-      <Pressable
-        accessibilityLabel="Less rest"
-        onPress={() => {
-          hapticTap();
-          onChange(Math.max(min, value - step));
-        }}
-        style={styles.stepBtn}
-      >
-        <Text style={[styles.stepSign, type.sansMedium, { color: colors.inkMuted }]}>−</Text>
-      </Pressable>
-      <Text style={[styles.stepValue, type.sansSemiBold, { color: colors.ink }]}>{display}</Text>
-      <Pressable
-        accessibilityLabel="More rest"
-        onPress={() => {
-          hapticTap();
-          onChange(value + step);
-        }}
-        style={styles.stepBtn}
-      >
-        <Text style={[styles.stepSign, type.sansMedium, { color: colors.inkMuted }]}>+</Text>
-      </Pressable>
-    </View>
-  );
-}
-
 const styles = StyleSheet.create({
   screen: {
     flex: 1,
@@ -339,25 +299,5 @@ const styles = StyleSheet.create({
   segmentText: {
     fontSize: 13,
     letterSpacing: 0.4,
-  },
-  stepper: {
-    flexDirection: "row",
-    alignItems: "center",
-    borderRadius: 10,
-  },
-  stepBtn: {
-    height: 36,
-    width: 34,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  stepSign: {
-    fontSize: 17,
-  },
-  stepValue: {
-    minWidth: 44,
-    textAlign: "center",
-    fontSize: 14.5,
-    fontVariant: ["tabular-nums"],
   },
 });

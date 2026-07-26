@@ -54,8 +54,9 @@ import { InkCanvas } from "./InkCanvas";
 import { Inspector } from "./Inspector";
 import { ToolShelf, type PlaceSpec } from "./ToolShelf";
 
-/** How far the eraser reaches, in canvas px. */
-const ERASE_RADIUS = 14;
+/** How far the eraser reaches, in canvas px. Not the same quantity as the
+ * doodle pad's percentage reach, which is why it is not the same name. */
+const ERASE_PX = 14;
 /** Canvas px between recorded points while drawing. Below this a stroke gains
  * weight and no detail. */
 const INK_STEP = 2;
@@ -428,7 +429,7 @@ export function BoardCanvas({ board }: { board: Moodboard }) {
   );
 
   const rub = useCallback((x: number, y: number) => {
-    liveDoodle(eraseNear(useCanvasStore.getState().doodle, x, y, ERASE_RADIUS));
+    liveDoodle(eraseNear(useCanvasStore.getState().doodle, x, y, ERASE_PX));
   }, []);
 
   const drawGesture = Gesture.Pan()
@@ -452,7 +453,7 @@ export function BoardCanvas({ board }: { board: Moodboard }) {
       if (erasing) {
         // Rubbing out rebuilds the stroke list, which is real work: only ask
         // for it once the eraser has actually moved somewhere new.
-        if (Math.abs(px - rubbedX.value) + Math.abs(py - rubbedY.value) > ERASE_RADIUS / 3) {
+        if (Math.abs(px - rubbedX.value) + Math.abs(py - rubbedY.value) > ERASE_PX / 3) {
           rubbedX.value = px;
           rubbedY.value = py;
           runOnJS(rub)(px, py);

@@ -26,7 +26,7 @@ function toRoutine(r: RecordModel): Routine {
   };
 }
 
-function toProgram(r: RecordModel): WorkoutProgram {
+function toWorkoutProgram(r: RecordModel): WorkoutProgram {
   return {
     id: r.id,
     name: r.name,
@@ -60,14 +60,14 @@ export function useRoutines() {
   });
 }
 
-export function usePrograms() {
+export function useWorkoutPrograms() {
   const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
   return useQuery({
     queryKey: gymKeys.programs,
     enabled: isAuthenticated,
     queryFn: async () => {
       const list = await pb.collection("workout_programs").getFullList({ sort: "position,created" });
-      return list.map(toProgram);
+      return list.map(toWorkoutProgram);
     },
   });
 }
@@ -379,18 +379,36 @@ export function emptySet(): WorkoutSet {
 
 /** What you lifted last time, per exercise name — the ghost values that make
  * logging two taps instead of typing. Derived from finished sessions, newest
- * first; a client-side scan is nothing at one user's scale. */
+ * first; a client-side scan is nothing at one user's scale.
+ *
+ * A ticked set that recorded neither weight nor reps is not a reference, it is
+ * a stray tap, and offering "0×0" as last time's numbers is worse than
+ * offering nothing. Weight alone can legitimately be zero — that is every
+ * bodyweight movement — so it takes both being empty to disqualify a set. */
 export function previousLookup(workouts: Workout[]): Map<string, WorkoutSet[]> {
   const map = new Map<string, WorkoutSet[]>();
   for (const w of workouts) {
     if (!w.ended_at) continue;
     for (const e of w.entries) {
       if (map.has(e.name)) continue;
-      const done = e.sets.filter((s) => s.done);
+      const done = e.sets.filter((s) => s.done && (s.reps > 0 || s.weight > 0));
       if (done.length > 0) map.set(e.name, done);
     }
   }
   return map;
+}
+
+/** Last time's set to hold this one against.
+ *
+ * Positional, but *clamped* — if you did three sets last time and five today,
+ * sets four and five are measured against the third rather than against
+ * nothing. The alternative is a column of em-dashes exactly where the session
+ * gets hard, which is when you most want to know what you did before. Finished
+ * sessions are also pruned of un-ticked sets, so last time's list is usually
+ * shorter than today's and this is the common case, not the edge. */
+export function ghostSet(sets: WorkoutSet[] | undefined, index: number): WorkoutSet | undefined {
+  if (!sets || sets.length === 0) return undefined;
+  return sets[Math.min(index, sets.length - 1)];
 }
 
 /** The rest you last used per exercise — memory so you don't re-set it. */

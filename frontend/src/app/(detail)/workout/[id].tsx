@@ -10,14 +10,16 @@ import {
   TextInput,
   View,
 } from "react-native";
-import Animated, { FadeIn, LinearTransition, SlideInDown, SlideOutDown, ZoomIn } from "react-native-reanimated";
+import Animated, { FadeIn } from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { usePagePadding } from "@/lib/shell";
 import { Grain } from "@/components/grain";
 import { PressableScale } from "@/components/pressable-scale";
 import { Panel } from "@/components/surface";
 import { fontStyle } from "@/features/style/tokens";
 import {
   emptySet,
+  ghostSet,
   personalRecords,
   previousLookup,
   restLookup,
@@ -30,7 +32,11 @@ import {
   type ExerciseRecord,
 } from "@/features/workouts/api";
 import { useNow } from "@/features/workouts/clock";
-import { ExercisePicker, type PickedExercise } from "@/features/workouts/components/ExercisePicker";
+import {
+  ExercisePicker,
+  ExerciseSheet,
+  type PickedExercise,
+} from "@/features/workouts/components/ExercisePicker";
 import { KeyPad } from "@/features/workouts/components/KeyPad";
 import { exerciseGif, libraryExercise } from "@/features/workouts/library";
 import { formatRest, useWorkoutPrefs } from "@/features/workouts/store";
@@ -48,10 +54,13 @@ import { hapticSuccess, hapticTap } from "@/lib/haptics";
 import { playFlip } from "@/lib/sounds";
 import { alpha } from "@/lib/theme";
 import { usePalette, useType } from "@/stores/theme";
+import { appear, fall, rise, settle } from "@/lib/motion";
 
-const settle = LinearTransition.springify().stiffness(400).damping(32);
 
 type Focus = { ei: number; si: number; field: "weight" | "reps" };
+
+/** How far a set row's contents sit inside its own rounded wash. */
+const ROW_PAD = 10;
 
 function parseNum(s: string): number {
   const v = parseFloat(s.replace(",", "."));
@@ -72,6 +81,7 @@ export default function WorkoutPage() {
   const colors = usePalette();
   const type = useType();
   const insets = useSafeAreaInsets();
+  const page = usePagePadding();
   const router = useRouter();
   const unit = useWorkoutPrefs((s) => s.unit);
   const defaultRest = useWorkoutPrefs((s) => s.restSeconds);
@@ -95,6 +105,8 @@ export default function WorkoutPage() {
   // Rest countdown: an end timestamp + which exercise it belongs to (so ±15s
   // updates that exercise's remembered rest). Background-safe.
   const [rest, setRest] = useState<{ until: number; total: number; ei: number } | null>(null);
+  // Which exercise's library page is open over the log, if any.
+  const [showing, setShowing] = useState<string | null>(null);
 
   const live = !!workout && !workout.ended_at;
   const effEntries = entries ?? workout?.entries ?? [];
@@ -165,7 +177,7 @@ export default function WorkoutPage() {
     const base =
       parseNum(editStr) ||
       entry.sets[focus.si].weight ||
-      prev.get(entry.name)?.[focus.si]?.weight ||
+      ghostSet(prev.get(entry.name), focus.si)?.weight ||
       0;
     const nextStr = sanitize(String(base + n));
     setEditStr(nextStr);
@@ -178,7 +190,7 @@ export default function WorkoutPage() {
   const finishSet = (ei: number, si: number) => {
     const entry = effEntries[ei];
     const set = entry.sets[si];
-    const ghost = prev.get(entry.name)?.[si];
+    const ghost = ghostSet(prev.get(entry.name), si);
     const filled: WorkoutSet = {
       weight: set.weight || ghost?.weight || 0,
       reps: set.reps || ghost?.reps || 0,
@@ -273,7 +285,7 @@ export default function WorkoutPage() {
   const focusEntry = focus ? effEntries[focus.ei] : null;
 
   return (
-    <View style={[styles.screen, { backgroundColor: colors.paper, paddingTop: insets.top + 12 }]}>
+    <View style={[styles.screen, { backgroundColor: colors.paper, paddingTop: page.paddingTop }]}>
       <Grain />
       {/* Pinned above the scroller: the way back, the session's name and its
           two controls stay put while the log runs under them. */}
@@ -351,7 +363,7 @@ export default function WorkoutPage() {
             <Animated.View key={`${entry.name}-${ei}`} layout={settle} entering={FadeIn.duration(160)}>
               <Panel style={styles.entryCard}>
                 <View style={styles.entryHead}>
-                  <EntryThumb libId={entry.libId} />
+                  <EntryThumb libId={entry.libId} onPress={() => setShowing(entry.libId ?? null)} />
                   <View style={styles.entryTitleText}>
                     <Text numberOfLines={1} style={[styles.entryName, type.sansSemiBold, { color: colors.zest }]}>
                       {entry.name}
@@ -407,7 +419,7 @@ export default function WorkoutPage() {
                     key={si}
                     index={si}
                     set={set}
-                    prev={prev.get(entry.name)?.[si]}
+                    prev={ghostSet(prev.get(entry.name), si)}
                     record={records.get(entry.name)}
                     live={live}
                     timed={timedMode.has(ei)}
@@ -483,8 +495,8 @@ export default function WorkoutPage() {
       ) : (
         resting && rest && live && (
           <Animated.View
-            entering={SlideInDown.springify().stiffness(300).damping(28)}
-            exiting={SlideOutDown.duration(180)}
+            entering={rise()}
+            exiting={fall()}
             style={[styles.restBar, { bottom: insets.bottom + 14 }]}
           >
             <Panel style={[styles.restPanel, { borderColor: alpha(colors.zest, 0.5) }]}>
@@ -503,6 +515,7 @@ export default function WorkoutPage() {
       )}
 
       <ExercisePicker visible={picking} onAdd={addExercises} onClose={() => setPicking(false)} />
+      {showing && <ExerciseSheet libId={showing} onClose={() => setShowing(null)} />}
     </View>
   );
 }
@@ -544,16 +557,28 @@ function Disc({
   );
 }
 
-function EntryThumb({ libId }: { libId?: string }) {
+/** The exercise's looping demo, and the way into its full page — the form
+ * notes, the muscle map, the big version of this same clip. A 48pt GIF is a
+ * reminder, not an instruction; tapping one has to lead somewhere. */
+function EntryThumb({ libId, onPress }: { libId?: string; onPress: () => void }) {
   const colors = usePalette();
   const ex = libraryExercise(libId);
   if (!ex) return null;
   return (
-    <Image
-      source={{ uri: exerciseGif(ex, 180) }}
-      resizeMode="cover"
-      style={[styles.entryThumb, { backgroundColor: "#ffffff", borderColor: alpha(colors.rule, 0.7) }]}
-    />
+    <PressableScale
+      scaleTo={0.94}
+      accessibilityLabel={`How to do ${ex.name}`}
+      onPress={() => {
+        hapticTap();
+        onPress();
+      }}
+    >
+      <Image
+        source={{ uri: exerciseGif(ex, 180) }}
+        resizeMode="cover"
+        style={[styles.entryThumb, { backgroundColor: "#ffffff", borderColor: alpha(colors.rule, 0.7) }]}
+      />
+    </PressableScale>
   );
 }
 
@@ -637,7 +662,7 @@ function SetRow({
       <View style={styles.colPrev}>
         {isPR ? (
           <Animated.View
-            entering={ZoomIn.springify().stiffness(320).damping(26)}
+            entering={appear()}
             style={[styles.prBadge, { backgroundColor: colors.zest }]}
           >
             <Text style={[styles.prText, type.sansSemiBold, { color: "#fff" }]}>PR</Text>
@@ -781,13 +806,23 @@ const styles = StyleSheet.create({
     lineHeight: 17,
     paddingVertical: 2,
   },
-  gridHead: { flexDirection: "row", alignItems: "center", gap: 8, paddingHorizontal: 4, marginTop: 4 },
+  // The row's own inset, on the head too so the columns stay in line. A done
+  // set fills its row with colour, and at 4pt the set number sat inside the
+  // corner radius — the wash looked like it was cropping the digit.
+  gridHead: { flexDirection: "row", alignItems: "center", gap: 8, paddingHorizontal: ROW_PAD, marginTop: 4 },
   colLabel: { fontSize: 9, letterSpacing: 1.4, textTransform: "uppercase" },
   colSet: { width: 26 },
   colPrev: { flex: 1, minWidth: 0 },
   colInput: { width: 64, textAlign: "center" },
   colAction: { width: 40, alignItems: "center" },
-  setRow: { flexDirection: "row", alignItems: "center", gap: 8, paddingVertical: 5, paddingHorizontal: 4, borderRadius: 10 },
+  setRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    paddingVertical: 6,
+    paddingHorizontal: ROW_PAD,
+    borderRadius: 10,
+  },
   setIndex: { fontSize: 12.5, fontVariant: ["tabular-nums"] },
   prevText: { fontSize: 12, fontVariant: ["tabular-nums"] },
   prBadge: { alignSelf: "flex-start", borderRadius: 999, paddingVertical: 2, paddingHorizontal: 9 },

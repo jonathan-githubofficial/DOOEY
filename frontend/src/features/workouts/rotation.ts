@@ -81,31 +81,89 @@ function startOfWeek(d: Date): Date {
 
 export interface RhythmDay {
   date: Date;
-  /** The focus accent of that day's first session, or null if you rested. */
+  /** The focus accent of that day's session, or null if you rested. */
   hueKey: CardHue | null;
   isToday: boolean;
+  /** The session logged that day, so a day is a way into what you did. */
+  workoutId: string | null;
 }
 
-/** Monday→Sunday of the current week, each day carrying the colour of what you
- * trained. Days you rested stay null. */
-export function weekRhythm(workouts: Workout[]): RhythmDay[] {
-  const monday = startOfWeek(new Date());
-  const done = finished(workouts);
+/** How far back the journey reaches. Half a year of Mondays is 182 cells,
+ * which draws in one pass and still shows a season's worth of rhythm; a full
+ * year would double the view count for a stretch nobody scrolls to. Anything
+ * older is reported as clipped rather than silently dropped. */
+const JOURNEY_WEEKS = 26;
+
+/** And the fewest. One week of history would make "open it out" do nothing
+ * visible, which reads as a broken control rather than as a short history.
+ * Six empty rows say "you've just started" — which is true, and is the shape
+ * the grid will keep. */
+const JOURNEY_MIN = 6;
+
+export interface Journey {
+  /** Monday→Sunday rows, **oldest first** — the last row is this week. */
+  weeks: RhythmDay[][];
+  /** The day of your first logged session, or null if there isn't one. Not the
+   * day the grid opens on: the grid is padded out to a readable size, and
+   * claiming you started on a Monday you hadn't yet trained would be a lie. */
+  first: Date | null;
+  /** True when sessions exist above the first row. */
+  clipped: boolean;
+  /** Finished sessions in total, clipped or not. */
+  sessions: number;
+}
+
+/** Whole weeks between two Mondays. The hour a DST change adds or removes is
+ * three orders of magnitude short of a week, so rounding absorbs it. */
+function weeksBetween(from: Date, to: Date): number {
+  return Math.round((to.getTime() - from.getTime()) / (7 * 86_400_000));
+}
+
+/** Your training as a calendar: one cell per day, tinted with what you trained
+ * that day, from your first session to this Sunday.
+ *
+ * This is the week strip and the history view at once — the same seven columns,
+ * more rows. A list of session cards can tell you what you did; only the grid
+ * can show you that you have skipped legs three weeks running, or that August
+ * was a write-off, because the shape of the gaps *is* the information.
+ *
+ * One session per day, the latest of that day. Two sessions on a Saturday is
+ * rare enough that showing the second one's colour and losing the first is a
+ * better trade than splitting the cell. */
+export function journeyWeeks(workouts: Workout[]): Journey {
+  const done = finished(workouts); // newest first
+  const thisMonday = startOfWeek(new Date());
   const today = startOfDay(new Date()).getTime();
 
-  return Array.from({ length: 7 }, (_, i) => {
-    const date = new Date(monday.getFullYear(), monday.getMonth(), monday.getDate() + i);
-    const next = new Date(date.getFullYear(), date.getMonth(), date.getDate() + 1).getTime();
-    const session = done.find((w) => {
-      const t = new Date(w.started_at).getTime();
-      return t >= date.getTime() && t < next;
-    });
-    return {
-      date,
-      isToday: date.getTime() === today,
-      hueKey: session ? (focusOf(session.entries)?.hueKey ?? "zest") : null,
-    };
-  });
+  // Oldest first into the map, so the latest session of a day wins the cell.
+  const byDay = new Map<number, Workout>();
+  for (let i = done.length - 1; i >= 0; i--) {
+    byDay.set(startOfDay(new Date(done[i].started_at)).getTime(), done[i]);
+  }
+
+  const first = done.length ? startOfDay(new Date(done[done.length - 1].started_at)) : null;
+  const span = first ? weeksBetween(startOfWeek(first), thisMonday) + 1 : 1;
+  const rows = Math.min(Math.max(span, JOURNEY_MIN), JOURNEY_WEEKS);
+  const from = new Date(
+    thisMonday.getFullYear(),
+    thisMonday.getMonth(),
+    thisMonday.getDate() - (rows - 1) * 7,
+  );
+
+  const weeks = Array.from({ length: rows }, (_, wi) =>
+    Array.from({ length: 7 }, (_, di): RhythmDay => {
+      const date = new Date(from.getFullYear(), from.getMonth(), from.getDate() + wi * 7 + di);
+      const session = byDay.get(date.getTime());
+      return {
+        date,
+        isToday: date.getTime() === today,
+        hueKey: session ? (focusOf(session.entries)?.hueKey ?? "zest") : null,
+        workoutId: session?.id ?? null,
+      };
+    }),
+  );
+
+  return { weeks, first, clipped: span > rows, sessions: done.length };
 }
 
 /** Every muscle trained this week, each mapped to the accent of the session

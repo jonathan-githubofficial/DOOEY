@@ -3,6 +3,7 @@ import { useState } from "react";
 import { Image, Modal, Platform, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import Animated, { FadeIn } from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { useSheetTop } from "@/lib/shell";
 import { Grain } from "@/components/grain";
 import { Plate } from "@/components/plate";
 import { PressableScale } from "@/components/pressable-scale";
@@ -13,7 +14,7 @@ import { alpha } from "@/lib/theme";
 import { usePalette, useType } from "@/stores/theme";
 import { useCardInk, type CardInk } from "../hues";
 import { exerciseGif, libraryExercise } from "../library";
-import { PROGRAMS, type Program, type ProgramRoutine } from "../programs";
+import { PROGRAMS, type CatalogProgram, type ProgramRoutine } from "../programs";
 import { CARD_HUES, type CardHue } from "../types";
 import { CardShell } from "./card-parts";
 
@@ -29,8 +30,8 @@ export function ProgramsExplorer({
 }: {
   visible: boolean;
   onStartRoutine: (routine: ProgramRoutine) => void;
-  onSaveRoutine: (program: Program, routine: ProgramRoutine) => void;
-  onAddProgram: (program: Program) => void;
+  onSaveRoutine: (program: CatalogProgram, routine: ProgramRoutine) => void;
+  onAddProgram: (program: CatalogProgram) => void;
   /** None of the shelf fits: name an empty program of your own instead. */
   onNewProgram: () => void;
   onClose: () => void;
@@ -38,7 +39,8 @@ export function ProgramsExplorer({
   const colors = usePalette();
   const type = useType();
   const insets = useSafeAreaInsets();
-  const [open, setOpen] = useState<Program | null>(null);
+  const sheetTop = useSheetTop();
+  const [open, setOpen] = useState<CatalogProgram | null>(null);
 
   const close = () => {
     setOpen(null);
@@ -55,7 +57,7 @@ export function ProgramsExplorer({
       <View
         style={[
           styles.sheet,
-          { backgroundColor: colors.paper, paddingTop: Platform.OS === "ios" ? 14 : insets.top + 14 },
+          { backgroundColor: colors.paper, paddingTop: sheetTop },
         ]}
       >
         <Grain />
@@ -136,7 +138,7 @@ function ProgramRow({
   hue,
   onPress,
 }: {
-  program: Program;
+  program: CatalogProgram;
   hue: CardHue;
   onPress: () => void;
 }) {
@@ -182,7 +184,7 @@ function ProgramRow({
 /** The split's exercises as paper tokens on the colour field — round, backed
  * by surface, overlapping like a handful of coins. A demo still on a white
  * rectangle would punch a hole in the card. */
-function ProgramThumbs({ program, ink }: { program: Program; ink: CardInk }) {
+function ProgramThumbs({ program, ink }: { program: CatalogProgram; ink: CardInk }) {
   const colors = usePalette();
   const type = useType();
 
@@ -223,7 +225,7 @@ function ProgramDetail({
   onAdd,
   onBack,
 }: {
-  program: Program;
+  program: CatalogProgram;
   onStartRoutine: (r: ProgramRoutine) => void;
   onSaveRoutine: (r: ProgramRoutine) => void;
   onAdd: () => void;
@@ -315,7 +317,7 @@ function RoutinePreview({
   onSave,
   onBack,
 }: {
-  program: Program;
+  program: CatalogProgram;
   routine: ProgramRoutine;
   onStart: () => void;
   onSave: () => void;

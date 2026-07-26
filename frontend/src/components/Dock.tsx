@@ -13,7 +13,6 @@ import Animated, {
   Easing,
   FadeIn,
   FadeOut,
-  LinearTransition,
   useAnimatedStyle,
   useSharedValue,
   withTiming,
@@ -27,20 +26,24 @@ import type { Stroke } from "@/lib/doodle";
 import { alpha } from "@/lib/theme";
 import { useAuthStore } from "@/stores/auth";
 import { usePalette, useType } from "@/stores/theme";
+import { settle } from "@/lib/motion";
+import { SPACES, spaceFor, type SpaceRoute } from "@/lib/spaces";
 
 // A pure deceleration curve — the pill glides and stops dead, no overshoot.
 const GLIDE = { duration: 260, easing: Easing.bezier(0.2, 0, 0, 1) };
-const settle = LinearTransition.duration(200).easing(Easing.bezier(0.2, 0, 0, 1));
 
 type TabBarProps = Parameters<NonNullable<React.ComponentProps<typeof Tabs>["tabBar"]>>[0];
 
-/** The spaces, in dock order — routes, glyphs and their doodle keys. */
-const SPACES = [
-  { key: "planner", route: "index", label: "Planner", icon: NotebookPen, doodle: "planner" },
-  { key: "boards", route: "boards", label: "Boards", icon: Shapes, doodle: "boards" },
-  { key: "projects", route: "projects", label: "Projects", icon: FolderOpen, doodle: "learning" },
-  { key: "gym", route: "gym", label: "Gym", icon: Dumbbell, doodle: "gym" },
-] as const;
+/** The dock's glyphs. The list of spaces itself lives in `lib/spaces`; only
+ * the icons are the dock's own business. Account is absent on purpose — your
+ * doodled self at the left end of the island is its door. */
+const DOCK_ICONS: Partial<Record<SpaceRoute, LucideIcon>> = {
+  index: NotebookPen,
+  boards: Shapes,
+  projects: FolderOpen,
+  gym: Dumbbell,
+};
+const DOCK_SPACES = SPACES.filter((s) => DOCK_ICONS[s.route]);
 
 /** The dock: a floating island. The wordmark anchors the left end (its zest
  * full-stop toggles light/dark), your doodled self beside it is the door to
@@ -51,19 +54,9 @@ export function Dock({ state, navigation }: TabBarProps) {
   const shadow = useShadow();
   const insets = useSafeAreaInsets();
 
-  const routeName = state.routes[state.index].name;
   // Task pages are drill-ins of the planner; a board of Boards; a project of
   // Projects; the style studio of Account — the parent stop stays lit there.
-  const active =
-    routeName === "index" || routeName.startsWith("task")
-      ? "planner"
-      : routeName === "boards" || routeName.startsWith("board")
-        ? "boards"
-        : routeName === "projects" || routeName.startsWith("project/")
-          ? "projects"
-          : routeName === "gym" || routeName.startsWith("workout") || routeName.startsWith("routine")
-            ? "gym"
-            : "account";
+  const active = spaceFor(state.routes[state.index].name);
 
   const stops = useRef<Record<string, { x: number; width: number }>>({});
   const pillX = useSharedValue(0);
@@ -129,14 +122,14 @@ export function Dock({ state, navigation }: TabBarProps) {
           onPress={() => navigation.navigate("account")}
         />
         <View style={[styles.divider, { backgroundColor: alpha(colors.rule, 0.8) }]} />
-        {SPACES.map((space) => (
+        {DOCK_SPACES.map((space) => (
           <DockTab
-            key={space.key}
+            key={space.route}
             label={space.label}
-            icon={space.icon}
+            icon={DOCK_ICONS[space.route]!}
             doodleKey={space.doodle}
-            active={active === space.key}
-            onLayout={measure(space.key)}
+            active={active === space.route}
+            onLayout={measure(space.route)}
             onPress={() => navigation.navigate(space.route)}
           />
         ))}

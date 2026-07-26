@@ -3,7 +3,7 @@ import { useRouter } from "expo-router";
 import { useState } from "react";
 import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import Animated, { FadeIn } from "react-native-reanimated";
-import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { usePagePadding } from "@/lib/shell";
 import { DoodleEditor } from "@/components/DoodleEditor";
 import { DoodleFlipbook } from "@/components/DoodleFlipbook";
 import { DoodleSvg } from "@/components/DoodleSvg";
@@ -38,7 +38,7 @@ const SPEEDS = [
 export default function Wordmark() {
   const colors = usePalette();
   const type = useType();
-  const insets = useSafeAreaInsets();
+  const page = usePagePadding();
   const router = useRouter();
   const frames = useStyleStore((s) => s.logoDoodle);
   const setLogoDoodle = useStyleStore((s) => s.setLogoDoodle);
@@ -67,7 +67,7 @@ export default function Wordmark() {
   };
 
   return (
-    <View style={[styles.screen, { backgroundColor: colors.paper, paddingTop: insets.top + 12 }]}>
+    <View style={[styles.screen, { backgroundColor: colors.paper, paddingTop: page.paddingTop }]}>
       <Grain />
       {/* Pinned above the scroller: the way back and the page's name stay put
           while the frames run under them. */}
@@ -86,7 +86,7 @@ export default function Wordmark() {
         showsVerticalScrollIndicator={false}
         contentContainerStyle={[
           styles.scrollContent,
-          { paddingBottom: Math.max(16, insets.bottom) + 96 },
+          { paddingBottom: page.paddingBottom },
         ]}
       >
         {/* The door, previewed: exactly what the login page will show — the
