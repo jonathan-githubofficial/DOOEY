@@ -2,6 +2,7 @@ import type { ComponentType } from "react";
 import { ScrollView, StyleSheet, View } from "react-native";
 import { Grain } from "@/components/grain";
 import { Masthead } from "@/components/Masthead";
+import { GymTodayWidget } from "@/features/home/components/GymTodayWidget";
 import { ScheduleWidget } from "@/features/home/components/ScheduleWidget";
 import { TasksTodayWidget } from "@/features/home/components/TasksTodayWidget";
 import type { WidgetKey } from "@/features/home/layout";
@@ -18,6 +19,7 @@ import { usePalette } from "@/stores/theme";
 const WIDGET_VIEWS: Partial<Record<WidgetKey, ComponentType>> = {
   schedule: ScheduleWidget,
   tasks: TasksTodayWidget,
+  gym: GymTodayWidget,
 };
 
 /** The front door: everything due today in one glance, arranged by you.
