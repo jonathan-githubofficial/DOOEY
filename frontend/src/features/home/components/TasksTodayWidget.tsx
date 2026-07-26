@@ -1,5 +1,6 @@
 import { useRouter } from "expo-router";
 import { Pressable, StyleSheet, Text, View } from "react-native";
+import Animated, { FadeIn, FadeOut } from "react-native-reanimated";
 import { Check } from "@/components/Check";
 import { useDayTasks, useUpdateTask } from "@/features/tasks/api";
 import type { Task } from "@/features/tasks/types";
@@ -74,30 +75,31 @@ export function TasksTodayWidget() {
       {shown.map((task) => {
         const age = ageDays(task.due_date);
         return (
-          <Pressable
-            key={task.id}
-            style={styles.row}
-            onPress={() => router.push({ pathname: "/task/[id]", params: { id: task.id } })}
-            onLongPress={() => timebox(task)}
-          >
-            <Check
-              done={false}
-              label={task.title}
-              onToggle={() =>
-                update.mutate({ id: task.id, patch: { done_at: new Date().toISOString() } })
-              }
-            />
-            <Text numberOfLines={1} style={[type.sans, styles.title, { color: colors.ink }]}>
-              {task.title}
-            </Text>
-            {age > 0 && (
-              <View style={[styles.age, { backgroundColor: alpha(colors.clay, 0.15) }]}>
-                <Text style={[type.sansMedium, styles.ageText, { color: colors.clay }]}>
-                  {age}d
-                </Text>
-              </View>
-            )}
-          </Pressable>
+          <Animated.View key={task.id} entering={FadeIn.duration(180)} exiting={FadeOut.duration(150)}>
+            <Pressable
+              style={styles.row}
+              onPress={() => router.push({ pathname: "/task/[id]", params: { id: task.id } })}
+              onLongPress={() => timebox(task)}
+            >
+              <Check
+                done={false}
+                label={task.title}
+                onToggle={() =>
+                  update.mutate({ id: task.id, patch: { done_at: new Date().toISOString() } })
+                }
+              />
+              <Text numberOfLines={1} style={[type.sans, styles.title, { color: colors.ink }]}>
+                {task.title}
+              </Text>
+              {age > 0 && (
+                <View style={[styles.age, { backgroundColor: alpha(colors.clay, 0.15) }]}>
+                  <Text style={[type.sansMedium, styles.ageText, { color: colors.clay }]}>
+                    {age}d
+                  </Text>
+                </View>
+              )}
+            </Pressable>
+          </Animated.View>
         );
       })}
       {open.length > SHOW && (
