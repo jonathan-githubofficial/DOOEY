@@ -2,6 +2,7 @@ import type { ComponentType } from "react";
 import { ScrollView, StyleSheet, View } from "react-native";
 import { Grain } from "@/components/grain";
 import { Masthead } from "@/components/Masthead";
+import { ScheduleWidget } from "@/features/home/components/ScheduleWidget";
 import { TasksTodayWidget } from "@/features/home/components/TasksTodayWidget";
 import type { WidgetKey } from "@/features/home/layout";
 import { useHomeStore } from "@/features/home/store";
@@ -15,6 +16,7 @@ import { usePalette } from "@/stores/theme";
 /** Widgets register here as they land; a key the registry doesn't know yet
  * simply doesn't render, so the persisted order can run ahead of the code. */
 const WIDGET_VIEWS: Partial<Record<WidgetKey, ComponentType>> = {
+  schedule: ScheduleWidget,
   tasks: TasksTodayWidget,
 };
 
