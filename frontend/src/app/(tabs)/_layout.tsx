@@ -1,4 +1,4 @@
-import { Redirect, Tabs } from "expo-router";
+import { Redirect, Tabs, usePathname } from "expo-router";
 import { Icon, Label, NativeTabs, VectorIcon } from "expo-router/unstable-native-tabs";
 import { useEffect, useRef, useState } from "react";
 import { PixelRatio, Platform, StyleSheet, View, type ImageSourcePropType } from "react-native";
@@ -10,7 +10,7 @@ import { useDock } from "@/features/home/store";
 import { useStyleStore } from "@/features/style/store";
 import { fontStyle } from "@/features/style/tokens";
 import { strokePath, type Stroke } from "@/lib/doodle";
-import { SPACES } from "@/lib/spaces";
+import { SPACES, spaceFor } from "@/lib/spaces";
 import { alpha, type Palette } from "@/lib/theme";
 import { useAuthStore } from "@/stores/auth";
 import { usePalette } from "@/stores/theme";
@@ -29,6 +29,9 @@ export default function TabsLayout() {
   const dockDoodles = useStyleStore((s) => s.dockDoodles);
   const [icons, setIcons] = useState<Record<string, string>>({});
   const dock = useDock();
+  // Read unconditionally (rules-of-hooks) even though only the native branch
+  // below needs it — see the focused-space comment there for why.
+  const pathname = usePathname();
   if (!isAuthenticated) return <Redirect href="/login" />;
 
   if (Platform.OS !== "web") {
@@ -48,6 +51,17 @@ export default function TabsLayout() {
     // that has none — a real risk once a user can hide a space from the dock
     // and something (a deep link, a Home widget) still points at it.
     const dockRoutes = new Set(dock.map((space) => space.route));
+
+    // The same throw/desync fires if the currently *focused* route's own
+    // Trigger is hidden — and hiding a space from the dock doesn't stop a
+    // deep link (or the user already standing there) from landing on it.
+    // So "visible" isn't just the dock: it's the dock plus wherever the user
+    // is right now. The focused space rides along with the rest of the
+    // hidden complement below in SPACES' natural order — it only surfaces
+    // while the user is standing in that space, so where it falls among the
+    // others is never actually seen.
+    const strippedPath = pathname.startsWith("/") ? pathname.slice(1) : pathname;
+    const focusedSpace = spaceFor(strippedPath === "" ? "index" : strippedPath);
     const hiddenSpaces = SPACES.filter((space) => !dockRoutes.has(space.route));
 
     return (
@@ -89,9 +103,20 @@ export default function TabsLayout() {
               </NativeTabs.Trigger>
             );
           })}
-          {hiddenSpaces.map((space) => (
-            <NativeTabs.Trigger key={space.route} name={space.route} hidden />
-          ))}
+          {hiddenSpaces.map((space) => {
+            const focused = space.route === focusedSpace;
+            return (
+              <NativeTabs.Trigger key={space.route} name={space.route} hidden={!focused}>
+                {focused &&
+                  (Platform.OS === "ios" ? (
+                    <Icon sf={space.sf} />
+                  ) : (
+                    <Icon src={<VectorIcon family={MaterialIcons} name={space.md} />} />
+                  ))}
+                {focused && <Label>{space.label}</Label>}
+              </NativeTabs.Trigger>
+            );
+          })}
         </NativeTabs>
       </>
     );

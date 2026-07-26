@@ -12,8 +12,10 @@ import type { DockChoice } from "@/features/home/layout";
  * icon set. Each bar maps `route` to its own glyph.
  *
  * Order and visibility of the middle spaces belong to the user (the "Your
- * dock" panel in Account); both bars render `useDock()` from
- * features/home/store, never this array directly.
+ * dock" panel in Account) and come from `useDock()` in features/home/store —
+ * but this array stays the registry both bars draw facts from: the native
+ * bar also reads it directly for the hidden complement (every space needs a
+ * Trigger, dock or not).
  *
  * `doodle` is the key into the user's hand-drawn page icons, which replace the
  * stock glyphs when "doodle icons in dock" is on. */

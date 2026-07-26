@@ -10,6 +10,7 @@ import { Masthead } from "@/components/Masthead";
 import { PressableScale } from "@/components/pressable-scale";
 import { Eyebrow, Panel, StampButton } from "@/components/surface";
 import { signOut } from "@/features/auth/api";
+import { DockPanel } from "@/features/home/components/DockPanel";
 import { PageDoodle } from "@/features/style/components/PageDoodle";
 import { alpha } from "@/lib/theme";
 import { useAuthStore } from "@/stores/auth";
@@ -114,6 +115,8 @@ export default function Account() {
             <ChevronRight size={16} color={colors.inkMuted} />
           </Panel>
         </PressableScale>
+
+        <DockPanel />
 
         <GardenPanel />
 
