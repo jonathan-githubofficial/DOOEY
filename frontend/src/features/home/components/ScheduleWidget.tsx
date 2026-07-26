@@ -27,7 +27,8 @@ export function ScheduleWidget() {
     .filter((t) => !t.done_at && t.start_min > 0)
     .sort((a, b) => a.start_min - b.start_min);
 
-  let nowDrawn = false;
+  const ruleIndex = scheduled.findIndex((t) => t.start_min >= nowMin);
+
   return (
     <HomeWidget title="schedule">
       {scheduled.length === 0 && !live && (
@@ -37,13 +38,11 @@ export function ScheduleWidget() {
           </Text>
         </Pressable>
       )}
-      {scheduled.map((t) => {
+      {scheduled.map((t, i) => {
         const past = t.start_min + (t.dur_min || 60) < nowMin;
-        const rule = !nowDrawn && t.start_min >= nowMin;
-        if (rule) nowDrawn = true;
         return (
           <Fragment key={t.id}>
-            {rule && <View style={[styles.nowRule, { backgroundColor: colors.zest }]} />}
+            {i === ruleIndex && <View style={[styles.nowRule, { backgroundColor: colors.zest }]} />}
             <Animated.View entering={FadeIn.duration(180)} exiting={FadeOut.duration(150)}>
               <Pressable
                 style={styles.row}
@@ -69,7 +68,7 @@ export function ScheduleWidget() {
           </Fragment>
         );
       })}
-      {scheduled.length > 0 && !nowDrawn && (
+      {scheduled.length > 0 && ruleIndex === -1 && (
         <View style={[styles.nowRule, { backgroundColor: colors.zest }]} />
       )}
       {live && (
