@@ -152,6 +152,12 @@ resources just pause if credits run out.
 
 ## Native apps against production
 
+The container serves the web build; a native build is a separate EAS build that
+has to be told where the API lives, because it is not being served by it.
+
 ```bash
-VITE_PB_URL=https://<your-domain> npm run mobile:sync
+cd frontend && EXPO_PUBLIC_PB_URL=https://<your-domain> eas build --profile production
 ```
+
+The web build needs no such flag: it is served by the same PocketBase it talks
+to, so `frontend/src/lib/pb.ts` falls back to the page's own origin.

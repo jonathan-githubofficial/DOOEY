@@ -1,17 +1,22 @@
-node_modules
-dist
-android
-ios
-pb/pb_data
-pb/pocketbase.exe
+# Build context = repo root. The image needs frontend/ (to build the web target)
+# and backend/pb_hooks + pb_migrations. Nothing else.
+**/node_modules
+frontend/dist
+frontend/.expo
+frontend/public/canvaskit.wasm
+
+# Live data and a platform-specific binary — the image fetches its own
+backend/pb_data
+backend/pocketbase.exe
+
 .env
 .env.local
 .env.*.local
 .git
 .claude
-.playwright-mcp
 .vscode
+.worktrees
 docs
-programs
 scripts
+ref
 CLAUDE.md

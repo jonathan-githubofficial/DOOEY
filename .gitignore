@@ -1,8 +1,17 @@
 node_modules
 dist
+
+# Local env and machine-local Claude permissions
 .env.local
 .env.*.local
 .claude/settings.local.json
-pb/pocketbase.exe
-pb/pb_data
-.playwright-mcp
+
+# The PocketBase binary is fetched per-platform; pb_data is live personal data
+backend/pocketbase.exe
+backend/pb_data
+
+# Scratch that has accumulated before and should not come back
+.worktrees/
+.scratch/
+test-results/
+.playwright-mcp/

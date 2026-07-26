@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
-# Check mobile/ for values that belong to the user and motion that does no job.
+# Check frontend/ for values that belong to the user and motion that does no job.
 #
-#   bash .claude/skills/design-system/scripts/design-check.sh          # all of mobile/src
+#   bash .claude/skills/design-system/scripts/design-check.sh          # all of frontend/src
 #   bash .claude/skills/design-system/scripts/design-check.sh --diff   # changed + untracked only
 #
 # Exits 1 if anything is found. Deliberately a grep plus one small calculation:
@@ -22,20 +22,20 @@ if [[ ${1:-} == "--diff" ]]; then
   # checking, and `git diff` never lists one.
   mapfile -t FILES < <(
     {
-      git diff --name-only --diff-filter=d HEAD -- 'mobile/src/*.ts' 'mobile/src/*.tsx'
-      git ls-files --others --exclude-standard -- 'mobile/src/*.ts' 'mobile/src/*.tsx'
+      git diff --name-only --diff-filter=d HEAD -- 'frontend/src/*.ts' 'frontend/src/*.tsx'
+      git ls-files --others --exclude-standard -- 'frontend/src/*.ts' 'frontend/src/*.tsx'
     } 2>/dev/null | sort -u
   )
-  [[ ${#FILES[@]} -eq 0 ]] && { echo "No changed source files under mobile/src."; exit 0; }
+  [[ ${#FILES[@]} -eq 0 ]] && { echo "No changed source files under frontend/src."; exit 0; }
   echo "Checking ${#FILES[@]} changed file(s)."
 else
-  mapfile -t FILES < <(find mobile/src -type f \( -name '*.ts' -o -name '*.tsx' \))
-  echo "Checking ${#FILES[@]} file(s) in mobile/src."
+  mapfile -t FILES < <(find frontend/src -type f \( -name '*.ts' -o -name '*.tsx' \))
+  echo "Checking ${#FILES[@]} file(s) in frontend/src."
 fi
 
 # The files that define the tokens everyone else imports. They are allowed to
 # hold raw values; nobody else is.
-OWNERS='mobile/src/(lib/(motion|theme)\.ts|stores/theme\.ts|features/style/tokens\.ts)'
+OWNERS='frontend/src/(lib/(motion|theme)\.ts|stores/theme\.ts|features/style/tokens\.ts)'
 
 FOUND=0
 
@@ -98,6 +98,33 @@ if [[ -n $BOUNCE ]]; then
   echo "  rule: damping / (2 * sqrt(stiffness * mass)) must be >= 0.8"
   echo "  fix: use gesture.press|release|snap|track from \"@/lib/motion\", or timing() if no finger drives it"
   echo "$BOUNCE"
+fi
+
+# Reanimated's entrance and layout builders spell the same spring a different
+# way, and the object-literal rule above cannot see it. A
+# `SlideInDown.springify().stiffness(300).damping(30)` is a spring on something
+# no finger is touching, which is the rule this whole section exists to state.
+SPRINGIFY=$(rg -n --no-heading --with-filename --color=never -o \
+  '\.springify\(\)(\.stiffness\([0-9.]+\))?(\.damping\([0-9.]+\))?' "${FILES[@]}" 2>/dev/null \
+  | sed 's|\\|/|g' | rg -v -- "$OWNERS" 2>/dev/null | awk -F: '
+  {
+    line = $0; s = 0; d = 0
+    if (match(line, /stiffness\([0-9.]+\)/)) { t = substr(line, RSTART, RLENGTH); gsub(/[^0-9.]/, "", t); s = t + 0 }
+    if (match(line, /damping\([0-9.]+\)/))   { t = substr(line, RSTART, RLENGTH); gsub(/[^0-9.]/, "", t); d = t + 0 }
+    if (s > 0 && d > 0) {
+      ratio = d / (2 * sqrt(s))
+      printf "  %s  ratio %.2f%s\n", $1 ":" $2, ratio, (ratio < 0.8 ? "   <- bounces" : "")
+    } else {
+      printf "  %s  (default spring)\n", $1 ":" $2
+    }
+  }')
+
+if [[ -n $SPRINGIFY ]]; then
+  FOUND=1
+  printf '\n\033[1;33mSpring on an entrance, exit or layout transition\033[0m  (%s)\n' "$(wc -l <<<"$SPRINGIFY" | tr -d ' ')"
+  echo "  rule: a spring follows a finger. An entrance, an exit and a layout settle do not."
+  echo "  fix: .duration(dur.quick|moved).easing(ease.out), or LinearTransition.duration(dur.quick).easing(ease.out)"
+  echo "$SPRINGIFY"
 fi
 
 check "Inline spring config" \

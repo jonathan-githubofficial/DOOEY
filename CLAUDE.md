@@ -7,54 +7,68 @@ It is built **for one user (the owner) now**, but every record keeps multi-user 
 (`owner` fields plus PocketBase rules), so opening it up as a SaaS later is a config change, not a
 rewrite. No sharing or visibility UI until then.
 
-> **The app is [mobile/](mobile/), an Expo app.** The Vite web app in `src/` is frozen legacy
-> (last commit 2026-07-18). Work in `mobile/` unless told otherwise, and read
-> [Legacy web app](#legacy-web-app-frozen) before touching anything outside it.
+> **The app is [frontend/](frontend/), an Expo app, and it is now the only app.** It ships to iOS,
+> Android *and* the web from one codebase. The Vite web app that used to live in root `src/` was
+> deleted on 2026-07-25; see [One app, three targets](#one-app-three-targets).
 
 This file is the canonical entry point. Deeper docs live in [docs/](docs/) and
-[mobile/docs/](mobile/docs/).
+[frontend/docs/](frontend/docs/).
 
 ---
 
-## Current state (updated 2026-07-25)
+## Current state (updated 2026-07-26)
 
 **Keep this section true.** Update it before you end a session. It is the only place that records
 where things actually stand, and it is what spares the next session from re-reading the repo.
 
 - **Branch** `feat/expo-migration`, with a large uncommitted working tree (about 37 files, mostly
   gym plus its docs).
-- **Shipped in `mobile/`**: auth and onboarding, Planner (tasks, week/month/agenda views,
+- **Shipped in `frontend/`**: auth and onboarding, Planner (tasks, week/month/agenda views,
   timeboxing, compose sheet), Boards, Projects (learning programs as folders), Account, the Style
   studio (runtime palette, fonts, backdrops, doodle icons), and Gym.
+- **Boards was rebuilt on 2026-07-25** to replace the old web version: every web feature except
+  folders, direct-manipulation editing with no dialogs, undo/redo, and a Skia ink layer so drawing
+  keeps up with a hand. Architecture and the reasoning behind each tool:
+  [frontend/docs/boards.md](frontend/docs/boards.md). **This added
+  `@shopify/react-native-skia`, a native module: the dev client has to be rebuilt** before the
+  Boards space will run on a device, and `npm install` must have run at least once since, because
+  its `postinstall` is what puts CanvasKit's wasm where the web build can serve it
+  (`frontend/scripts/copy-canvaskit.mjs`). The canvas has not yet been exercised signed-in on either
+  target.
 - **Gym is the active feature and the largest one**: program catalog, routine editor, live logger
   with a docked keypad and Start/Stop per set, history, muscle map. Architecture:
-  [mobile/docs/gym.md](mobile/docs/gym.md).
-- **In flight**: the Gym redesign specced in [mobile/docs/gym-ux-plan.md](mobile/docs/gym-ux-plan.md).
+  [frontend/docs/gym.md](frontend/docs/gym.md).
+- **In flight**: the Gym redesign specced in [frontend/docs/gym-ux-plan.md](frontend/docs/gym-ux-plan.md).
   The root problem to fix first: the routine editor collects sets, reps, weight and rest, but
   `useStartWorkout` builds every set from `emptySet()` and discards `target_reps` and
-  `target_weight` ([mobile/src/features/workouts/api.ts](mobile/src/features/workouts/api.ts)), so
+  `target_weight` ([frontend/src/features/workouts/api.ts](frontend/src/features/workouts/api.ts)), so
   the catalog's real rep schemes never reach a session and progressive overload stays passive.
 - **Not built**: Journal (food log), Google Calendar two-way sync, Google OAuth sign-in.
-- **Design system**: retargeted to `mobile/` on 2026-07-25.
+- **Design system**: retargeted to `frontend/` on 2026-07-25.
   [docs/design-system.md](docs/design-system.md) and [docs/design-audit.md](docs/design-audit.md)
   now describe this app, built on "you own it" and "motion has to do a job". New:
-  `mobile/src/lib/motion.ts` (durations, easings, four gesture springs) and `useElevation()` in
-  `mobile/src/stores/theme.ts`. The audit's worklist is unstarted: 21 hardcoded `shadowColor`
+  `frontend/src/lib/motion.ts` (durations, easings, four gesture springs) and `useElevation()` in
+  `frontend/src/stores/theme.ts`. The audit's worklist is unstarted: 21 hardcoded `shadowColor`
   sites, 34 hex literals, 14 card radii the slider cannot move, 6 springs that visibly bounce.
-- **Loose ends**: `src/lib/motion.ts`, `src/components/sheet.tsx` and the uncommitted edits to
-  `src/main.tsx` and `src/styles/global.css` were written for the **frozen web app** in the same
-  pass, before it was clear it had been superseded. Delete or ignore; do not port them, their
-  motion philosophy is the one the current system replaces.
+- **Two folders now: `frontend/` and `backend/`** (2026-07-26). Was `mobile/` and `pb/`. Also gone:
+  the 414MB Lynx worktree in `.worktrees/`, the dead lynx plugins in `.claude/settings.json`, a
+  `mobile/.claude/` that only enabled the Expo plugin, a committed `settings.local.json` full of
+  another machine's paths, and `.scratch/` + `test-results/` + `.playwright-mcp/`.
+- **The Vite web app is gone** (2026-07-25). `materializeProgram` was ported into
+  `frontend/src/features/learning/api.ts` first, so pushing a learning program is end to end again.
+  The Docker image now builds the Expo web export. See [One app, three targets](#one-app-three-targets).
 
 ---
 
 ## The spaces
 
 Five spaces behind the tab bar, declared in
-[mobile/src/app/(tabs)/_layout.tsx](mobile/src/app/(tabs)/_layout.tsx):
+[frontend/src/app/(tabs)/_layout.tsx](frontend/src/app/(tabs)/_layout.tsx):
 
 1. **Planner** (`index`): everything due today in one glance, plus week, month and agenda views.
-2. **Boards**: free-form mood boards (sticky notes, text, links, stickers, doodles).
+2. **Boards**: free-form mood boards (notes, text, links, photos, stickers, doodles, sections) on
+   a pannable, zoomable canvas with a freehand ink layer. See
+   [frontend/docs/boards.md](frontend/docs/boards.md).
 3. **Projects**: learning programs as file-folder cards.
 4. **Gym**: programs, routines, live logging, history.
 5. **Account**.
@@ -62,14 +76,14 @@ Five spaces behind the tab bar, declared in
 Native builds get the platform's own tab bar (`NativeTabs` from
 `expo-router/unstable-native-tabs`), and the hand-drawn page doodles are rasterized off-screen into
 bitmap icons when "doodle icons in dock" is on. The web build keeps the DOOEY dock island
-(`mobile/src/components/Dock.tsx`).
+(`frontend/src/components/Dock.tsx`).
 
 **Tasks are pages, not rows.** Every task opens its own page with fixed, well-designed sections:
 notes, checklist, resources (links and video embeds), attachments. Notion-ish depth, but structured,
 with no free-form block editor.
 
 Calendar is no longer its own space: week, month and agenda views live in
-`mobile/src/features/tasks/components/`.
+`frontend/src/features/tasks/components/`.
 
 ---
 
@@ -83,14 +97,15 @@ Calendar is no longer its own space: week, month and agenda views live in
 | Server state | TanStack Query v5 plus the PocketBase JS SDK |
 | Client state | Zustand v5, persisted through AsyncStorage |
 | Animation | react-native-reanimated 4 with react-native-worklets |
+| GPU canvas | `@shopify/react-native-skia`, the Boards ink layer only |
 | Styling | React Native `StyleSheet` with tokens in `features/style/tokens.ts`. No Tailwind, no NativeWind, no shadcn, no UI kit |
 | Fonts | Outfit (body) and Fraunces (display) via `@expo-google-fonts/*` |
 | Icons | `lucide-react-native`, `@expo/vector-icons`, plus the user's own doodles |
 | Native | expo-haptics, expo-image-picker, expo-video, expo-audio, expo-file-system, react-native-view-shot |
-| Backend | PocketBase (Go binary in `pb/`): API, realtime, auth |
-| Builds | EAS (`mobile/eas.json`), app id `com.dooey.app` |
+| Backend | PocketBase (Go binary in `backend/`): API, realtime, auth |
+| Builds | EAS (`frontend/eas.json`), app id `com.dooey.app` |
 
-`mobile/patches/` holds patch-package patches applied on `postinstall` (one keeps native tab icons
+`frontend/patches/` holds patch-package patches applied on `postinstall` (one keeps native tab icons
 from being tinted as templates). If a patched package misbehaves, read the patch before blaming the
 library.
 
@@ -103,17 +118,17 @@ expo-router, a block-editor library.
 ## Running it
 
 ```bash
-pb/pocketbase.exe serve          # backend on :8090, start this first
-cd mobile && npm start           # Metro, then press i, a or w
-cd mobile && npm run typecheck   # tsc --noEmit
-cd mobile && npm run lint
+backend/pocketbase.exe serve          # backend on :8090, start this first
+cd frontend && npm start           # Metro, then press i, a or w
+cd frontend && npm run typecheck   # tsc --noEmit
+cd frontend && npm run lint
 ```
 
-`mobile/src/lib/pb.ts` derives the API host from Expo's `hostUri` in dev, so phones, emulators and
+`frontend/src/lib/pb.ts` derives the API host from Expo's `hostUri` in dev, so phones, emulators and
 the web all find PocketBase with no config. Production builds set `EXPO_PUBLIC_PB_URL`.
 
-**`pb/pb_data` is live user data.** Never delete, reset or hand-edit it. Schema changes go through
-`pb/pb_migrations/`.
+**`backend/pb_data` is live user data.** Never delete, reset or hand-edit it. Schema changes go through
+`backend/pb_migrations/`.
 
 ---
 
@@ -130,7 +145,7 @@ Collections, all owner-scoped: `users`, `tasks`, `moodboards`, `routines`, `work
 - **Timestamps** are stored UTC and rendered in the user's timezone.
 - Tasks belonging to a learning program carry `project`, `gate` and `session_key`.
 
-Full gym data model: [mobile/docs/gym.md](mobile/docs/gym.md), section "Server collections".
+Full gym data model: [frontend/docs/gym.md](frontend/docs/gym.md), section "Server collections".
 
 ---
 
@@ -141,7 +156,7 @@ Every space sits behind a guard; `/login` is the only public route.
 - `(tabs)/_layout.tsx` redirects signed-out visitors to `/login`. `onboarding.tsx` runs for new
   accounts.
 - The session persists through PocketBase's `AsyncAuthStore` over AsyncStorage. **`authLoaded`
-  (`mobile/src/lib/pb.ts`) must resolve before auth state means anything**: await it, do not race it.
+  (`frontend/src/lib/pb.ts`) must resolve before auth state means anything**: await it, do not race it.
 - Google OAuth is on the roadmap and not wired yet.
 
 ---
@@ -176,12 +191,12 @@ The values behind all that live in tokens:
 
 | Concern | Owner |
 |---|---|
-| Palette, fonts, presets, backdrops, doodle pages | `mobile/src/features/style/tokens.ts` |
-| `Palette` type, `alpha()`, `relight()` | `mobile/src/lib/theme.ts` |
-| Live palette, type, elevation (`usePalette`, `useType`, `useElevation`) | `mobile/src/stores/theme.ts` |
-| Radius and shadow strength (`useCardRadius`, `useShadow`) | `mobile/src/features/style/store.ts` |
-| Durations, easings, gesture springs | `mobile/src/lib/motion.ts` |
-| Shared primitives (surface, plate, sheet, stamp-edge, grain, pressable-scale, Check) | `mobile/src/components/` |
+| Palette, fonts, presets, backdrops, doodle pages | `frontend/src/features/style/tokens.ts` |
+| `Palette` type, `alpha()`, `relight()` | `frontend/src/lib/theme.ts` |
+| Live palette, type, elevation (`usePalette`, `useType`, `useElevation`) | `frontend/src/stores/theme.ts` |
+| Radius and shadow strength (`useCardRadius`, `useShadow`) | `frontend/src/features/style/store.ts` |
+| Durations, easings, gesture springs | `frontend/src/lib/motion.ts` |
+| Shared primitives (surface, plate, sheet, stamp-edge, grain, pressable-scale, Check) | `frontend/src/components/` |
 
 **If a value appears in two components, it belongs in a token.**
 
@@ -196,49 +211,73 @@ damping ratios; `/design-check` runs it.
 
 ```
 DOOEY/
-├── CLAUDE.md               ← you are here
-├── mobile/                 ← THE APP (Expo)
-│   ├── app.json            ← Expo config (plugins, icons, typed routes)
-│   ├── eas.json            ← build profiles
-│   ├── patches/            ← patch-package patches, applied on postinstall
-│   ├── docs/gym.md         ← gym architecture, UI and logic
-│   ├── docs/gym-ux-plan.md ← the in-flight gym redesign
+├── CLAUDE.md                 ← you are here
+├── Dockerfile                ← builds frontend, bundles it with the backend as one image
+├── frontend/                 ← THE APP: Expo, and the only app. iOS, Android, web.
+│   ├── app.json              ← Expo config (plugins, icons, typed routes)
+│   ├── eas.json              ← build profiles
+│   ├── patches/              ← patch-package patches, applied on postinstall
+│   ├── scripts/              ← copies CanvasKit's wasm into public/ on postinstall
+│   ├── public/               ← served at the web root (canvaskit.wasm lands here)
+│   ├── docs/boards.md        ← the boards canvas, end to end
+│   ├── docs/gym.md           ← gym architecture, UI and logic
+│   ├── docs/gym-ux-plan.md   ← the in-flight gym redesign
 │   └── src/
-│       ├── app/            ← expo-router routes
-│       ├── components/     ← shared primitives (Dock, sheet, plate, surface, doodles)
-│       ├── features/       ← tasks, workouts, boards, learning, style, auth
-│       ├── lib/            ← pb, theme, dates, haptics, sounds, doodle, confirm, shell
-│       └── stores/         ← auth, theme, sheet, garden (Zustand)
-├── pb/                     ← PocketBase binary, pb_hooks, pb_migrations, pb_data (never touch pb_data)
-├── docs/                   ← design system, deploy runbook, learning programs
-├── scripts/                ← learning-program verify and push
-└── src/ android/ ios/      ← legacy web app and its Capacitor shells (frozen)
+│       ├── app/              ← expo-router routes
+│       ├── components/       ← shared primitives (Dock, sheet, plate, surface, doodles)
+│       ├── features/         ← tasks, workouts, boards, learning, style, auth
+│       ├── lib/              ← pb, theme, dates, haptics, sounds, doodle, confirm, shell
+│       └── stores/           ← auth, theme, sheet, garden (Zustand)
+├── backend/                  ← PocketBase: binary, pb_hooks, pb_migrations, pb_data
+│                               (pb_data is live personal data — never delete, reset or hand-edit)
+├── docs/                     ← design system, deploy runbook, learning programs
+├── scripts/                  ← learning-program verify and push (the only root code)
+└── ref/                      ← design reference documents
 ```
 
-Routes in `mobile/src/app/`: `(tabs)/` for the five spaces, `(detail)/` for `task/[id]`,
+Two folders, named for what they are. It used to be `mobile/` and `pb/`, which stopped being true
+once `mobile/` started shipping the web build too. Renamed 2026-07-26; the container path inside the
+image is still `/pb`, because that is PocketBase's own convention and the volume mount depends on
+it.
+
+Routes in `frontend/src/app/`: `(tabs)/` for the five spaces, `(detail)/` for `task/[id]`,
 `project/[id]`, `routine/[id]`, `workout/[id]`, `board/[id]`, `preferences`, `style`, `wordmark`,
 and at the root `compose`, `login`, `onboarding`.
 
-A feature's code lives **entirely** inside `mobile/src/features/<feature>/`: `components/` for its
+A feature's code lives **entirely** inside `frontend/src/features/<feature>/`: `components/` for its
 UI, `api.ts` for its PB queries and mutations, `types.ts`, `store.ts` when it needs one. If two
-features reach for the same thing, it moves to `mobile/src/lib/` or `mobile/src/components/`.
+features reach for the same thing, it moves to `frontend/src/lib/` or `frontend/src/components/`.
 Folders are created when a feature needs them, never pre-created empty.
 
 ---
 
-## Legacy web app (frozen)
+## One app, three targets
 
-Root `src/` is the original Vite app: React 19, TanStack Router, Tailwind v4, shadcn/ui,
-`motion/react`, wrapped by Capacitor 8 in `android/` and `ios/`, shipped as one Docker image to a
-free-tier Compute Engine VM ([docs/deploy-google-cloud.md](docs/deploy-google-cloud.md), with
+There used to be two apps: the Expo app in `frontend/` and a separate Vite web app in root `src/`
+(React 19, TanStack Router, Tailwind v4, shadcn/ui, `motion/react`). **The Vite app was deleted on
+2026-07-25.** It shared no code with `frontend/`, every new feature had to be built twice, and by the
+end `frontend/` was a strict superset of it — same five features plus Gym.
+
+`frontend/` now serves the web too, through React Native Web. The web build is a plain
+`expo export --platform web`, copied into `pb_public` so PocketBase serves the API and the app from
+one container ([Dockerfile](Dockerfile), [docs/deploy-google-cloud.md](docs/deploy-google-cloud.md),
 auto-deploy in [.github/workflows/deploy.yml](.github/workflows/deploy.yml)).
 
-Last commit 2026-07-18. **Do not add features to it, and do not copy its patterns into `mobile/`**:
-different styling system, different router, different animation library. It still owns one live
-thing, materializing learning-program sessions into tasks. Ask before deleting any of it.
+Three things worth knowing about that trade:
 
-[docs/roadmap.md](docs/roadmap.md) and [docs/architecture.md](docs/architecture.md) predate the
-migration and describe this web app. Read them as history, not as the plan.
+- **The web bundle is bigger.** 1.37MB gzipped against the Vite app's 206KB. Accepted knowingly: a
+  single-user app behind a login, opened daily and cached, with nothing that should ever be indexed.
+- **`web.output` stays `"single"`.** Not `"static"`: static rendering wants `generateStaticParams`
+  for dynamic routes, and `board/[id]`, `task/[id]`, `workout/[id]` and the rest are all user data.
+  PocketBase falls back to `index.html`, so the client router resolves deep links.
+- **On the web the API is the page's own origin** (`frontend/src/lib/pb.ts`), because PocketBase is
+  what served it. Only native builds need `EXPO_PUBLIC_PB_URL`.
+
+Root now holds the container, `frontend/`, `backend/`, `docs/`, and `scripts/` for the
+learning-program tooling. Its `package.json` has one dependency.
+
+[docs/roadmap.md](docs/roadmap.md) and [docs/architecture.md](docs/architecture.md) predate all of
+this and describe the deleted web app. Read them as history, not as the plan.
 
 ---
 
@@ -252,8 +291,9 @@ npm run verify-program -- <dir>
 npm run push-program   -- <dir>
 ```
 
-Full procedure, file formats, and the one caveat that matters (materialization still runs in the
-legacy web app): [docs/learning-programs.md](docs/learning-programs.md).
+Full procedure and file formats: [docs/learning-programs.md](docs/learning-programs.md). Sessions
+become tasks in the app now (`useMaterializePrograms`, mounted on the Projects tab), so push then
+open Projects and the work is there.
 
 ---
 
@@ -294,7 +334,7 @@ glyph, not punctuation, and stays.)
 
 ## Conventions
 
-- **One store per domain** in `mobile/src/stores/` (`auth`, `theme`, `sheet`, `garden`), except
+- **One store per domain** in `frontend/src/stores/` (`auth`, `theme`, `sheet`, `garden`), except
   feature-isolated stores, which live in the feature folder (`features/workouts/store.ts`,
   `features/style/store.ts`).
 - **Three kinds of state, never blurred**: server state is TanStack Query, preferences are Zustand
@@ -306,6 +346,8 @@ glyph, not punctuation, and stays.)
 
 ## What to read next
 
-1. [mobile/docs/gym.md](mobile/docs/gym.md): the current app's deepest feature, end to end.
-2. [mobile/docs/gym-ux-plan.md](mobile/docs/gym-ux-plan.md): what we are fixing right now, and why.
+1. [frontend/docs/gym.md](frontend/docs/gym.md): the current app's deepest feature, end to end.
+   [frontend/docs/boards.md](frontend/docs/boards.md) is the second, and the one to read for how a
+   direct-manipulation surface is put together here.
+2. [frontend/docs/gym-ux-plan.md](frontend/docs/gym-ux-plan.md): what we are fixing right now, and why.
 3. [docs/design-system.md](docs/design-system.md): the tokens, the ownership rule, and the motion rules.

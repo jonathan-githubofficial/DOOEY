@@ -1,5 +1,5 @@
 {
-  // Ctrl+Shift+B runs "dev: mobile" — it frees stale ports, then opens the
+  // Ctrl+Shift+B runs "dev: app" — it frees stale ports, then opens the
   // backend (PocketBase) and the frontend (Expo) each in its own terminal.
   // Stop either with Ctrl+C in its terminal; re-running frees the ports again.
   "version": "2.0.0",
@@ -23,9 +23,9 @@
     },
     {
       "label": "backend: PocketBase",
-      "detail": "pb/pocketbase.exe serve on 0.0.0.0:8090 so phones on the LAN can reach it (frees the port first)",
+      "detail": "backend/pocketbase.exe serve on 0.0.0.0:8090 so phones on the LAN can reach it (frees the port first)",
       "type": "shell",
-      "command": "./pb/pocketbase.exe serve --http 0.0.0.0:8090",
+      "command": "./backend/pocketbase.exe serve --http 0.0.0.0:8090",
       "dependsOn": ["free port 8090"],
       "isBackground": true,
       "presentation": { "panel": "dedicated", "reveal": "always", "group": "dev", "clear": true },
@@ -33,17 +33,17 @@
     },
     {
       "label": "frontend: Expo",
-      "detail": "expo start in mobile/ on :8081 (frees the port first)",
+      "detail": "expo start in frontend/ on :8081 (frees the port first)",
       "type": "shell",
       "command": "npm start",
-      "options": { "cwd": "${workspaceFolder}/mobile" },
+      "options": { "cwd": "${workspaceFolder}/frontend" },
       "dependsOn": ["free port 8081"],
       "isBackground": true,
       "presentation": { "panel": "dedicated", "reveal": "always", "group": "dev", "clear": true },
       "problemMatcher": []
     },
     {
-      "label": "dev: mobile",
+      "label": "dev: app",
       "detail": "Backend + Expo, each in its own terminal, ports freed first",
       "dependsOn": ["backend: PocketBase", "frontend: Expo"],
       "dependsOrder": "parallel",
@@ -51,12 +51,21 @@
       "problemMatcher": []
     },
     {
-      "label": "dev: web",
-      "detail": "Legacy web stack — free ports, then Vite + PocketBase together",
-      "type": "npm",
-      "script": "dev:all",
+      "label": "frontend: Expo (web)",
+      "detail": "expo start --web in frontend/ — same Metro port, so run this OR \"frontend: Expo\", not both",
+      "type": "shell",
+      "command": "npm run web",
+      "options": { "cwd": "${workspaceFolder}/frontend" },
+      "dependsOn": ["free port 8081"],
       "isBackground": true,
-      "presentation": { "panel": "dedicated", "reveal": "always", "clear": true },
+      "presentation": { "panel": "dedicated", "reveal": "always", "group": "dev", "clear": true },
+      "problemMatcher": []
+    },
+    {
+      "label": "dev: web",
+      "detail": "Backend + the Expo app's web target, straight into a browser",
+      "dependsOn": ["backend: PocketBase", "frontend: Expo (web)"],
+      "dependsOrder": "parallel",
       "problemMatcher": []
     }
   ]

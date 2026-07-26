@@ -7,15 +7,6 @@
     ]
   },
   "enabledPlugins": {
-    "lynx-debug@lynx-agent-skills": true,
-    "reactlynx@lynx-agent-skills": true
-  },
-  "extraKnownMarketplaces": {
-    "lynx-agent-skills": {
-      "source": {
-        "source": "github",
-        "repo": "lynx-community/skills"
-      }
-    }
+    "expo@claude-plugins-official": true
   }
 }

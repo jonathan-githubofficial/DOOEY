@@ -1,13 +1,13 @@
 ---
 name: design-system
-description: Use before writing or reviewing any DOOEY UI code in mobile/, and whenever a change touches colour, radius, shadow, typography, animation, or a shared primitive. Loads the design tokens and motion rules from docs/design-system.md, then checks the work against them so every screen stays consistent and stays under the user's control from the Style page. Trigger on "add a page", "build a component", "style this", "animate this", "add a sheet", "design check", "is this consistent", or any request to audit or clean up the app's styling and animations.
+description: Use before writing or reviewing any DOOEY UI code in frontend/, and whenever a change touches colour, radius, shadow, typography, animation, or a shared primitive. Loads the design tokens and motion rules from docs/design-system.md, then checks the work against them so every screen stays consistent and stays under the user's control from the Style page. Trigger on "add a page", "build a component", "style this", "animate this", "add a sheet", "design check", "is this consistent", or any request to audit or clean up the app's styling and animations.
 ---
 
 # DOOEY Design System
 
-**Scope: the Expo app in `mobile/`.** Root `src/` is a frozen legacy Vite app with a different
+**Scope: the Expo app in `frontend/`.** Root `src/` is a frozen legacy Vite app with a different
 styling system, router and animation library. Do not apply these rules to it and do not copy its
-patterns into `mobile/`.
+patterns into `frontend/`.
 
 ## Overview
 
@@ -94,11 +94,11 @@ Reduced motion is carried by every config in `motion.ts` via `ReduceMotion.Syste
 
 ## Primitives
 
-Check `mobile/src/components/` before building: `Panel`, `PressableScale`, `Sheet`, `Check`,
+Check `frontend/src/components/` before building: `Panel`, `PressableScale`, `Sheet`, `Check`,
 `Eyebrow`, `Stamp`, `Grain`, `StampEdge`, `Plate`, `Dock`, `Masthead`, `DoodleSvg`.
 
-Feature UI lives in `mobile/src/features/<feature>/components/`. If two features reach for the same
-thing, it moves to `mobile/src/components/` or `mobile/src/lib/`.
+Feature UI lives in `frontend/src/features/<feature>/components/`. If two features reach for the same
+thing, it moves to `frontend/src/components/` or `frontend/src/lib/`.
 
 ## Checking work
 
@@ -106,7 +106,7 @@ thing, it moves to `mobile/src/components/` or `mobile/src/lib/`.
 bash .claude/skills/design-system/scripts/design-check.sh --diff
 ```
 
-Without `--diff` it scans all of `mobile/src`. It greps for ownership violations and computes the
+Without `--diff` it scans all of `frontend/src`. It greps for ownership violations and computes the
 damping ratio of every spring.
 
 **Read every hit before reporting it.** It is a grep: it matches inside strings and comments, and
@@ -121,7 +121,7 @@ Then verify what grep cannot:
       check in this file.
 - [ ] Light and dark both rendered.
 - [ ] Reduced motion on, nothing invisible or stuck.
-- [ ] `cd mobile && npm run typecheck && npm run lint`.
+- [ ] `cd frontend && npm run typecheck && npm run lint`.
 
 Report each finding as `file:line` with what replaces the value. If it is clean, say so rather than
 manufacturing findings.

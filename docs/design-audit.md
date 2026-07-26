@@ -1,11 +1,11 @@
 # Design Sanitization Audit
 
-Baseline taken 2026-07-25 against `mobile/` (93 source files).
+Baseline taken 2026-07-25 against `frontend/` (93 source files).
 
 The work list that turns [design-system.md](design-system.md) from a description of intent into a
 description of the code.
 
-**Start with the good news.** `mobile/` is in far better shape than the frozen web app was.
+**Start with the good news.** `frontend/` is in far better shape than the frozen web app was.
 `alpha()` is used in 41 files, `usePalette()` and `useType()` are the norm, `<PressableScale>` is a
 single shared press primitive whose springs are already tuned near-critical with a comment saying
 "no wobble or overshoot", and hover lift was deliberately rejected. The architecture is right. What
@@ -48,7 +48,7 @@ The consequence is easy to see: switch to Charcoal or Tide in the Style page. Ev
 grey or blue, and every shadow in the app stays warm brown. The user changed their theme and the app
 only half agreed.
 
-`useElevation()` in `mobile/src/stores/theme.ts` now returns the whole shadow style, tinted from
+`useElevation()` in `frontend/src/stores/theme.ts` now returns the whole shadow style, tinted from
 their `ink` and scaled by their shadow slider. Replacing the 21 literals is mechanical.
 
 It also collapses a duplication: those 21 sites each hand-write `shadowColor`, `shadowOpacity`,
@@ -135,6 +135,31 @@ Same six. Restating it as a rule rather than a list, because it is the one that 
 > A spring models something with mass that a hand is moving. If nothing is being dragged or swiped,
 > the animation is explaining a change, and a change is explained with a duration and a curve.
 
+### 7. Eighteen spring entrances the checker used to be blind to
+
+Found 2026-07-25, after the owner pointed out that the sheet still rose with a spring despite the
+rule above. Reanimated's builders spell a spring a second way — `SlideInDown.springify()
+.stiffness(300).damping(30)`, `LinearTransition.springify()...` — and the damping-ratio rule only
+ever matched the `{ stiffness, damping }` object literal, so **none of these were ever reported**.
+The checker now computes ratios for the chained form too.
+
+Eighteen sites across the app, five of which bounce (ratio below 0.8):
+
+| Ratio | Where |
+|---|---|
+| **0.73** | `app/(detail)/workout/[id].tsx:640` |
+| **0.78** | `app/(detail)/task/[id].tsx:38` |
+| **0.78** | `features/tasks/components/AgendaSheet.tsx:44` |
+| **0.78** | `app/(detail)/project/[id].tsx:19` |
+| **0.78** | `features/tasks/components/TimeboxSheet.tsx:25` |
+
+The remaining thirteen sit between 0.80 and 0.87: they do not visibly overshoot, but they are still
+springs on entrances and layout settles, which rule 6 says should be curves.
+
+Already fixed, because they were the surface the complaint was about: `components/sheet.tsx` (the
+drawer's rise, the menu unfold, the layout settle) and `components/DoodleEditor.tsx` (a 0.73
+entrance). The rest are untouched.
+
 ---
 
 ## Migration order
@@ -159,7 +184,7 @@ onto `timing(dur.instant)`. This is where the app stops wobbling. Small diff, bi
 **Step 5. Decide on `PlannerBook`.** A conversation, not a task.
 
 **Step 6. Mount `<ReducedMotionConfig mode={ReduceMotion.System} />` at the app root** in
-`mobile/src/app/_layout.tsx`, so layout animations and entering/exiting presets honour the setting
+`frontend/src/app/_layout.tsx`, so layout animations and entering/exiting presets honour the setting
 alongside the configs in `motion.ts`.
 
 ---

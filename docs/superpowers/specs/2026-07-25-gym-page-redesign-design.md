@@ -1,7 +1,7 @@
 # Gym page redesign — design
 
 **Date:** 2026-07-25
-**Scope:** `mobile/src/app/(tabs)/gym.tsx` and the components it grows into.
+**Scope:** `frontend/src/app/(tabs)/gym.tsx` and the components it grows into.
 
 ## Goal
 
@@ -24,7 +24,7 @@ Where they conflict, glanceable wins.
 - No new dependencies.
 - No masonry library — a two-column packer is ~30 lines.
 - Reduced-motion handling is **not** addressed. The mobile app has no reduced-motion affordance
-  anywhere today (`AccessibilityInfo` appears nowhere in `mobile/src`). This redesign introduces no
+  anywhere today (`AccessibilityInfo` appears nowhere in `frontend/src`). This redesign introduces no
   new animation primitives — only `FadeInDown`, `LinearTransition` and `PressableScale`, all already
   in use — so it neither improves nor regresses that gap. Fixing it app-wide is separate work.
 
@@ -44,7 +44,7 @@ The current page is a filing cabinet. Concretely:
 - The dominant muscle of a routine is computed (`focusOf`, [gym.tsx:101-114]) and then expressed as
   an 8px dot. `MuscleMap`, the gym's strongest visual asset, only exists inside `ExercisePicker`.
 - The page answers "what are all my routines?" but never "what do I do today?" — which the
-  [gym-ux-plan](../../../mobile/docs/gym-ux-plan.md) names as the north star.
+  [gym-ux-plan](../../../frontend/docs/gym-ux-plan.md) names as the north star.
 
 ## Decisions
 
@@ -259,7 +259,7 @@ Same card shell, with `workout.title` as the name. Additions:
   since exercise count is already in the meta line and the card is half-width now.
 - History cards keep today's long-press-to-delete and gain no `BandMenu`, which is why the PR stamp
   can own the band's top-right. Surfacing a visible delete here is listed in the
-  [gym-ux-plan](../../../mobile/docs/gym-ux-plan.md) and stays out of this change.
+  [gym-ux-plan](../../../frontend/docs/gym-ux-plan.md) and stays out of this change.
 
 ### Section rules
 
@@ -289,12 +289,12 @@ above the label, `PressableScale` at 0.96.
 
 ## Testing
 
-There are no tests in `mobile/` today, so this doesn't invent a framework. Verification is:
+There are no tests in `frontend/` today, so this doesn't invent a framework. Verification is:
 
 1. **`rotation.ts` is pure and hand-checkable** — the four functions take plain arrays and return
    plain values. Each rule in the `nextUp` list above is walked manually against a seeded PPL
    program: fresh account, after Push, after a deleted routine, after an ad-hoc session.
-2. **Visual pass in the running app** (`npm run start` in `mobile/`), light and dark, on:
+2. **Visual pass in the running app** (`npm run start` in `frontend/`), light and dark, on:
    the seeded starter program; a gym with 2 programs and 8 routines; an empty gym; a live session;
    a history with and without a PR.
 3. **Style-token pass** — drag radius to 0 and to 3rem, and shadow to 0 and 2, in Style studio.
@@ -315,10 +315,10 @@ There are no tests in `mobile/` today, so this doesn't invent a framework. Verif
   stays alive on Projects, where it maps to a real thing (a program is a folder of sessions); on
   Gym it was wrapping the whole page, which is what made it feel boxed in.
 
-[gym.tsx:766-779]: ../../../mobile/src/app/(tabs)/gym.tsx#L766-L779
-[gym.tsx:101-114]: ../../../mobile/src/app/(tabs)/gym.tsx#L101-L114
-[api.ts:334]: ../../../mobile/src/features/workouts/api.ts#L334
-[index.tsx:243-274]: ../../../mobile/src/app/(tabs)/index.tsx#L243-L274
-[projects.tsx:131-139]: ../../../mobile/src/app/(tabs)/projects.tsx#L131-L139
-[ExercisePicker.tsx:338]: ../../../mobile/src/features/workouts/components/ExercisePicker.tsx#L338
-[AgendaSheet.tsx:256]: ../../../mobile/src/features/tasks/components/AgendaSheet.tsx#L256
+[gym.tsx:766-779]: ../../../frontend/src/app/(tabs)/gym.tsx#L766-L779
+[gym.tsx:101-114]: ../../../frontend/src/app/(tabs)/gym.tsx#L101-L114
+[api.ts:334]: ../../../frontend/src/features/workouts/api.ts#L334
+[index.tsx:243-274]: ../../../frontend/src/app/(tabs)/index.tsx#L243-L274
+[projects.tsx:131-139]: ../../../frontend/src/app/(tabs)/projects.tsx#L131-L139
+[ExercisePicker.tsx:338]: ../../../frontend/src/features/workouts/components/ExercisePicker.tsx#L338
+[AgendaSheet.tsx:256]: ../../../frontend/src/features/tasks/components/AgendaSheet.tsx#L256

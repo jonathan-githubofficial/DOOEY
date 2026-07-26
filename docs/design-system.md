@@ -2,7 +2,7 @@
 
 The single source of truth for how DOOEY looks and moves.
 
-**Scope: the Expo app in `mobile/`.** The Vite app in root `src/` is frozen legacy and has its own
+**Scope: the Expo app in `frontend/`.** The Vite app in root `src/` is frozen legacy and has its own
 Tailwind and `motion/react` setup that none of this touches. See
 [Legacy web app](../CLAUDE.md#legacy-web-app-frozen).
 
@@ -42,12 +42,12 @@ Everything below is in service of those two sentences.
 
 | Concern | Owner | Never |
 |---|---|---|
-| Palette, presets, fonts, backdrops, doodle pages | `mobile/src/features/style/tokens.ts` | A colour the Style page cannot reach |
-| `Palette` type, `alpha()`, `relight()` | `mobile/src/lib/theme.ts` | A raw `rgba()` literal |
-| Live palette, type, elevation | `mobile/src/stores/theme.ts` (`usePalette`, `useType`, `useElevation`) | `shadowColor:` written by hand |
-| Radius and shadow strength | `mobile/src/features/style/store.ts` (`useCardRadius`, `useShadow`) | A literal `borderRadius: 24` on a card |
-| Durations, easings, gesture springs | `mobile/src/lib/motion.ts` | An inline `withSpring` config |
-| Shared primitives | `mobile/src/components/` | Rebuilding one that exists |
+| Palette, presets, fonts, backdrops, doodle pages | `frontend/src/features/style/tokens.ts` | A colour the Style page cannot reach |
+| `Palette` type, `alpha()`, `relight()` | `frontend/src/lib/theme.ts` | A raw `rgba()` literal |
+| Live palette, type, elevation | `frontend/src/stores/theme.ts` (`usePalette`, `useType`, `useElevation`) | `shadowColor:` written by hand |
+| Radius and shadow strength | `frontend/src/features/style/store.ts` (`useCardRadius`, `useShadow`) | A literal `borderRadius: 24` on a card |
+| Durations, easings, gesture springs | `frontend/src/lib/motion.ts` | An inline `withSpring` config |
+| Shared primitives | `frontend/src/components/` | Rebuilding one that exists |
 
 ---
 
@@ -145,7 +145,7 @@ felt static. A notebook does not wobble when you write in it.
 The bar to clear is not "is this delightful", it is **"what would the user lose if this were
 instant?"** If the honest answer is nothing, make it instant. Most of the app should be.
 
-Everything below is in [`mobile/src/lib/motion.ts`](../mobile/src/lib/motion.ts).
+Everything below is in [`frontend/src/lib/motion.ts`](../frontend/src/lib/motion.ts).
 
 ### No wobble
 
@@ -218,7 +218,7 @@ Do not branch on `useReducedMotion()` in a component.
 
 ## Primitives
 
-Check `mobile/src/components/` before building anything.
+Check `frontend/src/components/` before building anything.
 
 | Component | Gives you |
 |---|---|
@@ -229,8 +229,8 @@ Check `mobile/src/components/` before building anything.
 | `<Eyebrow>` / `<Stamp>` | Micro-label, rubber-stamp badge |
 | `<Grain>` / `<StampEdge>` / `<Plate>` | Paper texture, perforated edge, plate surface |
 
-Feature-specific UI lives in `mobile/src/features/<feature>/components/`. If two features reach for
-the same thing, it moves to `mobile/src/components/` or `mobile/src/lib/`.
+Feature-specific UI lives in `frontend/src/features/<feature>/components/`. If two features reach for
+the same thing, it moves to `frontend/src/components/` or `frontend/src/lib/`.
 
 ---
 

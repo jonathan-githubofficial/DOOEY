@@ -1,23 +1,27 @@
-# DOOEY ships as ONE container: PocketBase serves the API *and* the built web
-# app (dist/ is copied to pb_public, which PocketBase serves automatically).
+# DOOEY ships as ONE container: PocketBase serves the API *and* the web build
+# of the Expo app (copied to pb_public, which PocketBase serves automatically).
 # Hosting steps live in docs/deploy-google-cloud.md.
 
-# --- 1. build the web app ---------------------------------------------------
+# --- 1. build the web target of the Expo app --------------------------------
 FROM node:22-alpine AS web
-WORKDIR /app
-COPY package.json package-lock.json ./
+WORKDIR /app/frontend
+# Manifests, patches and scripts first: `npm ci` runs postinstall, which needs
+# patch-package's patches and the CanvasKit copy script to already be here.
+COPY frontend/package.json frontend/package-lock.json ./
+COPY frontend/patches ./patches
+COPY frontend/scripts ./scripts
 RUN npm ci
-COPY . .
-# Leave VITE_PB_URL empty for the same-origin default (src/lib/pb.ts) — the
-# web app talks to the PocketBase that served it. Set it only if the API will
-# live on a different host than the web app.
-ARG VITE_PB_URL=
-ENV VITE_PB_URL=$VITE_PB_URL
-RUN npm run build
+COPY frontend ./
+# Leave EXPO_PUBLIC_PB_URL empty for the same-origin default (frontend/src/lib/pb.ts)
+# — the web build talks to the PocketBase that served it. Set it only if the API
+# will live on a different host.
+ARG EXPO_PUBLIC_PB_URL=
+ENV EXPO_PUBLIC_PB_URL=$EXPO_PUBLIC_PB_URL
+RUN npx expo export --platform web --output-dir dist
 
 # --- 2. fetch the PocketBase server binary -----------------------------------
 FROM alpine:3.22 AS fetch
-# 0.39.7 matches pb/pocketbase.exe — the version the migrations were written
+# 0.39.7 matches backend/pocketbase.exe — the version the migrations were written
 # and tested against. Bump both together.
 ARG PB_VERSION=0.39.7
 ARG TARGETARCH=amd64
@@ -30,9 +34,9 @@ FROM alpine:3.22
 RUN apk add --no-cache ca-certificates
 WORKDIR /pb
 COPY --from=fetch /pb/pocketbase ./pocketbase
-COPY pb/pb_hooks ./pb_hooks
-COPY pb/pb_migrations ./pb_migrations
-COPY --from=web /app/dist ./pb_public
+COPY backend/pb_hooks ./pb_hooks
+COPY backend/pb_migrations ./pb_migrations
+COPY --from=web /app/frontend/dist ./pb_public
 
 # SQLite lives here — always mount a real persistent disk over it in production.
 VOLUME /pb/pb_data

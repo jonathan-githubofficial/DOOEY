@@ -1,6 +1,6 @@
 # Token Reference
 
-Lookup tables only, for `mobile/`. The reasoning and the rules live in
+Lookup tables only, for `frontend/`. The reasoning and the rules live in
 [docs/design-system.md](../../../docs/design-system.md).
 
 ## Ownership map
@@ -114,7 +114,7 @@ once at the app root. Never branch on `useReducedMotion()` in a component.
 
 ## Primitives
 
-`mobile/src/components/`
+`frontend/src/components/`
 
 | Component | Gives you |
 |---|---|

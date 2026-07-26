@@ -2,7 +2,7 @@
 description: Check UI work against the DOOEY design system (ownership, tokens, motion)
 ---
 
-Check the current work against DOOEY's design system. Scope is `mobile/`; root `src/` is frozen
+Check the current work against DOOEY's design system. Scope is `frontend/`; root `src/` is frozen
 legacy and exempt.
 
 1. Read `docs/design-system.md` for the rules.
@@ -12,7 +12,7 @@ legacy and exempt.
 bash .claude/skills/design-system/scripts/design-check.sh --diff
 ```
 
-Without `--diff` it scans all of `mobile/src`. It checks ownership violations and computes the
+Without `--diff` it scans all of `frontend/src`. It checks ownership violations and computes the
 damping ratio of every spring.
 
 3. **Read every hit before reporting it.** It is a grep: it matches inside strings and comments, and
@@ -30,7 +30,7 @@ idiom). A hit you have not opened is not a finding.
    - Reduced motion on, nothing invisible or stuck.
    - For any animation added: what would the user lose if it were instant? If nothing, remove it.
 
-6. Run `cd mobile && npm run typecheck && npm run lint`.
+6. Run `cd frontend && npm run typecheck && npm run lint`.
 
 Report each finding as `file:line` with what replaces the value. If it is clean, say so plainly
 rather than manufacturing findings.

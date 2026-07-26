@@ -3,7 +3,7 @@
 // Usage:  npm run verify-program -- <dir>
 //         node scripts/verify-program.mjs <dir>
 //
-// This imports the app's REAL parser (src/features/learning/parse.ts), so what
+// This imports the app's REAL parser (frontend/src/features/learning/parse.ts), so what
 // passes here is exactly what the UI will render — the check can't drift from
 // the app. push-program.mjs runs this first and refuses to push on any error.
 //
@@ -19,7 +19,7 @@ const EXPECTED = ["PLAN.md", "SCHEDULE.md", "LOG.md", "TESTS.md", "DAILY-TEMPLAT
 
 // The app's own parser — single source of truth for the schedule contract.
 const { parseSchedule } = await import(
-  pathToFileURL(join(ROOT, "src/features/learning/parse.ts")).href
+  pathToFileURL(join(ROOT, "frontend/src/features/learning/parse.ts")).href
 );
 
 export async function verifyBundle(dir) {
