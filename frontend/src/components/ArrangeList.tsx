@@ -42,26 +42,28 @@ export function ArrangeList({
 }) {
   // Rows read their slot from this shared map so a drag displaces neighbours
   // live — AgendaSheet's ReorderableRows pattern, minus variable heights.
+  const keys = order.filter((k) => items.some((i) => i.key === k));
   const positions = useSharedValue<Record<string, number>>(
-    Object.fromEntries(order.map((k, i) => [k, i])),
+    Object.fromEntries(keys.map((k, i) => [k, i])),
   );
-  const orderKey = order.join(",");
+  const keysKey = keys.join(",");
 
   useEffect(() => {
-    positions.value = Object.fromEntries(order.map((k, i) => [k, i]));
+    positions.value = Object.fromEntries(keys.map((k, i) => [k, i]));
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [orderKey]);
+  }, [keysKey]);
 
   const commit = () => {
-    const next = [...order].sort(
+    const known = [...keys].sort(
       (a, b) => (positions.value[a] ?? 0) - (positions.value[b] ?? 0),
     );
-    onChange(next, [...hidden]);
+    const unknown = order.filter((k) => !keys.includes(k));
+    onChange([...known, ...unknown], [...hidden]);
   };
 
   return (
-    <View style={{ height: order.length * ROW_H }}>
-      {order.map((key) => {
+    <View style={{ height: keys.length * ROW_H }}>
+      {keys.map((key) => {
         const item = items.find((i) => i.key === key);
         if (!item) return null;
         return (
@@ -69,7 +71,7 @@ export function ArrangeList({
             key={key}
             item={item}
             positions={positions}
-            count={order.length}
+            count={keys.length}
             hidden={hidden.includes(key)}
             onToggle={() => {
               hapticTap();
@@ -164,7 +166,7 @@ function Row({
         <Pressable
           accessibilityRole="switch"
           accessibilityState={{ checked: !hidden }}
-          accessibilityLabel={`Show ${item.label} in the dock`}
+          accessibilityLabel={`Show ${item.label}`}
           onPress={onToggle}
           hitSlop={8}
           style={styles.eye}
