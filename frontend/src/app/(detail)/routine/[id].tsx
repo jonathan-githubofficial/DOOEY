@@ -207,7 +207,7 @@ export default function RoutineEditor() {
         <Eyebrow style={styles.section}>exercises</Eyebrow>
         <View style={styles.list}>
           {effItems.map((item, i) => (
-            <Animated.View key={`${item.name}-${i}`} layout={settle} entering={FadeIn.duration(160)}>
+            <Animated.View key={`${item.name}-${i}`} layout={settle()} entering={FadeIn.duration(160)}>
               <Panel style={styles.itemCard}>
                 <View style={styles.itemHead}>
                   <ItemThumb libId={item.libId} />

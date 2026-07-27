@@ -162,7 +162,7 @@ function Sheet({ spec, seq }: { spec: SheetSpec; seq: number }) {
         entering={
           WEB ? FadeIn.duration(dur.quick) : SlideInDown.duration(dur.moved).easing(ease.out)
         }
-        layout={settle}
+        layout={settle()}
         style={[
           WEB ? styles.card : styles.sheet,
           WEB && elevation,

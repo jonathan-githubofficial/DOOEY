@@ -364,7 +364,7 @@ export function ComposerForm({
       )}
 
       {showNotes && (
-        <Animated.View entering={FadeIn.duration(180)} layout={settle}>
+        <Animated.View entering={FadeIn.duration(180)} layout={settle()}>
           <TextInput
             value={notes}
             onChangeText={setNotes}

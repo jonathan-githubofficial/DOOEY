@@ -1,5 +1,5 @@
 import { StyleSheet, Text } from "react-native";
-import { Dumbbell, FolderOpen, NotebookPen, Shapes } from "lucide-react-native";
+import { Dumbbell, FolderOpen, Shapes, Utensils } from "lucide-react-native";
 import { ArrangeList } from "@/components/ArrangeList";
 import { Eyebrow, Panel } from "@/components/surface";
 import { spaceOf } from "@/lib/spaces";
@@ -8,10 +8,10 @@ import type { DockChoice } from "../layout";
 import { useHomeStore } from "../store";
 
 const ICONS = {
-  planner: NotebookPen,
   boards: Shapes,
   projects: FolderOpen,
   gym: Dumbbell,
+  journal: Utensils,
 } as const;
 
 /** The dock belongs to the user: reorder the middle spaces, tuck away the
@@ -31,13 +31,17 @@ export function DockPanel() {
         Hold to reorder, tap the eye to tuck a space away. Home and Account stay put.
       </Text>
       <ArrangeList
-        items={order.map((r) => {
+        items={order.flatMap((r) => {
+          const space = spaceOf(r);
           const Icon = ICONS[r];
-          return {
-            key: r,
-            label: spaceOf(r).label,
-            icon: <Icon size={18} color={colors.inkMuted} />,
-          };
+          if (!space) return [];
+          return [
+            {
+              key: r,
+              label: space.label,
+              icon: <Icon size={18} color={colors.inkMuted} />,
+            },
+          ];
         })}
         order={order}
         hidden={hidden}

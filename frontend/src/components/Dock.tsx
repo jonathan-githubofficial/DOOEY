@@ -2,10 +2,10 @@ import { Tabs } from "expo-router";
 import {
   Dumbbell,
   FolderOpen,
-  House,
   NotebookPen,
   Shapes,
   UserRound,
+  Utensils,
   type LucideIcon,
 } from "lucide-react-native";
 import { useEffect, useRef } from "react";
@@ -29,7 +29,7 @@ import { alpha } from "@/lib/theme";
 import { useAuthStore } from "@/stores/auth";
 import { usePalette, useType } from "@/stores/theme";
 import { settle } from "@/lib/motion";
-import { spaceFor, type SpaceRoute } from "@/lib/spaces";
+import { spaceFor, spaceOf, type Space, type SpaceRoute } from "@/lib/spaces";
 
 // A pure deceleration curve — the pill glides and stops dead, no overshoot.
 const GLIDE = { duration: 260, easing: Easing.bezier(0.2, 0, 0, 1) };
@@ -41,11 +41,11 @@ type TabBarProps = Parameters<NonNullable<React.ComponentProps<typeof Tabs>["tab
  * own business. Account is absent on purpose — your doodled self at the left
  * end of the island is its door. */
 const DOCK_ICONS: Partial<Record<SpaceRoute, LucideIcon>> = {
-  index: House,
-  planner: NotebookPen,
+  index: NotebookPen,
   boards: Shapes,
   projects: FolderOpen,
   gym: Dumbbell,
+  journal: Utensils,
 };
 
 /** The dock: a floating island. The wordmark anchors the left end (its zest
@@ -57,8 +57,11 @@ export function Dock({ state, navigation }: TabBarProps) {
   const shadow = useShadow();
   const insets = useSafeAreaInsets();
 
-  // Task pages are drill-ins of the planner; a board of Boards; a project of
-  // Projects; the style studio of Account — the parent stop stays lit there.
+  // `state.routes[state.index].name` is always one of the six tab routes
+  // themselves: task/board/project/workout pages push onto the root stack
+  // above this navigator, so they never become its own focused route.
+  // spaceFor's Account fallback is just a safety net for a name that somehow
+  // isn't one of the six.
   const active = spaceFor(state.routes[state.index].name);
 
   const stops = useRef<Record<string, { x: number; width: number }>>({});
@@ -84,7 +87,14 @@ export function Dock({ state, navigation }: TabBarProps) {
     if (key === active) place(key, true);
   };
 
-  const dockSpaces = useDock().filter((s) => s.route !== "account");
+  let dockSpaces: Space[] = useDock().filter((s) => s.route !== "account");
+  // Standing in a hidden space (a widget link, a deep link) must not leave
+  // the pill with nowhere to land: give the active space a stop of its own
+  // when the user's dock doesn't otherwise carry it.
+  const activeSpace = spaceOf(active);
+  if (activeSpace && active !== "account" && !dockSpaces.some((s) => s.route === active)) {
+    dockSpaces = [...dockSpaces, activeSpace];
+  }
   const dockKey = dockSpaces.map((s) => s.route).join(",");
 
   useEffect(() => {
@@ -140,17 +150,23 @@ export function Dock({ state, navigation }: TabBarProps) {
           onPress={() => navigation.navigate("account")}
         />
         <View style={[styles.divider, { backgroundColor: alpha(colors.rule, 0.8) }]} />
-        {dockSpaces.map((space) => (
-          <DockTab
-            key={space.route}
-            label={space.label}
-            icon={DOCK_ICONS[space.route]!}
-            doodleKey={space.doodle}
-            active={active === space.route}
-            onLayout={measure(space.route)}
-            onPress={() => navigation.navigate(space.route)}
-          />
-        ))}
+        {dockSpaces.map((space) => {
+          // Render only spaces with a DOCK_ICONS entry: a future space added
+          // here without one degrades to "no stop" instead of crashing.
+          const icon = DOCK_ICONS[space.route];
+          if (!icon) return null;
+          return (
+            <DockTab
+              key={space.route}
+              label={space.label}
+              icon={icon}
+              doodleKey={space.doodle}
+              active={active === space.route}
+              onLayout={measure(space.route)}
+              onPress={() => navigation.navigate(space.route)}
+            />
+          );
+        })}
       </View>
     </View>
   );
@@ -224,7 +240,7 @@ function DockTab({
   const tint = active ? colors.ink : colors.inkMuted;
 
   return (
-    <Animated.View layout={settle} onLayout={onLayout}>
+    <Animated.View layout={settle()} onLayout={onLayout}>
       <Pressable
         accessibilityLabel={label}
         accessibilityState={{ selected: active }}

@@ -157,7 +157,7 @@ function SessionRow({ task }: { task: Task }) {
     : "";
 
   return (
-    <Animated.View layout={settle} style={styles.sessionRow}>
+    <Animated.View layout={settle()} style={styles.sessionRow}>
       <Check
         done={isDone}
         gate={task.gate}

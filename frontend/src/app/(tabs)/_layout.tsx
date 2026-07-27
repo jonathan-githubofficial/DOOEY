@@ -10,7 +10,7 @@ import { useDock } from "@/features/home/store";
 import { useStyleStore } from "@/features/style/store";
 import { fontStyle } from "@/features/style/tokens";
 import { strokePath, type Stroke } from "@/lib/doodle";
-import { SPACES, spaceFor } from "@/lib/spaces";
+import { SPACES, type SpaceRoute } from "@/lib/spaces";
 import { alpha, type Palette } from "@/lib/theme";
 import { useAuthStore } from "@/stores/auth";
 import { usePalette } from "@/stores/theme";
@@ -30,39 +30,58 @@ export default function TabsLayout() {
   const [icons, setIcons] = useState<Record<string, string>>({});
   const dock = useDock();
   // Read unconditionally (rules-of-hooks) even though only the native branch
-  // below needs it — see the focused-space comment there for why.
+  // below needs it — see the revealed-space comment there for why.
   const pathname = usePathname();
+  const strippedPath = pathname === "/" ? "index" : pathname.slice(1);
+  const currentSpace = SPACES.find((s) => s.route === strippedPath);
+
+  // Spaces the user has actually stood on this session that aren't in their
+  // dock right now — grows only, never shrinks, so a space revealed once (a
+  // deep link, a Home widget) keeps its Trigger for the rest of the session
+  // instead of popping in and out as navigation moves on elsewhere. Adjusted
+  // during render (React's documented pattern for state derived from a prop
+  // change: https://react.dev/learn/you-might-not-need-an-effect), not in a
+  // useEffect — an effect would only persist the reveal one render after
+  // NativeTabs below already needed it, which is exactly the race this
+  // whole rewrite exists to close.
+  const [revealed, setRevealed] = useState<Set<SpaceRoute>>(new Set());
+  if (currentSpace && !dock.some((d) => d.route === currentSpace.route) && !revealed.has(currentSpace.route)) {
+    setRevealed((prev) => new Set(prev).add(currentSpace.route));
+  }
+
   if (!isAuthenticated) return <Redirect href="/login" />;
 
   if (Platform.OS !== "web") {
+    const dockRoutes = new Set(dock.map((space) => space.route));
+    // Every space needs a Trigger, hidden or not: the native tab bar throws
+    // (dev) or silently refocuses (prod) if navigation ever lands on a route
+    // that has none. Worse, it throws just the same if the currently
+    // *focused* route's own Trigger is merely hidden — so "visible" is never
+    // just the dock, it's the dock plus `revealed` plus, critically,
+    // wherever the user is standing on THIS render: the effect above only
+    // commits a newly-revealed space into state one render later, which is
+    // one render too late to save the render that first lands there. Folding
+    // `currentSpace` in here directly (not just through `revealed`) is what
+    // actually closes that gap; the effect's job is only to keep the space
+    // visible after the user has moved on.
+    const revealedSpaces = SPACES.filter(
+      (space) =>
+        !dockRoutes.has(space.route) && (revealed.has(space.route) || space === currentSpace),
+    );
+    const visibleSpaces = [...dock, ...revealedSpaces];
+    const visibleRoutes = new Set(visibleSpaces.map((space) => space.route));
+    const hiddenSpaces = SPACES.filter((space) => !visibleRoutes.has(space.route));
+
     // A native tab bar wants bitmaps, not React views — so each doodle is
     // rasterized off-screen in its real ink colors and handed to the bar
     // as-is (the patched Icon keeps it from being tinted as a template).
     const doodles: Record<string, Stroke[]> = {};
     if (dockDoodles) {
-      for (const space of dock) {
+      for (const space of visibleSpaces) {
         const strokes = pageDoodles[space.doodle];
         if (strokes?.length) doodles[space.route] = strokes;
       }
     }
-
-    // Every space needs a Trigger, hidden or not: the native tab bar throws
-    // (dev) or silently refocuses (prod) if navigation ever lands on a route
-    // that has none — a real risk once a user can hide a space from the dock
-    // and something (a deep link, a Home widget) still points at it.
-    const dockRoutes = new Set(dock.map((space) => space.route));
-
-    // The same throw/desync fires if the currently *focused* route's own
-    // Trigger is hidden — and hiding a space from the dock doesn't stop a
-    // deep link (or the user already standing there) from landing on it.
-    // So "visible" isn't just the dock: it's the dock plus wherever the user
-    // is right now. The focused space rides along with the rest of the
-    // hidden complement below in SPACES' natural order — it only surfaces
-    // while the user is standing in that space, so where it falls among the
-    // others is never actually seen.
-    const strippedPath = pathname.startsWith("/") ? pathname.slice(1) : pathname;
-    const focusedSpace = spaceFor(strippedPath === "" ? "index" : strippedPath);
-    const hiddenSpaces = SPACES.filter((space) => !dockRoutes.has(space.route));
 
     return (
       <>
@@ -83,7 +102,7 @@ export default function TabsLayout() {
             ? { backgroundColor: colors.surface }
             : { blurEffect: "systemChromeMaterial" as const })}
         >
-          {dock.map((space) => {
+          {visibleSpaces.map((space) => {
             const uri = doodles[space.route] ? icons[space.route] : undefined;
             return (
               <NativeTabs.Trigger key={space.route} name={space.route}>
@@ -103,20 +122,9 @@ export default function TabsLayout() {
               </NativeTabs.Trigger>
             );
           })}
-          {hiddenSpaces.map((space) => {
-            const focused = space.route === focusedSpace;
-            return (
-              <NativeTabs.Trigger key={space.route} name={space.route} hidden={!focused}>
-                {focused &&
-                  (Platform.OS === "ios" ? (
-                    <Icon sf={space.sf} />
-                  ) : (
-                    <Icon src={<VectorIcon family={MaterialIcons} name={space.md} />} />
-                  ))}
-                {focused && <Label>{space.label}</Label>}
-              </NativeTabs.Trigger>
-            );
-          })}
+          {hiddenSpaces.map((space) => (
+            <NativeTabs.Trigger key={space.route} name={space.route} hidden />
+          ))}
         </NativeTabs>
       </>
     );
@@ -130,11 +138,11 @@ export default function TabsLayout() {
         sceneStyle: { backgroundColor: colors.paper },
       }}
     >
-      <Tabs.Screen name="index" options={{ title: "Home" }} />
-      <Tabs.Screen name="planner" options={{ title: "Planner" }} />
+      <Tabs.Screen name="index" options={{ title: "Planner" }} />
       <Tabs.Screen name="boards" options={{ title: "Boards" }} />
       <Tabs.Screen name="projects" options={{ title: "Projects" }} />
       <Tabs.Screen name="gym" options={{ title: "Gym" }} />
+      <Tabs.Screen name="journal" options={{ title: "Journal" }} />
       <Tabs.Screen name="account" options={{ title: "Account" }} />
     </Tabs>
   );

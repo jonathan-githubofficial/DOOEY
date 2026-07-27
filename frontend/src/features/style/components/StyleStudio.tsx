@@ -194,7 +194,7 @@ function ColorRow({
 
   return (
     <Animated.View
-      layout={settle}
+      layout={settle()}
       style={[!first && { borderTopWidth: 1, borderTopColor: alpha(colors.rule, 0.4) }]}
     >
       <View style={styles.tokenRow}>
@@ -306,7 +306,7 @@ function PageDoodlesPanel() {
             ]}
           >
             <Animated.View
-              layout={settle}
+              layout={settle()}
               style={[
                 styles.dockKnob,
                 { backgroundColor: colors.surface },
@@ -582,7 +582,7 @@ function ShapePanel() {
             ]}
           >
             <Animated.View
-              layout={settle}
+              layout={settle()}
               style={[
                 styles.dockKnob,
                 { backgroundColor: colors.surface },

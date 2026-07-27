@@ -277,7 +277,7 @@ export default function Login() {
                   </Field>
 
                   {mode === "up" && (
-                    <Animated.View entering={FadeIn.duration(160)} exiting={FadeOut.duration(120)} layout={settle}>
+                    <Animated.View entering={FadeIn.duration(160)} exiting={FadeOut.duration(120)} layout={settle()}>
                       <Field label="Confirm">
                         <TextInput
                           value={confirm}
@@ -298,14 +298,14 @@ export default function Login() {
                 {error && (
                   <Animated.Text
                     entering={FadeIn.duration(160)}
-                    layout={settle}
+                    layout={settle()}
                     style={[styles.error, type.sans, { color: colors.clay }]}
                   >
                     {error}
                   </Animated.Text>
                 )}
 
-            <Animated.View layout={settle} style={styles.stampRow}>
+            <Animated.View layout={settle()} style={styles.stampRow}>
               {/* The same postage stamp the rest of the app presses, inked zest.
                   StampButton follows the app theme, so the label is pinned to the
                   lit palette by hand to match the wall. */}

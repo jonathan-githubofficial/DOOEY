@@ -282,7 +282,7 @@ function ChecklistSection({ task, autoFocus }: { task: Task; autoFocus?: boolean
       </View>
       <View style={styles.itemList}>
         {items.map((item) => (
-          <Animated.View key={item.id} layout={settle} exiting={FadeOut.duration(140)} style={styles.itemRow}>
+          <Animated.View key={item.id} layout={settle()} exiting={FadeOut.duration(140)} style={styles.itemRow}>
             <Check
               done={item.done}
               label={item.label}
@@ -365,7 +365,7 @@ function ResourcesSection({ task, autoFocus }: { task: Task; autoFocus?: boolean
       <Eyebrow>resources</Eyebrow>
       <View style={styles.itemList}>
         {resources.map((r) => (
-          <Animated.View key={r.id} layout={settle} exiting={FadeOut.duration(140)} style={styles.itemRow}>
+          <Animated.View key={r.id} layout={settle()} exiting={FadeOut.duration(140)} style={styles.itemRow}>
             {r.kind === "youtube" ? (
               <Play size={16} color={colors.clay} />
             ) : (

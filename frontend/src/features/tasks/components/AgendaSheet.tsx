@@ -97,7 +97,7 @@ export function AgendaSheet({ date, height }: { date: string; height?: number })
           {complete && <SignDay date={date} />}
 
           {done.length > 0 && (
-            <Animated.View layout={settle} style={styles.donePile}>
+            <Animated.View layout={settle()} style={styles.donePile}>
               <Eyebrow>done</Eyebrow>
               {done.map((t) => (
                 <DoneTaskRow key={t.id} task={t} />
@@ -678,7 +678,7 @@ function DoneTaskRow({ task }: { task: Task }) {
   const update = useUpdateTask();
   return (
     <Animated.View
-      layout={settle}
+      layout={settle()}
       entering={FadeIn.duration(180)}
       exiting={FadeOut.duration(150)}
     >

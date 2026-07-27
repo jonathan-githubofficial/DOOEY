@@ -1,5 +1,5 @@
 import { useLocalSearchParams, useRouter } from "expo-router";
-import { Check as CheckIcon, ChevronLeft, Pause as PauseIcon, Play, Plus, Square, Timer, Trash2, X } from "lucide-react-native";
+import { Check as CheckIcon, ChevronLeft, Pause as PauseIcon, Play, Plus, Square, Trash2, X } from "lucide-react-native";
 import { useEffect, useRef, useState } from "react";
 import {
   Image,
@@ -99,9 +99,6 @@ export default function WorkoutPage() {
   const [picking, setPicking] = useState(false);
   const [focus, setFocus] = useState<Focus | null>(null);
   const [editStr, setEditStr] = useState("");
-  const [running, setRunning] = useState<string | null>(null); // "ei:si"
-  // Exercises opted into timed sets (Start→Stop); the default is one-tap done.
-  const [timedMode, setTimedMode] = useState<Set<number>>(new Set());
   // Rest countdown: an end timestamp + which exercise it belongs to (so ±15s
   // updates that exercise's remembered rest). Background-safe.
   const [rest, setRest] = useState<{ until: number; total: number; ei: number } | null>(null);
@@ -184,9 +181,8 @@ export default function WorkoutPage() {
     patchSet(focus.ei, focus.si, { weight: parseNum(nextStr) });
   };
 
-  // Log a set. One tap by default; the opt-in timed mode splits it into Start
-  // (mark it running) then Stop, which lands here too. Blank fields adopt last
-  // time's numbers, so repeating a set needs no typing at all.
+  // Log a set — one tap. Blank fields adopt last time's numbers, so repeating a
+  // set needs no typing at all.
   const finishSet = (ei: number, si: number) => {
     const entry = effEntries[ei];
     const set = entry.sets[si];
@@ -197,31 +193,13 @@ export default function WorkoutPage() {
       done: true,
     };
     commit(effEntries.map((e, i) => (i === ei ? { ...e, sets: e.sets.map((s, j) => (j === si ? filled : s)) } : e)));
-    setRunning((r) => (r === `${ei}:${si}` ? null : r));
     // Beating your best estimated-1RM is a PR — celebrate a touch louder.
     const rec = records.get(entry.name);
     if (rec && rec.oneRM > 0 && epley1RM(filled.weight, filled.reps) > rec.oneRM) playFlip();
     hapticSuccess();
     if (autoStartRest) setRest({ until: now + entryRest(entry) * 1000, total: entryRest(entry), ei });
   };
-  const startSet = (ei: number, si: number) => {
-    hapticTap();
-    setFocus(null);
-    setRunning(`${ei}:${si}`);
-  };
-  const undoSet = (ei: number, si: number) => {
-    patchSet(ei, si, { done: false });
-    setRunning((r) => (r === `${ei}:${si}` ? null : r));
-  };
-  const toggleTimed = (ei: number) => {
-    hapticTap();
-    setTimedMode((cur) => {
-      const next = new Set(cur);
-      if (next.has(ei)) next.delete(ei);
-      else next.add(ei);
-      return next;
-    });
-  };
+  const undoSet = (ei: number, si: number) => patchSet(ei, si, { done: false });
 
   const addSet = (ei: number) =>
     commit(effEntries.map((e, i) => (i === ei ? { ...e, sets: [...e.sets, emptySet()] } : e)));
@@ -360,7 +338,7 @@ export default function WorkoutPage() {
 
         <View style={styles.entries}>
           {effEntries.map((entry, ei) => (
-            <Animated.View key={`${entry.name}-${ei}`} layout={settle} entering={FadeIn.duration(160)}>
+            <Animated.View key={`${entry.name}-${ei}`} layout={settle()} entering={FadeIn.duration(160)}>
               <Panel style={styles.entryCard}>
                 <View style={styles.entryHead}>
                   <EntryThumb libId={entry.libId} onPress={() => setShowing(entry.libId ?? null)} />
@@ -374,14 +352,6 @@ export default function WorkoutPage() {
                   </View>
                   {live && (
                     <View style={styles.entryTools}>
-                      <PressableScale
-                        scaleTo={0.8}
-                        accessibilityLabel={timedMode.has(ei) ? "Timed sets on" : "Time these sets"}
-                        onPress={() => toggleTimed(ei)}
-                        style={styles.entryRemove}
-                      >
-                        <Timer size={15} color={timedMode.has(ei) ? colors.zest : alpha(colors.inkMuted, 0.7)} />
-                      </PressableScale>
                       <PressableScale
                         scaleTo={0.8}
                         accessibilityLabel={`Remove ${entry.name}`}
@@ -422,14 +392,10 @@ export default function WorkoutPage() {
                     prev={ghostSet(prev.get(entry.name), si)}
                     record={records.get(entry.name)}
                     live={live}
-                    timed={timedMode.has(ei)}
-                    running={running === `${ei}:${si}`}
                     focusField={focus && focus.ei === ei && focus.si === si ? focus.field : null}
                     editStr={editStr}
                     onOpenCell={(field, current) => openCell(ei, si, field, current)}
                     onComplete={() => finishSet(ei, si)}
-                    onStart={() => startSet(ei, si)}
-                    onStop={() => finishSet(ei, si)}
                     onUndo={() => undoSet(ei, si)}
                     onRemove={() => removeSet(ei, si)}
                   />
@@ -602,22 +568,17 @@ function RestButton({ label, onPress }: { label: string; onPress: () => void }) 
 }
 
 /** One set: number · last-time ghost (or a PR flash) · weight/reps cells · the
- * log action. Default is a one-tap ✓; in an exercise's timed mode it's Start→
- * Stop. A done set that matched or beat last time washes green. */
+ * log action. A done set that matched or beat last time washes green. */
 function SetRow({
   index,
   set,
   prev,
   record,
   live,
-  timed,
-  running,
   focusField,
   editStr,
   onOpenCell,
   onComplete,
-  onStart,
-  onStop,
   onUndo,
   onRemove,
 }: {
@@ -626,14 +587,10 @@ function SetRow({
   prev?: WorkoutSet;
   record?: ExerciseRecord;
   live: boolean;
-  timed: boolean;
-  running: boolean;
   focusField: "weight" | "reps" | null;
   editStr: string;
   onOpenCell: (field: "weight" | "reps", current: number) => void;
   onComplete: () => void;
-  onStart: () => void;
-  onStop: () => void;
   onUndo: () => void;
   onRemove: () => void;
 }) {
@@ -653,7 +610,6 @@ function SetRow({
         styles.setRow,
         // No prev to compare = a plain "done" green; below last time = neutral.
         set.done && { backgroundColor: alpha(!prev || beat ? colors.leaf : colors.ink, !prev || beat ? 0.16 : 0.06) },
-        running && !set.done && { backgroundColor: alpha(colors.zest, 0.12) },
       ]}
     >
       <Text style={[styles.colSet, styles.setIndex, type.sansMedium, { color: colors.inkMuted }]}>
@@ -698,16 +654,6 @@ function SetRow({
           <PressableScale scaleTo={0.8} accessibilityLabel="Undo set" onPress={onUndo} style={[styles.actionBtn, { backgroundColor: colors.leaf }]}>
             <CheckIcon size={15} color="#fff" />
           </PressableScale>
-        ) : timed ? (
-          running ? (
-            <PressableScale scaleTo={0.85} accessibilityLabel="Stop set — start rest" onPress={onStop} style={[styles.actionBtn, { backgroundColor: colors.zest }]}>
-              <Square size={12} color="#fff" fill="#fff" />
-            </PressableScale>
-          ) : (
-            <PressableScale scaleTo={0.85} accessibilityLabel="Start set" onPress={onStart} style={[styles.actionBtn, styles.startBtn, { borderColor: colors.zest }]}>
-              <Play size={13} color={colors.zest} fill={colors.zest} />
-            </PressableScale>
-          )
         ) : (
           <PressableScale scaleTo={0.85} accessibilityLabel="Complete set" onPress={onComplete} style={[styles.actionBtn, styles.startBtn, { borderColor: colors.leaf }]}>
             <CheckIcon size={15} color={colors.leaf} />

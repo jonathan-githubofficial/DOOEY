@@ -98,12 +98,12 @@ export function WeekPanel({
 
   return (
     <Panel style={styles.panel}>
-      <Animated.View layout={settle} style={styles.top}>
+      <Animated.View layout={settle()} style={styles.top}>
         {!open && (
           <Animated.View
             entering={FadeIn.duration(dur.quick)}
             exiting={FadeOut.duration(dur.instant)}
-            layout={settle}
+            layout={settle()}
             style={styles.figureWrap}
           >
             <Pressable
@@ -153,7 +153,7 @@ export function WeekPanel({
               : `${days} ${days === 1 ? "day" : "days"}`}
           </Text>
 
-          <Animated.View layout={settle} style={styles.grid}>
+          <Animated.View layout={settle()} style={styles.grid}>
             {open &&
               earlier.map((week, wi) => (
                 <Animated.View
@@ -172,7 +172,7 @@ export function WeekPanel({
                 </Animated.View>
               ))}
 
-            <Animated.View layout={settle} style={[styles.row, open && styles.thisWeekRow]}>
+            <Animated.View layout={settle()} style={[styles.row, open && styles.thisWeekRow]}>
               {thisWeek.map((day, i) => (
                 <DayCell
                   key={day.date.toISOString()}
@@ -185,7 +185,7 @@ export function WeekPanel({
           </Animated.View>
 
           {(open || rested.length > 0) && (
-            <Animated.View layout={settle}>
+            <Animated.View layout={settle()}>
               <Text numberOfLines={1} style={[type.sans, styles.footText, { color: colors.inkMuted }]}>
                 {open ? (
                   since

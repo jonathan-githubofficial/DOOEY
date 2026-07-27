@@ -1,20 +1,19 @@
 import { Plus, X } from "lucide-react-native";
 import { useRef, useState } from "react";
 import { Modal, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
-import Animated, { FadeIn, LinearTransition } from "react-native-reanimated";
+import Animated, { FadeIn } from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Grain } from "@/components/grain";
 import { Plate } from "@/components/plate";
 import { PressableScale } from "@/components/pressable-scale";
 import { Eyebrow, Panel } from "@/components/surface";
+import { settle } from "@/lib/motion";
 import { useSheetTop } from "@/lib/shell";
 import { alpha } from "@/lib/theme";
 import { usePalette, useType } from "@/stores/theme";
 import { useCardInk } from "../hues";
 import { CARD_HUES, type RoutineItem } from "../types";
 import { ExercisePicker, type PickedExercise } from "./ExercisePicker";
-
-const settle = LinearTransition.duration(220);
 
 /** A routine being written. `key` is local only — it keeps the list stable
  * while names are still blank and cards are being removed. */
@@ -158,7 +157,7 @@ export function NewProgramDeck({
           {drafts.map((d, i) => {
             const shade = ink(CARD_HUES[i % CARD_HUES.length]);
             return (
-              <Animated.View key={d.key} layout={settle} entering={FadeIn.duration(180)}>
+              <Animated.View key={d.key} layout={settle()} entering={FadeIn.duration(180)}>
                 <Panel style={[styles.card, { backgroundColor: shade.field }]}>
                   <View style={styles.cardHead}>
                     <TextInput

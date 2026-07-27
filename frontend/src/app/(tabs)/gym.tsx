@@ -305,7 +305,7 @@ export default function Gym() {
             {!live && <View style={styles.heroWrap}>{hero()}</View>}
 
             {(programs ?? []).map((p) => (
-              <Animated.View key={p.id} layout={settle}>
+              <Animated.View key={p.id} layout={settle()}>
                 <ProgramSection
                   program={p}
                   routines={byProgram.get(p.id) ?? []}

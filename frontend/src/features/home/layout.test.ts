@@ -1,6 +1,5 @@
 import {
   DOCK_CHOICES,
-  HOME_WIDGETS,
   moveItem,
   normalizeOrder,
   toggleKey,
@@ -9,11 +8,11 @@ import {
 
 describe("normalizeOrder", () => {
   it("keeps a saved order, dropping unknowns and appending newcomers", () => {
-    expect(normalizeOrder(["gym", "zombies", "planner"], DOCK_CHOICES)).toEqual([
+    expect(normalizeOrder(["gym", "zombies", "boards"], DOCK_CHOICES)).toEqual([
       "gym",
-      "planner",
       "boards",
       "projects",
+      "journal",
     ]);
   });
   it("falls back to the canonical order when nothing was saved", () => {
@@ -46,8 +45,3 @@ describe("toggleKey", () => {
   });
 });
 
-describe("HOME_WIDGETS", () => {
-  it("ships schedule, tasks and gym", () => {
-    expect(HOME_WIDGETS.map((w) => w.key)).toEqual(["schedule", "tasks", "gym"]);
-  });
-});

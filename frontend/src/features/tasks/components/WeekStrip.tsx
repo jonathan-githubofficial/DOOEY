@@ -15,29 +15,37 @@ export function WeekStrip({
   onSelect,
   onToggleView,
   leading,
+  compact = false,
 }: {
   selected: string;
   onSelect: (date: string) => void;
   onToggleView: () => void;
   leading?: ReactNode;
+  /** Drop the day chips and page whole weeks instead. The week grid draws its
+   * own day header, so showing a second one above it says the same thing
+   * twice — but the pagers it doesn't have still have to live somewhere. */
+  compact?: boolean;
 }) {
   const colors = usePalette();
   const type = useType();
   const [weekAnchor, setWeekAnchor] = useState(selected);
-  const days = weekOf(weekAnchor);
+  // Compact has no chips to hold their own week, so the selection is the week.
+  const anchor = compact ? selected : weekAnchor;
+  const days = weekOf(anchor);
   const today = localDate();
   const monthLabel = toLocalNoon(days[3]).toLocaleDateString("en", {
     month: "long",
     year: "numeric",
   });
   const [monthName, yearName] = monthLabel.split(" ");
-  const todayInView = mondayOf(today) === mondayOf(weekAnchor);
+  const todayInView = mondayOf(today) === mondayOf(anchor);
 
   return (
     <View>
       <View style={styles.head}>
         {leading}
         <View style={styles.headRight}>
+          {compact && <Pager dir={-1} onPress={() => onSelect(addDays(selected, -7))} />}
           {!todayInView && (
             <PressableScale
               scaleTo={0.85}
@@ -54,6 +62,7 @@ export function WeekStrip({
           <Text style={[styles.month, type.display, { color: colors.ink }]}>
             {monthName} <Text style={{ color: colors.inkMuted }}>{yearName}</Text>
           </Text>
+          {compact && <Pager dir={1} onPress={() => onSelect(addDays(selected, 7))} />}
           <PressableScale
             scaleTo={0.85}
             accessibilityLabel="Open the month"
@@ -65,6 +74,7 @@ export function WeekStrip({
         </View>
       </View>
 
+      {!compact && (
       <View style={styles.row}>
         <View style={[styles.tray, { backgroundColor: alpha(colors.ink, 0.04) }]}>
           <Pager dir={-1} onPress={() => setWeekAnchor((a) => addDays(a, -7))} />
@@ -129,6 +139,7 @@ export function WeekStrip({
           <Pager dir={1} onPress={() => setWeekAnchor((a) => addDays(a, 7))} />
         </View>
       </View>
+      )}
     </View>
   );
 }

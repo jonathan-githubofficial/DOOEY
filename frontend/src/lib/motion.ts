@@ -65,11 +65,21 @@ export const ease = {
   inOut: Easing.inOut(Easing.quad),
 } as const;
 
-/** `withTiming(x, timing())` for the default, or `timing(dur.moved, ease.inOut)`. */
+/** `withTiming(x, timing())` for the default, or `timing(dur.moved, ease.inOut)`.
+ *
+ * A worklet, because half its callers are worklets. `useAnimatedStyle`, a
+ * gesture callback and `useAnimatedReaction` all run on the UI thread, and
+ * calling a plain JS function from there throws inside the worklet runtime —
+ * which Hermes can only rethrow as a C++ exception, so the process aborts with
+ * no JS stack and nothing an error boundary can catch. Marking it worklet-safe
+ * lets it be called from either thread, which is how it reads at every site. */
 export const timing = (
   duration: number = dur.quick,
   easing: (t: number) => number = ease.out,
-): WithTimingConfig => ({ duration, easing, reduceMotion: ReduceMotion.System });
+): WithTimingConfig => {
+  "worklet";
+  return { duration, easing, reduceMotion: ReduceMotion.System };
+};
 
 /* ------------------------------------------------------------------ springs */
 
@@ -136,11 +146,15 @@ export const appear = () =>
  * A curve, not a spring. Nothing is holding a reflowing list, so by the rule
  * above it is explaining a change, and a change is explained with a duration.
  *
- * Use it as `layout={settle}` on any `Animated.View` whose position depends on
- * its siblings. */
-export const settle = LinearTransition.duration(dur.quick)
-  .easing(ease.out)
-  .reduceMotion(ReduceMotion.System);
+ * A builder, for the same reason the entrances above are: one instance shared
+ * between every mounted component means they share its config, and this one was
+ * reached for by sixteen files at once — including the login screen and every
+ * tab, so the whole set churns against a single object the moment you sign in.
+ *
+ * Use it as `layout={settle()}` on any `Animated.View` whose position depends
+ * on its siblings. */
+export const settle = () =>
+  LinearTransition.duration(dur.quick).easing(ease.out).reduceMotion(ReduceMotion.System);
 
 /* ------------------------------------------------------------------ ambient */
 

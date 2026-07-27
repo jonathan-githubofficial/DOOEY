@@ -5,16 +5,7 @@
 /** The spaces the user may hide or reorder. Home and Account are pinned —
  * Home is the front door, Account holds the editor (you can't lock yourself
  * out). Food joins this list in phase 3. */
-export const DOCK_CHOICES = ["planner", "boards", "projects", "gym"] as const;
-export type DockChoice = (typeof DOCK_CHOICES)[number];
-
-/** The Home widgets, in factory order. Grows in later phases (inbox, food). */
-export const HOME_WIDGETS = [
-  { key: "schedule", label: "Schedule" },
-  { key: "tasks", label: "Tasks" },
-  { key: "gym", label: "Gym" },
-] as const;
-export type WidgetKey = (typeof HOME_WIDGETS)[number]["key"];
+export { DOCK_CHOICES, type DockChoice } from "@/lib/spaces";
 
 /** Reconcile a saved order with the canonical set: keep the saved order for
  * keys that still exist, drop unknowns, append newcomers at the end — so an

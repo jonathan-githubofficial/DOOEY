@@ -327,7 +327,7 @@ function TimeBlock({
       <Animated.View
         entering={FadeIn.duration(160)}
         exiting={FadeOut.duration(140)}
-        layout={settle}
+        layout={settle()}
         style={[
           styles.block,
           blockStyle,
@@ -385,7 +385,7 @@ function ShelfChip({
   const type = useType();
   const update = useUpdateTask();
   return (
-    <Animated.View entering={FadeIn.duration(160)} exiting={FadeOut.duration(140)} layout={settle}>
+    <Animated.View entering={FadeIn.duration(160)} exiting={FadeOut.duration(140)} layout={settle()}>
       <Pressable
         onPress={onPress}
         accessibilityState={{ selected: active }}

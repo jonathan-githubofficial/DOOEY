@@ -14,11 +14,11 @@ import {
 } from "@expo-google-fonts/outfit";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { useFonts } from "expo-font";
-import { Stack, usePathname } from "expo-router";
+import { Stack, usePathname, type ErrorBoundaryProps } from "expo-router";
 import * as SplashScreen from "expo-splash-screen";
 import { StatusBar } from "expo-status-bar";
 import { useEffect, useState } from "react";
-import { Appearance, Platform, StyleSheet, View } from "react-native";
+import { Appearance, Platform, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 import { BootIntro } from "@/components/BootIntro";
@@ -37,6 +37,29 @@ SplashScreen.preventAutoHideAsync();
 // Without this, restoring such a route leaves it rootless and "GO_BACK was not
 // handled by any navigator" fires on the first dismiss.
 export const unstable_settings = { initialRouteName: "(tabs)" };
+
+/** What a crash looks like instead of the app vanishing. A release build has no
+ * redbox, so a render error below the root is otherwise indistinguishable from
+ * a native crash — which is exactly the ambiguity that makes an "it crashes on
+ * launch" report impossible to act on. Shows the message and the top frames,
+ * and lets you retry without relaunching. */
+export function ErrorBoundary({ error, retry }: ErrorBoundaryProps) {
+  const frames = (error.stack ?? "").split("\n").slice(0, 12).join("\n");
+  return (
+    <View style={styles.crash}>
+      <ScrollView contentContainerStyle={styles.crashScroll}>
+        <Text style={styles.crashKicker}>SOMETHING BROKE</Text>
+        <Text style={styles.crashMessage}>{error.message || "Unknown error"}</Text>
+        <Text selectable style={styles.crashStack}>
+          {frames}
+        </Text>
+        <Pressable accessibilityRole="button" onPress={retry} style={styles.crashRetry}>
+          <Text style={styles.crashRetryText}>Try again</Text>
+        </Pressable>
+      </ScrollView>
+    </View>
+  );
+}
 
 const queryClient = new QueryClient();
 
@@ -148,4 +171,25 @@ const styles = StyleSheet.create({
     maxWidth: FRAME_W,
     alignSelf: "center",
   },
+  // Deliberately plain: this screen has to render when the theme, the fonts or
+  // the stores are the very thing that failed, so it borrows nothing from them.
+  crash: { flex: 1, backgroundColor: "#f3f0e9" },
+  crashScroll: { padding: 24, paddingTop: 72, gap: 12 },
+  crashKicker: { fontSize: 11, letterSpacing: 2, color: "#8a8178" },
+  crashMessage: { fontSize: 18, lineHeight: 25, color: "#241f1a" },
+  crashStack: {
+    fontSize: 11,
+    lineHeight: 16,
+    color: "#6b635a",
+    fontFamily: Platform.OS === "ios" ? "Menlo" : "monospace",
+  },
+  crashRetry: {
+    marginTop: 12,
+    alignSelf: "flex-start",
+    backgroundColor: "#241f1a",
+    borderRadius: 999,
+    paddingVertical: 11,
+    paddingHorizontal: 22,
+  },
+  crashRetryText: { color: "#f3f0e9", fontSize: 14, letterSpacing: 0.4 },
 });
