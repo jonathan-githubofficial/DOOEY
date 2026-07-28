@@ -12,6 +12,14 @@ export function dateOnly(pbDate: string): string {
   return pbDate.slice(0, 10);
 }
 
+/** The local calendar day a real instant fell on. Not `dateOnly`: that reads
+ * the stored characters, which are UTC, so a 9pm session in a western timezone
+ * would file itself under tomorrow. */
+export function localDateOf(instant: string): string {
+  const d = new Date(instant);
+  return `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`;
+}
+
 /** A date value (YYYY-MM-DD) → PB storage form (00:00Z, date-only meaning). */
 export function toPbDate(dateInput: string): string {
   return `${dateInput} 00:00:00.000Z`;

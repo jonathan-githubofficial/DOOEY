@@ -2,45 +2,48 @@ import { StyleSheet, View } from "react-native";
 import Body, { type Slug } from "react-native-body-highlighter";
 import { alpha } from "@/lib/theme";
 import { usePalette } from "@/stores/theme";
-import { bodyData, MUSCLE_SLUG } from "../anatomy";
+import { bodyData, paintSide, SECONDARY_STRENGTH, type Paint, type Side } from "../anatomy";
 import type { Gender } from "../store";
 
-/** The figure in the week panel: every muscle you trained this week, each in
- * the colour of the session that hit it. Unlike `MuscleMap` — which shades one
- * exercise in one tint — this paints many muscles in many hues at once, and the
- * caller drives which way it faces so the panel can flip it. */
+/** One view of the figure with muscles shaded.
+ *
+ * Every figure in the gym goes through here, so they cannot disagree about
+ * where a muscle lives or how hard a secondary one is washed. The caller drives
+ * which way it faces, and supplies a colour per muscle — one tint for a single
+ * routine, many for a week of sessions. */
 export function WeekBody({
   painted,
   gender,
   side,
   scale,
 }: {
-  painted: Map<string, string>;
+  painted: Map<string, Paint>;
   gender: Gender;
-  side: "front" | "back";
+  side: Side;
   scale: number;
 }) {
   const colors = usePalette();
 
-  // One entry per slug that shows on this side. A slug two muscles map onto
-  // (lats and upper back both land on "upper-back") keeps the first colour
-  // written — Body renders one fill per slug regardless.
-  const bySlug = new Map<Slug, string>();
-  for (const [target, color] of painted) {
-    const placed = MUSCLE_SLUG[target];
-    if (!placed || placed.side !== side) continue;
-    if (!bySlug.has(placed.slug)) bySlug.set(placed.slug, color);
+  /** Unworked muscle. The outline is kept under this weight on purpose. */
+  const RESTING = alpha(colors.ink, 0.13);
+
+  const worked = new Map<Slug, string>();
+  for (const [slug, paint] of paintSide(painted, side)) {
+    worked.set(slug, paint.strong ? paint.color : alpha(paint.color, SECONDARY_STRENGTH));
   }
-  const resting = alpha(colors.ink, 0.13);
 
   return (
     <View style={styles.wrap} pointerEvents="none">
       <Body
-        data={bodyData(bySlug, resting)}
+        data={bodyData(worked, RESTING)}
         gender={gender}
         side={side}
         scale={scale}
-        border={alpha(colors.ink, 0.25)}
+        // Lighter than the body it encloses, not twice its weight. The library
+        // hard-codes a 2-unit stroke, so at the sizes these figures are drawn
+        // an outline heavier than the fill turns the whole thing into a
+        // wireframe and the shading stops being the thing you notice.
+        border={alpha(colors.ink, 0.14)}
       />
     </View>
   );

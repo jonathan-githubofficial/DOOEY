@@ -2,10 +2,9 @@ import { useRouter } from "expo-router";
 import {
   ChevronDown,
   ChevronRight,
+  Clock,
   Copy,
   BookOpen,
-  Dumbbell,
-  Palette,
   Plus,
   Trash2,
 } from "lucide-react-native";
@@ -16,17 +15,13 @@ import { usePagePadding } from "@/lib/shell";
 import { DotsButton } from "@/components/dots-button";
 import { Grain } from "@/components/grain";
 import { Masthead } from "@/components/Masthead";
-import { Plate } from "@/components/plate";
 import { PressableScale } from "@/components/pressable-scale";
-import { Panel } from "@/components/surface";
 import { PageDoodle } from "@/features/style/components/PageDoodle";
 import { useCardRadius } from "@/features/style/store";
 import {
-  prSessions,
   useAddProgram,
   useDeleteProgram,
   useDeleteRoutine,
-  useDeleteWorkout,
   useWorkoutPrograms,
   useRoutines,
   useSaveLooseRoutine,
@@ -35,14 +30,15 @@ import {
   useStartWorkout,
   useWorkouts,
 } from "@/features/workouts/api";
-import { HISTORY_STATS_H, TWIN_H, cardHeight } from "@/features/workouts/card-metrics";
-import { CardDesigner } from "@/features/workouts/components/CardDesigner";
-import { HistoryCard } from "@/features/workouts/components/HistoryCard";
+import { routineHeight } from "@/features/workouts/card-metrics";
+import { focusOf } from "@/features/workouts/focus";
 import { Masonry } from "@/features/workouts/components/Masonry";
 import { ProgramsExplorer } from "@/features/workouts/components/ProgramsExplorer";
 import { RoutineCard } from "@/features/workouts/components/RoutineCard";
-import { UpNextCard } from "@/features/workouts/components/UpNextCard";
-import { WeekPanel } from "@/features/workouts/components/WeekPanel";
+import {
+  TrainingTicket,
+  type TicketNext,
+} from "@/features/workouts/components/TrainingTicket";
 import type { CatalogProgram, ProgramRoutine } from "@/features/workouts/programs";
 import {
   journeyWeeks,
@@ -57,7 +53,6 @@ import { useWorkoutPrefs } from "@/features/workouts/store";
 import {
   type Routine,
   type RoutineTemplate,
-  type Workout,
   type WorkoutProgram,
 } from "@/features/workouts/types";
 import { confirmDestructive } from "@/lib/confirm";
@@ -72,15 +67,11 @@ const ADD_TILE_H = 96;
 /** Late cards shouldn't wait out a stagger nobody's watching. */
 const MAX_STAGGER = 8;
 
-/** What the page is showing below the week panel: the routines you'd train, or
- * the sessions you did. Opening the panel out is what moves between them. */
-type Tab = "workout" | "history";
-
 /** A routine card or the tile that makes another one — both ride the masonry. */
 type CardItem = { kind: "routine"; routine: Routine } | { kind: "add" };
 
-/** The gym: what to train today up top, then your routines as a board. History
- * swaps the board for finished sessions. The running session rides above both. */
+/** The gym: the training ticket up top — this week, and what to do next — then
+ * your routines as a board. The running session rides above both. */
 export default function Gym() {
   const colors = usePalette();
   const type = useType();
@@ -96,27 +87,34 @@ export default function Gym() {
   const delRoutine = useDeleteRoutine();
   const addProgram = useAddProgram();
   const saveLoose = useSaveLooseRoutine();
-  const delWorkout = useDeleteWorkout();
   const start = useStartWorkout();
   const seededFlag = useWorkoutPrefs((s) => s.seededRoutines);
   const markSeeded = useWorkoutPrefs((s) => s.markSeeded);
   const defaultRest = useWorkoutPrefs((s) => s.restSeconds);
-  const [tab, setTab] = useState<Tab>("workout");
   const [exploring, setExploring] = useState(false);
   const [creating, setCreating] = useState(false);
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
-  const [designing, setDesigning] = useState<Routine | null>(null);
 
   const live = workouts?.find((w) => !w.ended_at) ?? null;
-  const history = useMemo(() => (workouts ?? []).filter((w) => w.ended_at), [workouts]);
-  const prs = useMemo(() => prSessions(workouts ?? []), [workouts]);
   const upNext = useMemo(
     () => nextUp(routines ?? [], programs ?? [], workouts ?? []),
     [routines, programs, workouts],
   );
-  const journey = useMemo(() => journeyWeeks(workouts ?? []), [workouts]);
+  // The ticket's counterfoil is the last row of the same grid the History page
+  // draws in full, so the two can never disagree about what a day looked like.
+  const week = useMemo(() => {
+    const weeks = journeyWeeks(workouts ?? []).weeks;
+    return weeks[weeks.length - 1];
+  }, [workouts]);
   const painted = useMemo(() => weekTargets(workouts ?? []), [workouts]);
   const rested = useMemo(() => restedLongest(workouts ?? []), [workouts]);
+  // What a week of your split is: the routines in the program you're on, or
+  // everything you own if you aren't following one yet.
+  const target = useMemo(() => {
+    const all = routines ?? [];
+    const mine = upNext ? all.filter((r) => r.program === upNext.program) : [];
+    return mine.length || all.length;
+  }, [routines, upNext]);
   const programsReady = !!programs;
 
   // Routines grouped by the program they belong to.
@@ -186,12 +184,6 @@ export default function Gym() {
     title: routine.name,
     actions: [
       {
-        label: "Design card",
-        symbol: "paintpalette",
-        icon: <Palette size={17} color={colors.ink} />,
-        onPress: () => setDesigning(routine),
-      },
-      {
         label: "Duplicate",
         symbol: "doc.on.doc",
         icon: <Copy size={17} color={colors.ink} />,
@@ -221,25 +213,6 @@ export default function Gym() {
     ],
   });
 
-  const sessionMenu = (workout: Workout): Menu => ({
-    title: workout.title,
-    actions: [
-      {
-        label: "Delete session",
-        symbol: "trash",
-        destructive: true,
-        icon: <Trash2 size={17} color={colors.clay} />,
-        onPress: () =>
-          confirmDestructive(
-            "Delete this session?",
-            "The workout and everything logged in it go for good.",
-            "Delete session",
-            () => delWorkout.mutate(workout.id),
-          ),
-      },
-    ],
-  });
-
   const addWholeProgram = (program: CatalogProgram) =>
     addProgram.mutate({
       name: program.name,
@@ -251,32 +224,56 @@ export default function Gym() {
       })),
     });
 
-  const hero = () => {
-    if (!programsReady || !routines) return <HeroPlaceholder />;
+  /** What the stub says. A live session wins: mid-session the thing to do next
+   * *is* the session, and the week record above it is still true either way —
+   * which is why the whole hero used to step aside here and no longer does. */
+  const next = (): TicketNext => {
+    if (live) return { kind: "live", workout: live, onOpen: () => openWorkout(live.id) };
+    if (!programsReady || !routines) return { kind: "waiting" };
     if (upNext) {
-      return (
-        <UpNextCard
-          routine={upNext}
-          programName={programs.find((p) => p.id === upNext.program)?.name ?? "Your gym"}
-          lastDone={lastDoneAt(upNext.id, workouts ?? [])}
-          onStart={() => startWorkout({ id: upNext.id, name: upNext.name, items: upNext.items })}
-          onOpen={() => openRoutine(upNext.id)}
-        />
-      );
+      return {
+        kind: "routine",
+        routine: upNext,
+        programName: programs.find((p) => p.id === upNext.program)?.name ?? "Your gym",
+        lastDone: lastDoneAt(upNext.id, workouts ?? []),
+        onStart: () => startWorkout({ id: upNext.id, name: upNext.name, items: upNext.items }),
+        onOpen: () => openRoutine(upNext.id),
+      };
     }
-    if (programs.length === 0) return <HeroPlaceholder />; // the starter program is landing
-    return <HeroEmpty onCreate={() => addRoutine(programs[0])} />;
+    if (programs.length === 0) return { kind: "waiting" }; // the starter program is landing
+    return { kind: "invite", onCreate: () => addRoutine(programs[0]) };
   };
 
   return (
     <View style={[styles.screen, { backgroundColor: colors.paper, paddingTop: page.paddingTop }]}>
       <Grain />
-      {/* Pinned above the scroller: the space's name and its Workout/History
-          keys stay put while the page runs under them. */}
-      {/* Just the space's name. The switch between what's ahead and what's
-          behind lives in the week panel, which is already a calendar of both. */}
+      {/* Pinned above the scroller: the space's name and its one key stay put
+          while the page runs under them. */}
       <View style={styles.head}>
-        <Masthead avatar={<PageDoodle page="gym" />} title="Gym" />
+        <Masthead avatar={<PageDoodle page="gym" />} title="Gym">
+          {/* The space's one action, in the corner every space keeps it in. It
+              opens a page rather than growing the ticket: every week you have
+              trained is a different question from how this week is going, and
+              the card that tried to answer both had to be two cards. */}
+          <PressableScale
+            scaleTo={0.96}
+            accessibilityRole="button"
+            accessibilityLabel="Show every week you've trained"
+            onPress={() => {
+              hapticTap();
+              router.push("/history");
+            }}
+            style={[
+              styles.histKey,
+              { backgroundColor: colors.surface, borderColor: alpha(colors.rule, 0.7) },
+            ]}
+          >
+            <Clock size={14} color={colors.inkMuted} />
+            <Text style={[styles.histKeyText, type.sansMedium, { color: colors.ink }]}>
+              History
+            </Text>
+          </PressableScale>
+        </Masthead>
       </View>
       <ScrollView
         showsVerticalScrollIndicator={false}
@@ -285,94 +282,60 @@ export default function Gym() {
           { paddingBottom: page.paddingBottom },
         ]}
       >
-        {/* The week is context, not an action — it belongs on screen even
-            mid-session, and in both modes, because opening it out *is* the
-            switch. Only "up next" steps aside, since you're already training
-            the thing it would offer. */}
-        <View style={styles.weekWrap}>
-          <WeekPanel
-            journey={journey}
+        {/* One object with two halves: the record above the perforation, the
+            instruction below it. Both belong on screen mid-session — the week
+            is still true, and the stub carries the session itself. */}
+        <View style={styles.ticketWrap}>
+          <TrainingTicket
+            week={week}
             painted={painted}
             rested={rested}
-            open={tab === "history"}
-            onToggle={() => setTab(tab === "history" ? "workout" : "history")}
+            target={target}
+            next={next()}
             onOpenSession={openWorkout}
           />
         </View>
 
-        {tab === "workout" ? (
-          <>
-            {!live && <View style={styles.heroWrap}>{hero()}</View>}
+        {(programs ?? []).map((p) => (
+          <Animated.View key={p.id} layout={settle()}>
+            <ProgramSection
+              program={p}
+              routines={byProgram.get(p.id) ?? []}
+              collapsed={collapsed.has(p.id)}
+              onToggleCollapse={() => toggleCollapsed(p.id)}
+              onOpenRoutine={openRoutine}
+              onRename={(name) => saveProgram.mutate({ id: p.id, name })}
+              routineMenu={routineMenu}
+              programMenu={() => programMenu(p)}
+              onAddRoutine={() => addRoutine(p)}
+            />
+          </Animated.View>
+        ))}
 
-            {(programs ?? []).map((p) => (
-              <Animated.View key={p.id} layout={settle()}>
-                <ProgramSection
-                  program={p}
-                  routines={byProgram.get(p.id) ?? []}
-                  collapsed={collapsed.has(p.id)}
-                  onToggleCollapse={() => toggleCollapsed(p.id)}
-                  onOpenRoutine={openRoutine}
-                  onRename={(name) => saveProgram.mutate({ id: p.id, name })}
-                  routineMenu={routineMenu}
-                  programMenu={() => programMenu(p)}
-                  onAddRoutine={() => addRoutine(p)}
-                />
-              </Animated.View>
-            ))}
-
-            {/* The shelf of proven splits, and where a program of your own
-                starts too. It used to sit in the week panel's top corner, on
-                screen every visit — but once you're following something, the
-                last thing you need offered is somebody else's plan. It waits
-                at the end of your own programs, where you'd go looking for it
-                only when you'd run out of them. */}
-            <PressableScale
-              scaleTo={0.97}
-              accessibilityRole="button"
-              accessibilityLabel="Browse programs"
-              onPress={() => {
-                hapticTap();
-                setExploring(true);
-              }}
-              style={[
-                styles.browse,
-                { backgroundColor: colors.surface, borderColor: alpha(colors.rule, 0.7) },
-              ]}
-            >
-              <BookOpen size={15} color={colors.inkMuted} />
-              <Text style={[styles.browseText, type.sansMedium, { color: colors.ink }]}>
-                Browse programs
-              </Text>
-            </PressableScale>
-          </>
-        ) : (
-          <View style={styles.historyWrap}>
-            {history.length === 0 ? (
-              <Text style={[styles.empty, type.sans, { color: colors.inkMuted }]}>
-                No workouts yet — start one from the card up top.
-              </Text>
-            ) : (
-              <Masonry
-                items={history}
-                estimateHeight={(w) => cardHeight(w.entries.length, HISTORY_STATS_H)}
-                renderItem={(w, i) => (
-                  <Animated.View
-                    key={w.id}
-                    entering={FadeInDown.delay(Math.min(i, MAX_STAGGER) * 40).duration(220)}
-                  >
-                    <HistoryCard
-                      workout={w}
-                      index={i}
-                      isPR={prs.has(w.id)}
-                      onPress={() => openWorkout(w.id)}
-                      menu={() => sessionMenu(w)}
-                    />
-                  </Animated.View>
-                )}
-              />
-            )}
-          </View>
-        )}
+        {/* The shelf of proven splits, and where a program of your own starts
+            too. It used to sit in the week panel's top corner, on screen every
+            visit — but once you're following something, the last thing you need
+            offered is somebody else's plan. It waits at the end of your own
+            programs, where you'd go looking for it only when you'd run out of
+            them. */}
+        <PressableScale
+          scaleTo={0.97}
+          accessibilityRole="button"
+          accessibilityLabel="Browse programs"
+          onPress={() => {
+            hapticTap();
+            setExploring(true);
+          }}
+          style={[
+            styles.browse,
+            { backgroundColor: colors.surface, borderColor: alpha(colors.rule, 0.7) },
+          ]}
+        >
+          <BookOpen size={15} color={colors.inkMuted} />
+          <Text style={[styles.browseText, type.sansMedium, { color: colors.ink }]}>
+            Browse programs
+          </Text>
+        </PressableScale>
       </ScrollView>
 
       <ProgramsExplorer
@@ -407,41 +370,7 @@ export default function Gym() {
         }}
         onClose={() => setCreating(false)}
       />
-
-      {designing && <CardDesigner routine={designing} onClose={() => setDesigning(null)} />}
     </View>
-  );
-}
-
-/** The hero's shape while the gym is still loading (or the starter program is
- * landing) — so the page doesn't jump when it arrives. */
-function HeroPlaceholder() {
-  const colors = usePalette();
-  const type = useType();
-  return (
-    <Panel style={styles.heroStub}>
-      <Text style={[styles.stubText, type.sans, { color: alpha(colors.inkMuted, 0.8) }]}>
-        Setting up your gym…
-      </Text>
-    </Panel>
-  );
-}
-
-/** Programs exist but nothing to train yet. */
-function HeroEmpty({ onCreate }: { onCreate: () => void }) {
-  const colors = usePalette();
-  const type = useType();
-  return (
-    <Panel style={styles.heroStub}>
-      <Dumbbell size={26} color={alpha(colors.inkMuted, 0.6)} />
-      <Text style={[styles.emptyTitle, type.display, { color: colors.ink }]}>
-        Build your first routine
-      </Text>
-      <Text style={[styles.emptyBody, type.sans, { color: colors.inkMuted }]}>
-        Add a few exercises and it’ll show up here, ready to start.
-      </Text>
-      <Plate label="New routine" onPress={onCreate} style={styles.emptyPlate} />
-    </Panel>
   );
 }
 
@@ -536,7 +465,9 @@ function ProgramSection({
           <Masonry
             items={items}
             estimateHeight={(item) =>
-              item.kind === "add" ? ADD_TILE_H : cardHeight(item.routine.items.length, TWIN_H)
+              item.kind === "add"
+                ? ADD_TILE_H
+                : routineHeight(item.routine.items.length, focusOf(item.routine.items) !== null)
             }
             renderItem={(item, i) =>
               item.kind === "add" ? (
@@ -587,17 +518,20 @@ const styles = StyleSheet.create({
   scrollContent: { paddingHorizontal: 16 },
 
 
-  weekWrap: { marginTop: 22 },
-  heroWrap: { marginTop: 14 },
-  heroStub: { minHeight: 220, alignItems: "center", justifyContent: "center", padding: 28 },
-  stubText: { fontSize: 13 },
-  emptyTitle: { marginTop: 10, fontSize: 21, letterSpacing: -0.4, textAlign: "center" },
-  emptyBody: { marginTop: 6, fontSize: 13, lineHeight: 19, textAlign: "center" },
-  emptyPlate: { marginTop: 18 },
+  histKey: {
+    height: 32,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    borderWidth: 1,
+    borderRadius: 999,
+    paddingHorizontal: 12,
+  },
+  histKeyText: { fontSize: 12 },
+  ticketWrap: { marginTop: 22 },
 
   program: { marginTop: 24 },
   programHead: { flexDirection: "row", alignItems: "center", gap: 6 },
-  programHeadTap: { flex: 1, minWidth: 0, flexDirection: "row", alignItems: "center", gap: 6 },
   programName: {
     flex: 1,
     minWidth: 0,
@@ -641,7 +575,4 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
   },
   browseText: { fontSize: 12.5 },
-
-  historyWrap: { marginTop: 22 },
-  empty: { fontSize: 12.5, textAlign: "center", paddingVertical: 20 },
 });

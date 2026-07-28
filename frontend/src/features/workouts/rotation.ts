@@ -166,17 +166,32 @@ export function journeyWeeks(workouts: Workout[]): Journey {
   return { weeks, first, clipped: span > rows, sessions: done.length };
 }
 
+export interface WeekMuscle {
+  hue: CardHue;
+  /** The muscle a session was for, rather than one it also used. */
+  strong: boolean;
+}
+
 /** Every muscle trained this week, each mapped to the accent of the session
- * that hit it — what the figure in the week panel shades. */
-export function weekTargets(workouts: Workout[]): Map<string, CardHue> {
+ * that hit it — what the figure in the week panel shades.
+ *
+ * `strong` separates what a session was *for* from what it also worked, so a
+ * week of benching shows a solid chest and faintly-shaded shoulders and
+ * triceps rather than claiming all three equally. */
+export function weekTargets(workouts: Workout[]): Map<string, WeekMuscle> {
   const monday = startOfWeek(new Date()).getTime();
-  const painted = new Map<string, CardHue>();
+  const painted = new Map<string, WeekMuscle>();
   // Oldest first, so a muscle hit twice wears its most recent session's colour.
   for (const w of [...finished(workouts)].reverse()) {
     if (new Date(w.started_at).getTime() < monday) continue;
     const focus = focusOf(w.entries);
     if (!focus) continue;
-    for (const t of focus.targets) painted.set(t, MUSCLE_HUE[t] ?? focus.hueKey);
+    // A muscle worked hard in one session and incidentally in another keeps
+    // the stronger claim, whichever came last.
+    for (const t of focus.secondary) {
+      if (!painted.get(t)?.strong) painted.set(t, { hue: MUSCLE_HUE[t] ?? focus.hueKey, strong: false });
+    }
+    for (const t of focus.targets) painted.set(t, { hue: MUSCLE_HUE[t] ?? focus.hueKey, strong: true });
   }
   return painted;
 }

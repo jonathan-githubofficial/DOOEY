@@ -44,11 +44,18 @@ export function Panel({ style, children }: PropsWithChildren<{ style?: StyleProp
 }
 
 /** Uppercase, tracked micro-label used inside cards. */
-export function Eyebrow({ style, children }: PropsWithChildren<{ style?: StyleProp<TextStyle> }>) {
+export function Eyebrow({
+  style,
+  numberOfLines,
+  children,
+}: PropsWithChildren<{ style?: StyleProp<TextStyle>; numberOfLines?: number }>) {
   const colors = usePalette();
   const type = useType();
   return (
-    <Text style={[styles.eyebrow, type.sansMedium, { color: colors.inkMuted }, style]}>
+    <Text
+      numberOfLines={numberOfLines}
+      style={[styles.eyebrow, type.sansMedium, { color: colors.inkMuted }, style]}
+    >
       {children}
     </Text>
   );

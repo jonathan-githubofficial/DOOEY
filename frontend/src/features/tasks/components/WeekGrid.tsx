@@ -1,5 +1,7 @@
 import { StyleSheet, Text, View } from "react-native";
 import { PressableScale } from "@/components/pressable-scale";
+import { useDayRituals } from "@/features/rituals/api";
+import { RitualPip } from "@/features/rituals/components/RitualBlock";
 import { localDate, toLocalNoon, weekOf } from "@/lib/dates";
 import { alpha } from "@/lib/theme";
 import { usePalette, useType } from "@/stores/theme";
@@ -108,12 +110,24 @@ function DayColumn({ date, pxPerMin }: { date: string; pxPerMin: number }) {
   const type = useType();
   const { data: tasks } = useDayTasks(date);
   const scheduled = (tasks ?? []).filter((t) => !t.done_at && t.start_min > 0);
-  const lanes = layoutLanes(
-    scheduled.map((t) => ({ id: t.id, start_min: t.start_min, dur_min: t.dur_min })),
+  const slots = useDayRituals(date).filter(
+    (s) => s.start_min >= DAY_START && s.start_min < DAY_END,
   );
+  const lanes = layoutLanes([
+    ...scheduled.map((t) => ({ id: t.id, start_min: t.start_min, dur_min: t.dur_min })),
+    ...slots.map((s) => ({ id: s.id, start_min: s.start_min, dur_min: s.dur_min })),
+  ]);
 
   return (
     <>
+      {slots.map((s) => (
+        <RitualPip
+          key={s.id}
+          slot={s}
+          pxPerMin={pxPerMin}
+          lane={lanes.get(s.id) ?? { lane: 0, lanes: 1 }}
+        />
+      ))}
       {scheduled.map((t) => {
         const lane = lanes.get(t.id) ?? { lane: 0, lanes: 1 };
         const blockHeight = t.dur_min * pxPerMin;

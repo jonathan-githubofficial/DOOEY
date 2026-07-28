@@ -3,8 +3,8 @@ import { useRef, useState } from "react";
 import { Modal, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
 import Animated, { FadeIn } from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { DrawerHead } from "@/components/drawer-head";
 import { Grain } from "@/components/grain";
-import { Plate } from "@/components/plate";
 import { PressableScale } from "@/components/pressable-scale";
 import { Eyebrow, Panel } from "@/components/surface";
 import { settle } from "@/lib/motion";
@@ -120,17 +120,20 @@ export function NewProgramDeck({
     <Modal visible={visible} animationType="slide" onRequestClose={close}>
       <View style={[styles.sheet, { backgroundColor: colors.paper, paddingTop: sheetTop }]}>
         <Grain />
-        <View style={styles.head}>
-          <Eyebrow>new program</Eyebrow>
-          <PressableScale
-            scaleTo={0.85}
-            accessibilityLabel="Close"
-            onPress={close}
-            style={styles.close}
-          >
-            <X size={18} color={colors.inkMuted} />
-          </PressableScale>
-        </View>
+        <DrawerHead
+          eyebrow="new program"
+          onCancel={close}
+          cancelLabel="Discard this program"
+          onConfirm={create}
+          confirmLabel="Create program"
+          confirmDisabled={!!blocker}
+          style={styles.head}
+        />
+        {/* The blocker rides under the tick rather than beside a footer
+            button: it is the reason that corner is dim. */}
+        {!!blocker && (
+          <Text style={[styles.blocker, type.sans, { color: colors.inkMuted }]}>{blocker}</Text>
+        )}
 
         <ScrollView
           showsVerticalScrollIndicator={false}
@@ -217,17 +220,6 @@ export function NewProgramDeck({
           </PressableScale>
         </ScrollView>
 
-        <View
-          style={[
-            styles.foot,
-            { paddingBottom: Math.max(insets.bottom, 14), borderTopColor: alpha(colors.rule, 0.6) },
-          ]}
-        >
-          {blocker && (
-            <Text style={[styles.blocker, type.sans, { color: colors.inkMuted }]}>{blocker}</Text>
-          )}
-          <Plate label="Create program" onPress={create} disabled={!!blocker} />
-        </View>
       </View>
 
       <ExercisePicker
@@ -243,8 +235,7 @@ export function NewProgramDeck({
 
 const styles = StyleSheet.create({
   sheet: { flex: 1, paddingHorizontal: 16 },
-  head: { flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
-  close: { height: 34, width: 34, alignItems: "center", justifyContent: "flex-end" },
+  head: { marginBottom: 2 },
   body: { paddingTop: 14, gap: 10 },
   namePanel: { padding: 16, gap: 2 },
   nameInput: { fontSize: 24, letterSpacing: -0.5, paddingVertical: 3 },
@@ -278,6 +269,5 @@ const styles = StyleSheet.create({
     paddingVertical: 20,
   },
   dealText: { fontSize: 14 },
-  foot: { paddingTop: 12, borderTopWidth: 1, gap: 8 },
-  blocker: { fontSize: 12, textAlign: "center" },
+  blocker: { marginTop: 8, fontSize: 12 },
 });

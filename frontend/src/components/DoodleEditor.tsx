@@ -1,12 +1,12 @@
-import { Check, Eraser, Pencil, Undo2, X } from "lucide-react-native";
+import { Eraser, Pencil, Undo2 } from "lucide-react-native";
 import { useEffect, useRef, useState } from "react";
 import { Platform, StyleSheet, Text, View, type ViewStyle } from "react-native";
 import { Gesture, GestureDetector } from "react-native-gesture-handler";
 import Animated, { FadeIn } from "react-native-reanimated";
 import { DoodleSvg } from "@/components/DoodleSvg";
+import { DrawerHead } from "@/components/drawer-head";
 import { Grain } from "@/components/grain";
 import { PressableScale } from "@/components/pressable-scale";
-import { Eyebrow } from "@/components/surface";
 import { eraseNear, INK_COLORS, touchPct, type InkColor, type Stroke } from "@/lib/doodle";
 import { dur } from "@/lib/motion";
 import { useCardRadius } from "@/features/style/store";
@@ -130,7 +130,23 @@ export function DoodleEditor({
       ]}
     >
       <Grain radius={radius - 1} />
-      <Eyebrow>{heading}</Eyebrow>
+      <DrawerHead
+        eyebrow={heading}
+        onCancel={onClose}
+        cancelLabel="Discard this drawing"
+        onConfirm={async () => {
+          setSaving(true);
+          try {
+            await onSave(strokes);
+          } finally {
+            setSaving(false);
+          }
+        }}
+        confirmLabel="Save doodle"
+        confirmDisabled={saving}
+        accent={colors.leaf}
+        style={styles.head}
+      />
 
       <GestureDetector gesture={draw}>
         <View
@@ -204,24 +220,6 @@ export function DoodleEditor({
           <MiniTool label="Undo" disabled={history.length === 0} onPress={undo}>
             <Undo2 size={14} color={colors.inkMuted} />
           </MiniTool>
-          <MiniTool label="Cancel" onPress={onClose}>
-            <X size={14} color={colors.inkMuted} />
-          </MiniTool>
-          <MiniTool
-            label="Save doodle"
-            accent
-            disabled={saving}
-            onPress={async () => {
-              setSaving(true);
-              try {
-                await onSave(strokes);
-              } finally {
-                setSaving(false);
-              }
-            }}
-          >
-            <Check size={14} color={colors.leaf} />
-          </MiniTool>
         </View>
       </View>
     </Animated.View>
@@ -231,14 +229,12 @@ export function DoodleEditor({
 function MiniTool({
   label,
   active,
-  accent,
   disabled,
   onPress,
   children,
 }: {
   label: string;
   active?: boolean;
-  accent?: boolean;
   disabled?: boolean;
   onPress: () => void;
   children: React.ReactNode;
@@ -254,7 +250,6 @@ function MiniTool({
       style={[
         styles.miniTool,
         active && { backgroundColor: alpha(colors.zest, 0.15) },
-        accent && { backgroundColor: alpha(colors.leaf, 0.15) },
         disabled && { opacity: 0.4 },
       ]}
     >
@@ -264,6 +259,7 @@ function MiniTool({
 }
 
 const styles = StyleSheet.create({
+  head: { marginBottom: 2 },
   card: {
     width: 264,
     borderWidth: 1,

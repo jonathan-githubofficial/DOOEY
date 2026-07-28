@@ -130,23 +130,6 @@ export function useSaveRoutine() {
   });
 }
 
-/** Restyle a routine's card. Kept apart from `useSaveRoutine` so designing a
- * card never rewrites its exercises, and editing exercises never wipes the
- * design. Passing "" / [] returns that half of the card to its automatic
- * fallback. */
-export function useDesignRoutine() {
-  const qc = useQueryClient();
-  return useMutation({
-    mutationFn: (design: { id: string; hue?: CardHue | ""; emblem?: Stroke[] }) => {
-      const patch: Record<string, unknown> = {};
-      if (design.hue !== undefined) patch.hue = design.hue;
-      if (design.emblem !== undefined) patch.emblem = design.emblem;
-      return pb.collection("routines").update(design.id, patch);
-    },
-    onSettled: () => qc.invalidateQueries({ queryKey: gymKeys.routines }),
-  });
-}
-
 export function useDeleteRoutine() {
   const qc = useQueryClient();
   return useMutation({

@@ -22,6 +22,7 @@ import { Eyebrow } from "@/components/surface";
 import { useCardRadius, useShadow } from "@/features/style/store";
 import { hapticTap } from "@/lib/haptics";
 import { dur, ease, settle, timing } from "@/lib/motion";
+import { SHEET_OVERHANG } from "@/lib/shell";
 import { alpha } from "@/lib/theme";
 import {
   closeSheet,
@@ -169,7 +170,10 @@ function Sheet({ spec, seq }: { spec: SheetSpec; seq: number }) {
           {
             backgroundColor: colors.surface,
             borderColor: alpha(colors.rule, 0.7),
-            paddingBottom: WEB ? 18 : insets.bottom + 12,
+            // The web card floats and is rounded all round, so it has no
+            // edge to hide; only the native drawer runs on under the keyboard.
+            paddingBottom: WEB ? 18 : insets.bottom + 12 + SHEET_OVERHANG,
+            marginBottom: WEB ? 0 : -SHEET_OVERHANG,
             ...(WEB
               ? { borderRadius: radius }
               : { borderTopLeftRadius: radius, borderTopRightRadius: radius }),

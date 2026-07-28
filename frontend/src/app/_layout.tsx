@@ -25,6 +25,7 @@ import { BootIntro } from "@/components/BootIntro";
 import { Grain } from "@/components/grain";
 import { SheetHost } from "@/components/sheet";
 import { initSession } from "@/features/auth/api";
+import { COMPOSE_SHEET } from "@/features/tasks/compose-sheet";
 import { LiveBarHost } from "@/features/workouts/components/LiveBarHost";
 import { FRAME_W } from "@/lib/shell";
 import { LIGHT_PALETTE, usePalette, useThemeStore } from "@/stores/theme";
@@ -62,12 +63,6 @@ export function ErrorBoundary({ error, retry }: ErrorBoundaryProps) {
 }
 
 const queryClient = new QueryClient();
-
-// The sheet OPENS at these detents (small — the title autofocuses, so the
-// keyboard is up from the first frame and stacks its height on top). Once
-// open, compose.tsx swaps detents as the keyboard comes and goes — the
-// tuning knobs live at the top of that file (DETENTS_KEYBOARD/DETENTS_BARE).
-const COMPOSE_DETENTS = [0.15, 0.2];
 
 export default function RootLayout() {
   const theme = useThemeStore((s) => s.theme);
@@ -134,16 +129,10 @@ export default function RootLayout() {
                 it up, rounds it, grabs it, and keeps it above the keyboard. */}
             <Stack.Screen
               name="compose"
-              options={{
-                // Snug at rest, drags up for room when notes or the picker
-                // unfold. The form fills whichever band it gets, footer on
-                // the bottom edge. Height lives in COMPOSE_DETENTS above.
-                presentation: "formSheet",
-                sheetAllowedDetents: COMPOSE_DETENTS,
-                sheetGrabberVisible: true,
-                sheetCornerRadius: 24,
-                contentStyle: { backgroundColor: colors.surface },
-              }}
+              // Nothing may be added here that paints a background: the
+              // drawer is a Modal inside a transparent screen, and an opaque
+              // contentStyle turns it back into a full page.
+              options={COMPOSE_SHEET}
             />
           </Stack>
         </View>

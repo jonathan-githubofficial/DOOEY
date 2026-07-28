@@ -1,4 +1,4 @@
-import { libraryExercise, MUSCLE_GROUPS, prettyName } from "./library";
+import { exerciseMuscles, libraryExercise, MUSCLE_GROUPS, prettyName } from "./library";
 import type { CardHue, Routine } from "./types";
 
 /** Which DOOEY accent a muscle wears — grouped by region so a card's colour
@@ -29,18 +29,26 @@ export interface Focus {
   /** That muscle's accent, as a palette token key. Resolved by the caller so
    * this module stays pure and the choice survives a palette edit. */
   hueKey: CardHue;
-  /** Every muscle worked, most-trained first — what the body figure shades. */
+  /** The muscles the exercises are *for*, most-trained first. */
   targets: string[];
+  /** Everything else the routine works. Shaded, but never counted toward the
+   * label or the hue: a chest day that involves the shoulders is still a chest
+   * day, and a card that changed colour because of what it brushes would be
+   * telling you the wrong thing. */
+  secondary: string[];
 }
 
-/** What a routine or session trains. Tallies target muscles across every
+/** What a routine or session trains. Tallies muscles across every
  * library-backed exercise; a list of only custom moves has no focus. */
 export function focusOf(items: { libId?: string }[]): Focus | null {
   const tally = new Map<string, number>();
+  const also = new Set<string>();
   for (const it of items) {
     const ex = libraryExercise(it.libId);
     if (!ex) continue;
-    for (const t of ex.targets) tally.set(t, (tally.get(t) ?? 0) + 1);
+    const { primary, secondary } = exerciseMuscles(ex);
+    for (const t of primary) tally.set(t, (tally.get(t) ?? 0) + 1);
+    for (const t of secondary) also.add(t);
   }
   if (tally.size === 0) return null;
   const targets = [...tally.entries()].sort((a, b) => b[1] - a[1]).map(([k]) => k);
@@ -49,6 +57,7 @@ export function focusOf(items: { libId?: string }[]): Focus | null {
     label: MUSCLE_GROUPS.find((g) => g.key === top)?.label ?? prettyName(top),
     hueKey: MUSCLE_HUE[top] ?? "zest",
     targets,
+    secondary: [...also].filter((m) => !tally.has(m)),
   };
 }
 

@@ -6,6 +6,7 @@ import { Grain } from "@/components/grain";
 import { Masthead } from "@/components/Masthead";
 import { PressableScale } from "@/components/pressable-scale";
 import { Panel } from "@/components/surface";
+import { RitualsPanel } from "@/features/rituals/components/RitualsPanel";
 import { formatRest, useWorkoutPrefs, type Gender, type WeightUnit } from "@/features/workouts/store";
 import { Stepper } from "@/components/stepper";
 import { hapticTap } from "@/lib/haptics";
@@ -42,6 +43,7 @@ export default function Preferences() {
           { paddingBottom: page.paddingBottom },
         ]}
       >
+        <RitualsPanel />
         <GymPrefs />
       </ScrollView>
     </View>
@@ -240,7 +242,7 @@ const styles = StyleSheet.create({
     justifyContent: "center",
   },
   banner: {
-    marginTop: 16,
+    marginTop: 32,
     flexDirection: "row",
     alignItems: "center",
     gap: 12,

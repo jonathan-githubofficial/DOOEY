@@ -16,30 +16,32 @@ This file is the canonical entry point. Deeper docs live in [docs/](docs/) and
 
 ---
 
-## Current state (updated 2026-07-26)
+## Current state (updated 2026-07-27)
 
 **Keep this section true.** Update it before you end a session. It is the only place that records
 where things actually stand, and it is what spares the next session from re-reading the repo.
 
 - **Branch** `feat/expo-migration`, working tree clean.
-- **Shipped in `frontend/`**: auth and onboarding, Home (a user-arranged widget stack), Planner
-  (week/month/agenda views, timeboxing, compose sheet), Boards, Projects (learning programs as
-  folders), Account, the Style studio (runtime palette, fonts, backdrops, doodle icons), and Gym.
-- **Home is now the first tab** (`frontend/src/app/(tabs)/index.tsx`): a user-arranged widget stack
-  (schedule, tasks, gym) with an arrange mode off the masthead pencil (hold to reorder, tap the eye
-  to hide — the same convention as `ArrangeList`'s dock editor) and the compose FAB. Planner moved
-  to `(tabs)/planner.tsx` and now opens on Week; its old today view is retired in Home's favour, no
-  planner capability lost. The dock is user-configurable from Account's **"Your dock"** panel:
-  reorder or hide any space except Home and Account, which stay pinned so you can never lock
-  yourself out. Order and hidden set live in the `users.shell` JSON field (migration 029), synced
-  like the Style store; both tab bars render from the same resolved list (`useDock()`), and native
-  builds register a `NativeTabs.Trigger` for every space even when it's hidden from the dock, plus a
-  focused-space guard, since a route the tab navigator can't find a trigger for throws. Full spec:
-  [docs/superpowers/specs/2026-07-26-home-dock-food-journal-design.md](docs/superpowers/specs/2026-07-26-home-dock-food-journal-design.md) —
-  phase 1 (this work) is done; phase 2 (capture bar, inbox, search) and phase 3 (the Food Journal
-  widget) are next.
-- **A jest-expo test rig now exists**: `cd frontend && npm test` runs 15 tests (pure shell-layout
-  arithmetic, plus `SPACES`/`resolveDock`/`spaceFor`). First tests in `frontend/`.
+- **Shipped in `frontend/`**: auth and onboarding, Planner (list/timeline/week views, timeboxing,
+  compose sheet), Boards, Projects (learning programs as folders), Journal (food log), Account,
+  the Style studio (runtime palette, fonts, backdrops, doodle icons), Gym, and Rituals.
+- **The Planner is the home page** (`frontend/src/app/(tabs)/index.tsx`). The separate Home widget
+  stack was removed on 2026-07-27: it duplicated the planner's today view without adding anything.
+  Its mode toggle is grouped by span — `List` and `Timeline` are one day drawn two ways, `Week` is
+  a different span, and a divider in the toggle says so. The month unfolds out of the date shelf
+  rather than being a fourth mode, and `WeekStrip` takes a `compact` prop so Week mode doesn't
+  print the seven days twice. The dock stays user-configurable from Account's **"Your dock"**
+  panel: reorder or hide any space except Planner and Account, which stay pinned so you can never
+  lock yourself out. Order and hidden set live in the `users.shell` JSON field (migration 029).
+- **A jest-expo test rig exists**: `cd frontend && npm test` runs 71 tests — shell-layout
+  arithmetic, `SPACES`/`resolveDock`/`spaceFor`, the ritual schedule engine, the muscle-figure
+  mapping tables, tag parsing, and the compose sheet's presentation options.
+- **The iOS launch crash is fixed** (2026-07-27). `timing()` in `frontend/src/lib/motion.ts` was a
+  plain function called from five UI-thread worklets, one of them `ArrangeList`'s `useAnimatedStyle`
+  — which runs on mount, and iOS instantiates every tab at once, so signing in aborted the process
+  (`throwPendingError → __cxa_throw → SIGABRT`, uncatchable by any JS error boundary). `timing()`
+  now carries a `"worklet"` directive. **If you add a helper that a worklet calls, it needs one
+  too**; nothing in the type system will tell you.
 - **Boards was rebuilt on 2026-07-25** to replace the old web version: every web feature except
   folders, direct-manipulation editing with no dialogs, undo/redo, and a Skia ink layer so drawing
   keeps up with a hand. Architecture and the reasoning behind each tool:
@@ -52,12 +54,55 @@ where things actually stand, and it is what spares the next session from re-read
 - **Gym is the active feature and the largest one**: program catalog, routine editor, live logger
   with a docked keypad and Start/Stop per set, history, muscle map. Architecture:
   [frontend/docs/gym.md](frontend/docs/gym.md).
+- **The gym's hero is one ticket** (2026-07-28,
+  `frontend/src/features/workouts/components/TrainingTicket.tsx`). It replaced `WeekPanel` and
+  `UpNextCard`, two Panels stacked with a gap that never said they were a pair: the counterfoil
+  above the perforation is the record (`1 of 4 days this week`, the week's keys, the muscles it
+  hit), the stub below it is the instruction in the routine's own hue (what to train, and the
+  page's only Start). The stub has four states as a `TicketNext` union — live session, next
+  routine, invitation, waiting — so "you own no routines" is *an answer* rather than a hole in the
+  card. It is drawn as real ticket furniture: a **stamp-cut silhouette** (a scallop out of every
+  edge, a fold notch where the tear meets each side, perforation between them, all on
+  `stamp-edge.tsx`'s numbers), tracked uppercase captions in tabular figures over every value, and
+  art that bleeds off the paper (the counterfoil's figures stand in a plate tinted with the hue the
+  week came out; the stub's run off the bottom edge). **No barcode** — it would encode nothing,
+  which is the decoration-without-a-job a metaphor is not allowed to be here. **Every bite is paper
+  painted on top, not a real cutout**: a mask would stop the colour fields reaching the card's
+  edges, and would cost the shadow on Android, where elevation follows a view's bounds and not its
+  paint. **The tear is split between the halves rather than straddling them**, so neither paints
+  outside its own box and no platform's overflow or z-order rules can break it. History left
+  the card for `(detail)/history.tsx`: how this week is going and what you have done since January
+  are different questions, and the second was never a state of the first.
+- **The muscle figures were wrong until 2026-07-27**, in three ways, all now fixed and tested
+  (`frontend/src/features/workouts/anatomy.test.ts`). (1) `exercises.json` had been hand-built
+  without upstream's `secondaryMuscles`, so every exercise had exactly one muscle — a bench press
+  was chest and nothing else. It is now generated by `frontend/scripts/build-exercise-library.mjs`
+  from the same pinned SHA as the GIFs. (2) Each muscle was mapped to one side of the body, so
+  shoulders, forearms, calves, triceps, traps and adductors could never light on half the figure;
+  which side a part shows on is now read from the library's own assets. (3) `MuscleMap` picked one
+  side and silently dropped the rest, so a squat showed quads and forgot the glutes. **Add a muscle
+  name and the mapping tables in `anatomy.ts` are the only place to touch** — every figure renders
+  through `WeekBody` now.
 - **In flight**: the Gym redesign specced in [frontend/docs/gym-ux-plan.md](frontend/docs/gym-ux-plan.md).
-  The root problem to fix first: the routine editor collects sets, reps, weight and rest, but
-  `useStartWorkout` builds every set from `emptySet()` and discards `target_reps` and
-  `target_weight` ([frontend/src/features/workouts/api.ts](frontend/src/features/workouts/api.ts)), so
-  the catalog's real rep schemes never reach a session and progressive overload stays passive.
-- **Not built**: Journal (food log), Google Calendar two-way sync, Google OAuth sign-in.
+  Its root problem is fixed — `useStartWorkout` now instantiates each set from the routine's
+  `target_reps`/`target_weight` instead of `emptySet()`, so a catalog rep scheme reaches the logger.
+  Steps 1 to 4 and the training ticket are done; what is left is persisting the live timers and the
+  shared plan/perform visual language.
+- **Rituals tie the spaces together** (2026-07-27, `frontend/src/features/rituals/`). A ritual is a
+  standing commitment — a routine on chosen weekdays at chosen times, or meals once or several
+  times a day — and its slots lay themselves out on all three planner views, styled per kind: a
+  training slot wears its routine's card hue and emblem and its play disc starts the session from
+  the planner; a meal slot is honey and opens the Journal. **Nothing records whether a slot was
+  kept.** `useDayRituals` derives that by joining the schedule against the workouts and journal
+  entries that already exist, so deleting a session un-keeps its slot. Each slot owns a *band* (to
+  the midpoints between neighbouring times), which is what lets three meal slots resolve
+  independently against one flat list of entries. Schedules live in `users.rituals` (migration 031)
+  and sync exactly like `users.shell`. Edited on Preferences, under **Rituals**.
+- **Two migrations are written but NOT applied**: `030_journal_entries` and `031_users_rituals`.
+  PocketBase runs them on start, so both land on the next `backend/pocketbase.exe serve`. Until
+  then the Journal cannot read or write, and ritual schedules stay device-local (the sync PATCH
+  fails on the unknown field and is swallowed).
+- **Not built**: Google Calendar two-way sync, Google OAuth sign-in.
 - **Design system**: retargeted to `frontend/` on 2026-07-25.
   [docs/design-system.md](docs/design-system.md) and [docs/design-audit.md](docs/design-audit.md)
   now describe this app, built on "you own it" and "motion has to do a job". New:
@@ -80,23 +125,23 @@ Six spaces behind the tab bar, declared in
 [frontend/src/lib/spaces.ts](frontend/src/lib/spaces.ts) (`SPACES`) and rendered by both tab bars
 from [frontend/src/app/(tabs)/_layout.tsx](frontend/src/app/(tabs)/_layout.tsx):
 
-1. **Home** (`index`): the front door. A user-arranged widget stack (schedule, tasks, gym today) —
-   everything due today, actionable in place, no drill-in required.
-2. **Planner**: week, month and agenda views, timeboxing, opens on Week. Its old today view moved
-   to Home; nothing else about it changed.
-3. **Boards**: free-form mood boards (notes, text, links, photos, stickers, doodles, sections) on
+1. **Planner** (`index`): the front door and the calendar in one. List, Timeline and Week views,
+   timeboxing, the month unfolding out of the date shelf, and the day's ritual slots laid out
+   above the tasks.
+2. **Boards**: free-form mood boards (notes, text, links, photos, stickers, doodles, sections) on
    a pannable, zoomable canvas with a freehand ink layer. See
    [frontend/docs/boards.md](frontend/docs/boards.md).
-4. **Projects**: learning programs as file-folder cards.
-5. **Gym**: programs, routines, live logging, history.
+3. **Projects**: learning programs as file-folder cards.
+4. **Gym**: programs, routines, live logging, history.
+5. **Journal**: what you ate, in your own words, grouped by daypart. Never parsed, by design.
 6. **Account**.
 
-**The dock is user-composable**, not fixed. Reorder or hide any space but Home and Account from
+**The dock is user-composable**, not fixed. Reorder or hide any space but Planner and Account from
 Account's "Your dock" panel (`frontend/src/features/home/components/DockPanel.tsx`); the resolved
 order comes from `useDock()` in `frontend/src/features/home/store.ts`. Native builds get the
 platform's own tab bar (`NativeTabs` from `expo-router/unstable-native-tabs`) — every space
-registers a trigger whether it's in the dock or not, so a hidden space stays reachable by deep link
-or from a Home widget — and the hand-drawn page doodles are rasterized off-screen into bitmap icons
+registers a trigger whether it's in the dock or not, so a hidden space stays reachable by deep
+link or from a ritual slot on the planner — and the hand-drawn page doodles are rasterized off-screen into bitmap icons
 when "doodle icons in dock" is on. The web build keeps the DOOEY dock island
 (`frontend/src/components/Dock.tsx`) behind a `Tabs` that likewise registers all six screens
 regardless of dock membership.
@@ -155,8 +200,8 @@ own gitignored typed-routes cache, and a debounced regeneration can land mid-edi
 happens `npm run typecheck` fails with `Type '"/"' is not assignable to type ...` at `<Redirect>`/
 `router.replace` call sites in `login.tsx`, `onboarding.tsx` or `compose.tsx` that were never
 touched. It is not a code bug: delete the file (or all of `frontend/.expo/`) and run `npx expo
-start` once to let Metro regenerate it, then re-run typecheck. Recurred twice moving Planner to
-`/planner` and adding Home during the Home/dock work above.
+start` once to let Metro regenerate it, then re-run typecheck. Recurred moving Planner between
+`/planner` and `/` and adding the Journal route.
 
 **`backend/pb_data` is live user data.** Never delete, reset or hand-edit it. Schema changes go through
 `backend/pb_migrations/`.
@@ -166,7 +211,11 @@ start` once to let Metro regenerate it, then re-run typecheck. Recurred twice mo
 ## Data (PocketBase)
 
 Collections, all owner-scoped: `users`, `tasks`, `moodboards`, `routines`, `workouts`,
-`workout_programs`, `learning_programs`.
+`workout_programs`, `learning_programs`, `journal_entries`.
+
+Two things live on the `users` record rather than in a collection of their own, because the client
+always reads them whole and they belong to the account: `shell` (dock order and hidden set) and
+`rituals` (the recurring schedules the planner lays out).
 
 - **Data isolation** is enforced server-side by PocketBase rules (`owner = @request.auth.id`). The
   client trusts what PB returns.
@@ -272,8 +321,8 @@ image is still `/pb`, because that is PocketBase's own convention and the volume
 it.
 
 Routes in `frontend/src/app/`: `(tabs)/` for the six spaces, `(detail)/` for `task/[id]`,
-`project/[id]`, `routine/[id]`, `workout/[id]`, `board/[id]`, `preferences`, `style`, `wordmark`,
-and at the root `compose`, `login`, `onboarding`.
+`project/[id]`, `routine/[id]`, `workout/[id]`, `board/[id]`, `tag/[tag]`, `history`,
+`preferences`, `style`, `wordmark`, and at the root `compose`, `login`, `onboarding`.
 
 A feature's code lives **entirely** inside `frontend/src/features/<feature>/`: `components/` for its
 UI, `api.ts` for its PB queries and mutations, `types.ts`, `store.ts` when it needs one. If two

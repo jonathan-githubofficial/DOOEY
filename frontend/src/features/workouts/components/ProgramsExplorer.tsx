@@ -1,10 +1,11 @@
-import { ChevronLeft, ChevronRight, FolderPlus, Plus, X } from "lucide-react-native";
+import { ChevronLeft, ChevronRight, FolderPlus, Plus } from "lucide-react-native";
 import { useState } from "react";
 import { Image, Modal, Platform, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import Animated, { FadeIn } from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useSheetTop } from "@/lib/shell";
 import { Grain } from "@/components/grain";
+import { DrawerHead } from "@/components/drawer-head";
 import { Plate } from "@/components/plate";
 import { PressableScale } from "@/components/pressable-scale";
 import { Eyebrow, Panel, Stamp } from "@/components/surface";
@@ -61,32 +62,34 @@ export function ProgramsExplorer({
         ]}
       >
         <Grain />
-        <View style={styles.head}>
-          <Eyebrow style={styles.headLabel}>programs</Eyebrow>
-          {/* Nothing on the shelf fits? Build the folder yourself, from the
-              same corner you came looking in. */}
-          <PressableScale
-            scaleTo={0.96}
-            accessibilityRole="button"
-            accessibilityLabel="New program"
-            onPress={() => {
-              hapticTap();
-              onNewProgram();
-            }}
-            style={[
-              styles.newBtn,
-              { borderColor: alpha(colors.zest, 0.5), backgroundColor: alpha(colors.zest, 0.12) },
-            ]}
-          >
-            <FolderPlus size={15} color={colors.zest} />
-            <Text style={[styles.newLabel, type.sansMedium, { color: colors.zest }]}>
-              New program
-            </Text>
-          </PressableScale>
-          <PressableScale scaleTo={0.85} accessibilityLabel="Close" onPress={close} style={styles.close}>
-            <X size={18} color={colors.inkMuted} />
-          </PressableScale>
-        </View>
+        {/* A browser, so there is nothing to commit and no tick. Nothing on
+            the shelf fits? Build the folder yourself, from the same corner you
+            came looking in. */}
+        <DrawerHead
+          eyebrow="programs"
+          onCancel={close}
+          cancelLabel="Close the programs shelf"
+          trailing={
+            <PressableScale
+              scaleTo={0.96}
+              accessibilityRole="button"
+              accessibilityLabel="New program"
+              onPress={() => {
+                hapticTap();
+                onNewProgram();
+              }}
+              style={[
+                styles.newBtn,
+                { borderColor: alpha(colors.zest, 0.5), backgroundColor: alpha(colors.zest, 0.12) },
+              ]}
+            >
+              <FolderPlus size={15} color={colors.zest} />
+              <Text style={[styles.newLabel, type.sansMedium, { color: colors.zest }]}>
+                New program
+              </Text>
+            </PressableScale>
+          }
+        />
         <Text style={[styles.blurb, type.sans, { color: colors.inkMuted }]}>
           Proven splits. Tap one to preview a day, then start it or save it.
         </Text>
@@ -246,7 +249,7 @@ function ProgramDetail({
         contentContainerStyle={[styles.detail, { paddingBottom: insets.bottom + 24 }]}
       >
         <View style={styles.detailHead}>
-          <PressableScale scaleTo={0.85} accessibilityLabel="Back to programs" onPress={onBack} style={styles.close}>
+          <PressableScale scaleTo={0.85} accessibilityLabel="Back to programs" onPress={onBack} style={styles.detailBack}>
             <ChevronLeft size={20} color={colors.inkMuted} />
           </PressableScale>
           <View style={styles.detailTitleText}>
@@ -337,7 +340,7 @@ function RoutinePreview({
         contentContainerStyle={[styles.detail, { paddingBottom: insets.bottom + 24 }]}
       >
         <View style={styles.detailHead}>
-          <PressableScale scaleTo={0.85} accessibilityLabel="Back" onPress={onBack} style={styles.close}>
+          <PressableScale scaleTo={0.85} accessibilityLabel="Back" onPress={onBack} style={styles.detailBack}>
             <ChevronLeft size={20} color={colors.inkMuted} />
           </PressableScale>
           <View style={styles.detailTitleText}>
@@ -427,8 +430,7 @@ function RoutineFan({ routine }: { routine: ProgramRoutine }) {
 
 const styles = StyleSheet.create({
   sheet: { flex: 1, paddingHorizontal: 16 },
-  head: { flexDirection: "row", alignItems: "center", gap: 10 },
-  headLabel: { flex: 1 },
+  detailBack: { height: 34, width: 34, alignItems: "center", justifyContent: "center" },
   newBtn: {
     height: 32,
     flexDirection: "row",
@@ -439,7 +441,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
   },
   newLabel: { fontSize: 12 },
-  close: { height: 34, width: 34, alignItems: "center", justifyContent: "center" },
   blurb: { marginTop: 6, fontSize: 13, lineHeight: 18 },
   programTopRow: { flexDirection: "row", alignItems: "flex-start", gap: 12 },
   programText: { flex: 1, minWidth: 0 },

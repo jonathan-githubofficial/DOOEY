@@ -62,3 +62,19 @@ export function useSheetTop(): number {
   const insets = useSafeAreaInsets();
   return Platform.OS === "ios" ? 14 : insets.top + 14;
 }
+
+/** How far a bottom drawer's paper runs on past its own bottom edge.
+ *
+ * iOS rounds the top corners of its keyboard, and a drawer sitting exactly on
+ * that edge leaves two small wedges at the corners where the scrim shows
+ * through. Rounding the drawer's own corners to match wouldn't close them, it
+ * would only change their shape — so the paper carries on underneath instead,
+ * and there is nothing behind the curve to see.
+ *
+ * The same overhang runs off the bottom of the screen when no keyboard is up,
+ * which costs nothing and means a drawer never has a visible bottom edge.
+ *
+ * Used as a pair: add it to `paddingBottom` and subtract it as `marginBottom`,
+ * so the box grows downward and the content inside does not move.
+ */
+export const SHEET_OVERHANG = 32;

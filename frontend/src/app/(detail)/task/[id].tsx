@@ -27,6 +27,8 @@ import { Check } from "@/components/Check";
 import { Grain } from "@/components/grain";
 import { PressableScale } from "@/components/pressable-scale";
 import { Eyebrow, Panel, Stamp } from "@/components/surface";
+import { TagChips } from "@/features/tasks/components/TagChips";
+import { harvestTags } from "@/features/tasks/tags";
 import { attachmentUrl, useDeleteTask, useTask, useUpdateTask } from "@/features/tasks/api";
 import type { ChecklistItem, Resource, Task } from "@/features/tasks/types";
 import { confirmDestructive } from "@/lib/confirm";
@@ -172,6 +174,7 @@ function AddSectionKey({
 function TaskHead({ task }: { task: Task }) {
   const colors = usePalette();
   const type = useType();
+  const router = useRouter();
   const update = useUpdateTask();
   const [title, setTitle] = useState(task.title);
   const [description, setDescription] = useState(task.description);
@@ -196,8 +199,16 @@ function TaskHead({ task }: { task: Task }) {
           value={title}
           onChangeText={setTitle}
           onEndEditing={() => {
-            const t = title.trim();
-            if (t && t !== task.title) update.mutate({ id: task.id, patch: { title: t } });
+            // Typing `#foo` here tags the task, exactly as in the composer:
+            // the word is lifted out and the title stays a plain sentence.
+            const { title: plain, tags: found } = harvestTags(`${title} `);
+            const t = plain.trim();
+            if (!t) return;
+            const tags = [...task.tags, ...found.filter((x) => !task.tags.includes(x))];
+            if (t !== task.title || tags.length !== task.tags.length) {
+              setTitle(t);
+              update.mutate({ id: task.id, patch: { title: t, tags } });
+            }
           }}
           multiline
           style={[styles.title, type.display, { color: colors.ink }]}
@@ -223,6 +234,16 @@ function TaskHead({ task }: { task: Task }) {
         placeholder="A one-liner under the title…"
         placeholderTextColor={alpha(colors.inkMuted, 0.5)}
         style={[styles.description, type.sans, { color: colors.inkMuted }]}
+      />
+      {/* Beneath the title and the one-liner, the same as on a planner row.
+          Tap one to take it off; type `#something` in the title to add one. */}
+      <TagChips
+        tags={task.tags}
+        onPress={(tag) => router.push({ pathname: "/tag/[tag]", params: { tag } })}
+        onRemove={(tag) =>
+          update.mutate({ id: task.id, patch: { tags: task.tags.filter((t) => t !== tag) } })
+        }
+        style={styles.tags}
       />
     </View>
   );
@@ -469,6 +490,7 @@ const styles = StyleSheet.create({
   head: { marginTop: 4, paddingHorizontal: 4 },
   headTitleRow: { flexDirection: "row", alignItems: "flex-start", gap: 12 },
   title: { flex: 1, fontSize: 26, letterSpacing: -0.5, paddingTop: 0 },
+  tags: { marginTop: 10 },
   stampRow: { marginTop: 10, flexDirection: "row" },
   description: { marginTop: 8, fontSize: 14 },
   panel: { marginTop: 16, padding: 20 },

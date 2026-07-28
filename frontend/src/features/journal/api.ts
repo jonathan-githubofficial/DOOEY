@@ -18,11 +18,13 @@ function toEntry(r: RecordModel): JournalEntry {
  * `eaten_at` is a real timestamp, so a day is a half-open window rather than a
  * prefix match: anything from local midnight up to (not including) the next.
  * That's what keeps yesterday's supper out of today's list across timezones. */
-export function useJournalDay(date: string) {
+export function useJournalDay(date: string, wanted = true) {
   const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
   return useQuery({
     queryKey: journalKeys.day(date),
-    enabled: isAuthenticated,
+    // `wanted` is for callers that mount one of these per day and only need
+    // the ones a meal ritual actually falls on — the week grid asks for seven.
+    enabled: isAuthenticated && wanted,
     queryFn: async () => {
       const records = await pb.collection("journal_entries").getFullList({
         filter: pb.filter("kind = 'food' && eaten_at >= {:from} && eaten_at < {:to}", {

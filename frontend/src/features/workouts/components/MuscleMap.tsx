@@ -1,46 +1,49 @@
 import { StyleSheet, View } from "react-native";
-import Body from "react-native-body-highlighter";
-import { alpha } from "@/lib/theme";
 import { usePalette } from "@/stores/theme";
-import { bodyData, MUSCLE_SLUG, type Placed } from "../anatomy";
-import type { Gender } from "../store";
+import { busiestSide, paintOf } from "../anatomy";
+import { useWorkoutPrefs } from "../store";
+import { WeekBody } from "./WeekBody";
 
-/** An anatomical figure (male/female per prefs) with the exercise's worked
- * muscles shaded — the "which muscle" companion to the motion GIF. The view
- * flips to the back when the primary muscle lives there. Cardio-only exercises
- * (no mapped muscle) just show the plain figure. `tint` paints the shading in a
- * routine's focus hue; left off, it's the standard highlight red. */
+/** An anatomical figure with an exercise's muscles shaded — the "which muscle"
+ * companion to the motion GIF.
+ *
+ * It used to pick one side and drop every muscle on the other, so a squat
+ * showed the quads and quietly forgot the glutes and hamstrings. Now `both`
+ * shows the pair wherever there is room for it, and the single-sided form —
+ * the muscle-group chips, at thumbnail size — turns to whichever side the
+ * primary muscles are actually on.
+ *
+ * `tint` paints the shading in a routine's focus hue; left off, it's clay. */
 export function MuscleMap({
   targets,
-  gender,
+  secondary = [],
+  both = false,
   scale = 0.55,
   tint,
 }: {
   targets: string[];
-  gender: Gender;
+  secondary?: string[];
+  /** Show front and back together. The exercise sheet has the room; the
+   * thumbnail chips don't. */
+  both?: boolean;
   scale?: number;
   tint?: string;
 }) {
   const colors = usePalette();
-  const fill = tint ?? colors.clay;
-  const placed = targets.map((t) => MUSCLE_SLUG[t]).filter((p): p is Placed => !!p);
-  const side = placed[0]?.side ?? "front";
-  // Shade every worked muscle that shows on the chosen side.
-  const worked = new Map(placed.filter((p) => p.side === side).map((p) => [p.slug, fill]));
+  const gender = useWorkoutPrefs((s) => s.gender);
+  const painted = paintOf(targets, secondary, tint ?? colors.clay);
 
-  return (
-    <View style={styles.wrap} pointerEvents="none">
-      <Body
-        data={bodyData(worked, alpha(colors.ink, 0.13))}
-        gender={gender}
-        side={side}
-        scale={scale}
-        border={alpha(colors.ink, 0.25)}
-      />
-    </View>
-  );
+  if (both) {
+    return (
+      <View style={styles.row} pointerEvents="none">
+        <WeekBody painted={painted} gender={gender} side="front" scale={scale} />
+        <WeekBody painted={painted} gender={gender} side="back" scale={scale} />
+      </View>
+    );
+  }
+  return <WeekBody painted={painted} gender={gender} side={busiestSide(painted)} scale={scale} />;
 }
 
 const styles = StyleSheet.create({
-  wrap: { alignItems: "center", justifyContent: "center" },
+  row: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 2 },
 });

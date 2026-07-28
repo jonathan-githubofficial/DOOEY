@@ -200,3 +200,128 @@ Each step is independently shippable and ends with a testable outcome.
 5. ⏳ *(later)* **Persist live timers; editor lightening + shared plan/perform language.** *Done
    when:* backgrounding mid-rest returns to a still-running timer, and planning vs performing is
    visually unmistakable.
+
+---
+
+## The training ticket (specced and built, 2026-07-28)
+
+The page's top two cards became **one object with two sections, drawn as a
+ticket** — the top is what you have done, the stub under the perforation is what
+to do next. They were `WeekPanel` and `UpNextCard`, two Panels stacked with 22pt
+between them, and nothing said they were a pair. They are: one is the record,
+the other is the instruction, and a ticket is precisely the shape of "one thing,
+whose bottom half you tear off and use". Both are now retired into
+`components/TrainingTicket.tsx`.
+
+Why the metaphor earns its keep, by the house rule that a metaphor must clarify
+what a thing *is* or *does*: the perforation carries the meaning. It says the two
+halves belong to one object, and it says which half is actionable. Neither a
+divider nor two cards can say that.
+
+### Shape
+
+```
+ ‿‿‿‿‿‿‿‿‿‿‿‿‿‿‿‿‿‿‿‿‿‿‿‿‿‿‿‿‿   SCALLOPED on all four edges, stamp-cut.
+(░░░░░░░░░│ 21–27 JUL           )  ART PLATE — the week's own hue.
+(░[front]░│ 1 of 4 days this wk )  COUNTERFOIL — the record. Paper,
+(░[back]░░│ M T W T F S S       )  like the page.
+(░░░░░░░░░│ Longest rested: …   )
+ ) ·  ·  ·  ·  ·  ·  ·  ·  ·  · (   FOLD NOTCH at each end of the tear,
+(  NEXT IN UPPER/LOWER │        )   perforation between them.
+(  Legs                │[front] )  STUB — the instruction. Wears the
+(  5 exercises · train…│[back]  )  routine's hue, because on a real
+(  [ START ]           │        )  ticket the detachable part is the
+ ‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾    coloured one. Its art runs off the edge.
+```
+
+### How it was built
+
+- `components/TrainingTicket.tsx` is one Panel with `padding: 0`, so each half
+  can run its own colour field to the card's edge: `Counterfoil` (paper) and
+  `Stub` (`ink.field` from the routine's hue). `WeekPanel` and `UpNextCard` are
+  gone. `DayCell` moved to its own file, because the same cell has to mean the
+  same thing in the ticket's one row and in the History page's six months.
+- **The stub's four states are a discriminated union**, `TicketNext`, not a pile
+  of optional props: live session / next routine / invitation / waiting. That is
+  what makes "no routine yet" read as *one of the answers* rather than as a card
+  with a hole in it, which is the whole reason the stub is never absent.
+- **The silhouette is stamp-cut**: a scallop bitten out of every edge
+  (`TicketEdge`), a big fold notch where the tear meets each side, and the
+  perforation running between them. `SCALLOP` and `GAP` are `stamp-edge.tsx`'s own
+  numbers, so a torn ticket and a postage stamp read as the same workshop.
+- **The bites are painted in `colors.paper` on top of the card, not cut out of
+  it.** A real cutout — the CSS mask and evenodd path `stamp-edge` uses — would
+  mean none of the card's colour fields could run to its edges, and the art plate
+  bleeding off the leading edge is the point of the counterfoil. The page behind
+  is paper, so a paper bite is a hole.
+- It also means the card keeps a rectangle's shadow while showing a scalloped
+  edge. The bites are 3.5pt deep against a soft 8pt shadow, so there is nothing
+  to see; a genuine cutout would have cost the shadow altogether on Android,
+  where elevation follows a view's bounds and not its paint.
+- **The scallops stop clear of the corners**, which leaves the radius the user
+  chose a clean curve. A ticket is not allowed to take that decision back.
+- **The tear is split between the halves rather than straddling them.** Each half
+  draws one measured SVG of circles centred on the tear line, and the SVG's own
+  viewport clips the rest — so neither half paints outside its own box and nothing
+  is at the mercy of three platforms' overflow and z-order rules. Holes that would
+  collide with a fold notch are dropped, so the perforation starts clear of it
+  rather than blobbing into it.
+- The stub prints its own `Grain`: the Panel's is under the colour field. It is
+  clipped to a hole's radius, and the arc that leaves in each top corner is
+  exactly the patch the end notch covers.
+- The History key stays in the masthead — it is a page action, not a card's.
+
+### The three decisions
+
+**No routine yet → the stub becomes the invitation.** A ticket missing its stub
+reads as torn, not as empty. The stub's job is "what to do next", so with no
+programs it says how to get one — `Build your first routine`, below the
+perforation, with no hue (a ticket for nothing is not a coloured ticket).
+
+**A live session → the stub shows it, and does not control it.** `gym.tsx` used
+to hide the whole hero while a workout ran, which threw away the week record
+too, and that is still true and still worth seeing. When you are mid-session the
+thing to do next *is* the session, so the stub carries it: the session's name,
+sets logged, and a stamp reading **Resume** that taps through to the logger. It
+must not grow pause/stop keys — the live bar above the dock already owns those
+everywhere in the app, and a second controller is how two of them end up
+disagreeing.
+
+**Expanded history → out of the card, into its own screen.** The tension was that
+six months of week rows grow the record half and push the stub off the bottom.
+The real fault is that the card had two modes at all: "this week" and "your last
+six months" are different questions, and the second one is not a state of the
+first. So the masthead's History key pushes `(detail)/history` instead of
+expanding in place.
+
+That was the cheapest option as well as the clearest: `journeyWeeks()` and the
+week-row rendering moved across nearly intact, and the ticket has no `open` prop,
+no journey branch, and no "when expanded…" caveat anywhere. It is always exactly
+one thing — this week, and what is next — which is what lets it be a ticket.
+
+### What the halves say
+
+Both halves are printed the way a ticket prints a value: a tracked uppercase
+caption over it, in tabular figures.
+
+- The counterfoil is captioned with the week itself — `21–27 JUL`, or
+  `28 JUL–3 AUG` across a month boundary. Under it the headline, `1 of 4 days
+  this week`: progress against what your split asks, not a tally you could count
+  off the grid below it. Then the seven day keys, then what you have rested
+  longest.
+- The stub is captioned `NEXT IN <PROGRAM>`, which used to sit at the *end* of
+  the meta line where the ellipsis ate it first. Then the routine, then
+  `5 exercises · trained yesterday` — short enough now to actually read. Then the
+  page's only Start. A live session captions itself `IN PROGRESS` and counts sets.
+- **The art.** The counterfoil's figures stand in a full-bleed plate at the
+  leading edge, which is where a ticket puts its picture, and the plate wears the
+  hue the week itself came out — the accent that shaded the most muscles you
+  actually trained, or the quietest possible wash if you trained nothing. The
+  stub's figures run off the bottom edge instead of sitting in a frame, offset by
+  the viewBox's dead foot margin so the *feet* land on the edge and not the box.
+- Both pairs are drawn at one scale. They are two views of the same body on the
+  same card, and two scales would read as a mistake rather than as a hierarchy.
+- **No barcode.** It is the strongest ticket cue there is and it would encode
+  nothing, which is exactly the decoration-without-a-job a metaphor here is not
+  allowed to be. The punched holes and the caption type do the same work
+  honestly.

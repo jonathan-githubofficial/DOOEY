@@ -31,12 +31,15 @@ import { DoodleEditor } from "@/components/DoodleEditor";
 import { DoodleSvg } from "@/components/DoodleSvg";
 import { PressableScale } from "@/components/pressable-scale";
 import { Eyebrow, Panel, Stamp } from "@/components/surface";
+import { useDayRituals } from "@/features/rituals/api";
+import { RitualSlip } from "@/features/rituals/components/RitualSlip";
 import { addDays, dayTitle, dueInfo, localDate, toLocalNoon, toPbDate } from "@/lib/dates";
 import { hapticLift, hapticSuccess, hapticTap, hapticWarn } from "@/lib/haptics";
 import { alpha } from "@/lib/theme";
 import { useGardenStore } from "@/stores/garden";
 import { usePalette, useType } from "@/stores/theme";
 import { useDayTasks, useDeleteTask, useUpdateTask } from "../api";
+import { TagChips } from "./TagChips";
 import type { Task } from "../types";
 import { BINDING_INSET, RING_COUNT } from "./PlannerBook";
 import { settle } from "@/lib/motion";
@@ -61,12 +64,15 @@ export function AgendaSheet({ date, height }: { date: string; height?: number })
   const colors = usePalette();
   const type = useType();
   const { data: tasks, isPending, error } = useDayTasks(date);
+  const slots = useDayRituals(date);
 
   const open = useMemo(() => (tasks ?? []).filter((t) => !t.done_at), [tasks]);
   const done = (tasks ?? []).filter((t) => t.done_at);
+  const standing = slots.filter((s) => s.state !== "kept").length;
   // A day with work behind it and nothing left: it earns the stamp,
-  // the signature line, and the companion's little jump.
-  const complete = !!tasks && open.length === 0 && done.length > 0;
+  // the signature line, and the companion's little jump. A ritual still
+  // waiting keeps the day open, the same as an unchecked task.
+  const complete = !!tasks && open.length === 0 && standing === 0 && done.length > 0;
 
   const body = (
     <>
@@ -84,11 +90,25 @@ export function AgendaSheet({ date, height }: { date: string; height?: number })
       )}
       {isPending && !error && <GhostLines />}
 
+      {/* Above the tasks, because they are the shape of the day rather than
+          items in it: what recurs is already decided, the list is what you
+          decide today. */}
+      {slots.length > 0 && (
+        <Animated.View layout={settle()} style={styles.rituals}>
+          <Eyebrow>rituals</Eyebrow>
+          <View style={styles.ritualStack}>
+            {slots.map((s) => (
+              <RitualSlip key={s.id} slot={s} />
+            ))}
+          </View>
+        </Animated.View>
+      )}
+
       {tasks && (
         <>
           <ReorderableRows rows={open} date={date} />
 
-          {open.length === 0 && done.length === 0 && (
+          {open.length === 0 && done.length === 0 && slots.length === 0 && (
             <Text style={[styles.empty, type.sans, { color: colors.inkMuted }]}>
               Nothing planned — the day is yours.
             </Text>
@@ -110,7 +130,7 @@ export function AgendaSheet({ date, height }: { date: string; height?: number })
   );
 
   return (
-    <PageSheet date={date} count={open.length} height={height}>
+    <PageSheet date={date} count={open.length + standing} height={height}>
       {body}
     </PageSheet>
   );
@@ -613,6 +633,9 @@ function DraggableRow({
                     </Text>
                     {due && due.tone !== "future" && <DueChip due={due} />}
                   </View>
+                  {/* One line, always: the row's height is computed from the
+                      checklist alone, so anything here that could wrap would
+                      put the drag math and the layout out of step. */}
                   {!!task.description && (
                     <Text
                       numberOfLines={1}
@@ -621,6 +644,13 @@ function DraggableRow({
                       {task.description}
                     </Text>
                   )}
+                  {/* Under the title and its one-liner, never inside them. */}
+                  <TagChips
+                    tags={task.tags}
+                    compact
+                    onPress={(tag) => router.push(`/tag/${tag}`)}
+                    style={styles.rowTags}
+                  />
                 </View>
                 {task.checklist.length > 0 && (
                   <View style={styles.rowChecklist}>
@@ -792,6 +822,13 @@ const styles = StyleSheet.create({
     fontSize: 11,
     fontVariant: ["tabular-nums"],
   },
+  rituals: {
+    marginTop: 14,
+  },
+  ritualStack: {
+    marginTop: 8,
+    gap: 8,
+  },
   list: {
     marginTop: 4,
   },
@@ -930,6 +967,9 @@ const styles = StyleSheet.create({
   rowSub: {
     marginTop: 2,
     fontSize: 12,
+  },
+  rowTags: {
+    marginTop: 3,
   },
   rowChecklist: {
     paddingBottom: 8,

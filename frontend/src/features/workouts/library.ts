@@ -1,3 +1,4 @@
+import { canonicalMuscle } from "./anatomy";
 import type { ExerciseKind } from "./types";
 import data from "./exercises.json";
 import keys360 from "./media360.json";
@@ -29,7 +30,11 @@ const KEY_360 = keys360 as Record<string, string>;
 export interface LibraryExercise {
   id: string;
   name: string;
+  /** The muscle the movement is *for*. Upstream gives exactly one. */
   targets: string[];
+  /** Everything else it works, in upstream's own loose vocabulary ("shoulders",
+   * "core", "rear deltoids") — normalized by `exerciseMuscles`. */
+  secondary: string[];
   parts: string[];
   equip: string[];
   steps: string[];
@@ -97,9 +102,33 @@ export function kindOf(): ExerciseKind {
   return "weight_reps";
 }
 
+/** What an exercise works, in the app's own muscle vocabulary: what it is for,
+ * and what it also uses.
+ *
+ * Both lists are normalized and deduped, and a muscle that is already primary
+ * is never repeated as secondary — otherwise a curl would list biceps twice and
+ * the figure would shade it at the weaker strength. */
+export function exerciseMuscles(ex: { targets: string[]; secondary?: string[] }): {
+  primary: string[];
+  secondary: string[];
+} {
+  const primary = [...new Set(ex.targets.map(canonicalMuscle).filter(Boolean))];
+  const seen = new Set(primary);
+  const secondary: string[] = [];
+  for (const raw of ex.secondary ?? []) {
+    const m = canonicalMuscle(raw);
+    if (!m || seen.has(m)) continue;
+    seen.add(m);
+    secondary.push(m);
+  }
+  return { primary, secondary };
+}
+
 export function searchLibrary(query: string, muscle: string): LibraryExercise[] {
   const q = query.trim().toLowerCase();
   return LIBRARY.filter((ex) => {
+    // The muscle lens matches what the movement is for, not everything it
+    // brushes: filtering "biceps" should not return every row and chin-up.
     if (muscle !== "all" && !ex.targets.includes(muscle)) return false;
     if (!q) return true;
     return (

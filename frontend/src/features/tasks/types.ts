@@ -26,6 +26,9 @@ export interface Task {
   checklist: ChecklistItem[];
   resources: Resource[];
   attachments: string[]; // PB-stored filenames
+  /** Lowercase, deduped, order-preserving. A tag exists only while a task
+   * carries it — there is no tag record behind these. */
+  tags: string[];
   sort_order: number; // manual agenda order (float, midpoint inserts)
   start_min: number; // minutes from local midnight; 0 = unscheduled
   dur_min: number; // timebox length in minutes
@@ -48,5 +51,6 @@ export type TaskPatch = Partial<
     | "sort_order"
     | "start_min"
     | "dur_min"
+    | "tags"
   >
 >;

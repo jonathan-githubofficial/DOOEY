@@ -23,6 +23,7 @@ function toTask(r: RecordModel): Task {
     checklist: r.checklist ?? [],
     resources: r.resources ?? [],
     attachments: r.attachments ?? [],
+    tags: Array.isArray(r.tags) ? r.tags : [],
     sort_order: r.sort_order ?? 0,
     start_min: r.start_min ?? 0,
     dur_min: r.dur_min || 60,
@@ -155,6 +156,7 @@ export function useCreateTask() {
       due_date,
       start_min,
       dur_min,
+      tags,
     }: {
       title: string;
       description?: string;
@@ -162,6 +164,7 @@ export function useCreateTask() {
       due_date?: string;
       start_min?: number;
       dur_min?: number;
+      tags?: string[];
     }) =>
       pb.collection("tasks").create(
         {
@@ -172,6 +175,7 @@ export function useCreateTask() {
           due_date: due_date ?? "",
           start_min: start_min ?? 0,
           dur_min: dur_min ?? 60,
+          tags: tags ?? [],
           sort_order: Date.now(),
         },
         { requestKey: null },
@@ -211,5 +215,51 @@ export function useDeleteTask() {
     },
     onError: (_e, _v, ctx) => restoreDayCaches(qc, ctx?.snaps),
     onSettled: () => qc.invalidateQueries({ queryKey: taskKeys.all }),
+  });
+}
+
+
+/** Every tag in use, most-used first.
+ *
+ * There is no tag table to read, so this *is* the tag list: one lean query for
+ * the field alone, tallied here. A tag therefore exists exactly as long as some
+ * task carries it — nothing to garbage-collect, nothing to rename into
+ * inconsistency. The app's own reserved tags are merged in by the picker, so
+ * those survive having no tasks. */
+export function useAllTags() {
+  const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
+  return useQuery({
+    queryKey: ["tasks", "tags"] as const,
+    enabled: isAuthenticated,
+    queryFn: async () => {
+      const records = await pb.collection("tasks").getFullList({ fields: "tags" });
+      const tally = new Map<string, number>();
+      for (const r of records) {
+        for (const t of (r.tags as string[] | null) ?? []) tally.set(t, (tally.get(t) ?? 0) + 1);
+      }
+      return [...tally.entries()]
+        .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))
+        .map(([t]) => t);
+    },
+  });
+}
+
+/** Every task carrying one tag, open work first.
+ *
+ * `tags` is a JSON array, so the match is a LIKE against its serialized text
+ * with the quotes included — `"gym"` finds `["gym"]` and `["a","gym"]` but not
+ * `["gymnastics"]`, because the closing quote has to line up too. */
+export function useTasksByTag(tag: string) {
+  const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
+  return useQuery({
+    queryKey: ["tasks", "byTag", tag] as const,
+    enabled: isAuthenticated && !!tag,
+    queryFn: async () => {
+      const records = await pb.collection("tasks").getFullList({
+        filter: pb.filter("tags ~ {:needle}", { needle: `"${tag}"` }),
+        sort: "done_at,due_date,sort_order",
+      });
+      return records.map(toTask);
+    },
   });
 }

@@ -1,4 +1,4 @@
-import { ChevronLeft, Info, X } from "lucide-react-native";
+import { ChevronLeft, Info } from "lucide-react-native";
 import { useMemo, useState } from "react";
 import {
   FlatList,
@@ -15,16 +15,17 @@ import {
 import Animated, { FadeIn } from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useSheetTop } from "@/lib/shell";
+import { DrawerHead } from "@/components/drawer-head";
 import { Grain } from "@/components/grain";
 import { Plate } from "@/components/plate";
 import { PressableScale } from "@/components/pressable-scale";
 import { Eyebrow } from "@/components/surface";
 import { hapticTap } from "@/lib/haptics";
-import { fall, rise } from "@/lib/motion";
 import { alpha } from "@/lib/theme";
 import { usePalette, useType } from "@/stores/theme";
 import {
   exerciseGif,
+  exerciseMuscles,
   kindOf,
   libraryExercise,
   MUSCLE_GROUPS,
@@ -32,7 +33,6 @@ import {
   searchLibrary,
   type LibraryExercise,
 } from "../library";
-import { useWorkoutPrefs } from "../store";
 import type { ExerciseKind } from "../types";
 import { MuscleMap } from "./MuscleMap";
 
@@ -147,17 +147,23 @@ export function ExercisePicker({
         ]}
       >
         <Grain />
-        <View style={styles.head}>
-          <Eyebrow>{onAdd ? "add exercises" : "exercise library"}</Eyebrow>
-          <PressableScale
-            scaleTo={0.85}
-            accessibilityLabel="Close the library"
-            onPress={close}
-            style={styles.close}
-          >
-            <X size={18} color={colors.inkMuted} />
-          </PressableScale>
-        </View>
+        {/* The count rides in the eyebrow rather than on a second button:
+            the tick already says "add", and what changes as you pick is how
+            many, not what the corner does. */}
+        <DrawerHead
+          eyebrow={
+            !onAdd
+              ? "exercise library"
+              : selected.size > 0
+                ? `${selected.size} picked`
+                : "add exercises"
+          }
+          onCancel={close}
+          cancelLabel="Close the library"
+          onConfirm={onAdd && selected.size > 0 ? commit : undefined}
+          confirmLabel={`Add ${selected.size} ${selected.size === 1 ? "exercise" : "exercises"}`}
+          style={styles.head}
+        />
 
         <TextInput
           value={query}
@@ -256,21 +262,6 @@ export function ExercisePicker({
           </>
         )}
 
-        {/* The batch bar — rides in once something's picked. */}
-        {onAdd && selected.size > 0 && (
-          <Animated.View
-            entering={rise()}
-            exiting={fall()}
-            style={[styles.addBar, { paddingBottom: insets.bottom + 12 }]}
-          >
-            <Plate
-              label={`Add ${selected.size} ${selected.size === 1 ? "exercise" : "exercises"}`}
-              onPress={commit}
-              style={styles.addBarPlate}
-            />
-          </Animated.View>
-        )}
-
         {detail && (
           <ExerciseDetail
             exercise={detail}
@@ -296,7 +287,6 @@ function GroupCard({
 }) {
   const colors = usePalette();
   const type = useType();
-  const gender = useWorkoutPrefs((s) => s.gender);
   return (
     <PressableScale
       scaleTo={0.96}
@@ -307,7 +297,7 @@ function GroupCard({
     >
       <Grain radius={9} />
       <View style={[styles.groupCardThumb, { backgroundColor: alpha(colors.ink, 0.04) }]}>
-        <MuscleMap targets={[group.key]} gender={gender} scale={0.3} />
+        <MuscleMap targets={[group.key]} scale={0.3} />
       </View>
       <Text numberOfLines={1} style={[styles.groupCardName, type.display, { color: colors.ink }]}>
         {group.label}
@@ -403,7 +393,7 @@ function ExerciseDetail({
   const colors = usePalette();
   const type = useType();
   const insets = useSafeAreaInsets();
-  const gender = useWorkoutPrefs((s) => s.gender);
+  const { primary, secondary } = exerciseMuscles(exercise);
   return (
     <Animated.View
       entering={FadeIn.duration(160)}
@@ -419,7 +409,7 @@ function ExerciseDetail({
             scaleTo={0.85}
             accessibilityLabel="Back to the library"
             onPress={onBack}
-            style={styles.close}
+            style={styles.detailBack}
           >
             <ChevronLeft size={20} color={colors.inkMuted} />
           </PressableScale>
@@ -438,11 +428,28 @@ function ExerciseDetail({
         </View>
 
         <View style={styles.anatomy}>
-          <MuscleMap targets={exercise.targets} gender={gender} scale={0.5} />
+          <MuscleMap targets={primary} secondary={secondary} both scale={0.5} />
           <View style={styles.anatomyChips}>
-            {[...exercise.targets, ...exercise.equip].map((m) => (
+            {/* What it's for reads solid; what it also works is outlined, the
+                same distinction the figure beside it is making. */}
+            {primary.map((m) => (
               <View key={m} style={[styles.muscleChip, { backgroundColor: alpha(colors.clay, 0.12) }]}>
                 <Text style={[styles.muscleText, type.sansMedium, { color: colors.clay }]}>{m}</Text>
+              </View>
+            ))}
+            {secondary.map((m) => (
+              <View
+                key={m}
+                style={[styles.muscleChip, styles.muscleChipAlso, { borderColor: alpha(colors.clay, 0.35) }]}
+              >
+                <Text style={[styles.muscleText, type.sansMedium, { color: alpha(colors.ink, 0.55) }]}>
+                  {m}
+                </Text>
+              </View>
+            ))}
+            {exercise.equip.map((m) => (
+              <View key={m} style={[styles.muscleChip, { backgroundColor: alpha(colors.ink, 0.06) }]}>
+                <Text style={[styles.muscleText, type.sansMedium, { color: colors.inkMuted }]}>{m}</Text>
               </View>
             ))}
           </View>
@@ -500,11 +507,9 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
   },
   head: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
+    marginBottom: 2,
   },
-  close: {
+  detailBack: {
     height: 34,
     width: 34,
     alignItems: "center",
@@ -646,17 +651,6 @@ const styles = StyleSheet.create({
     fontSize: 12.5,
     textAlign: "center",
   },
-  addBar: {
-    position: "absolute",
-    left: 16,
-    right: 16,
-    bottom: 0,
-  },
-  addBarPlate: {
-    alignSelf: "stretch",
-    borderRadius: 14,
-    paddingVertical: 15,
-  },
   detail: {
     paddingHorizontal: 16,
     paddingTop: 12,
@@ -705,6 +699,10 @@ const styles = StyleSheet.create({
     borderRadius: 999,
     paddingVertical: 5,
     paddingHorizontal: 11,
+  },
+  muscleChipAlso: {
+    borderWidth: 1,
+    paddingVertical: 4,
   },
   muscleText: {
     fontSize: 11,

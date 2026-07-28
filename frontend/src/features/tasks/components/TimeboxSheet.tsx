@@ -12,6 +12,9 @@ import Animated, {
 } from "react-native-reanimated";
 import { Check } from "@/components/Check";
 import { Eyebrow } from "@/components/surface";
+import { RitualBlock } from "@/features/rituals/components/RitualBlock";
+import { useDayRituals } from "@/features/rituals/api";
+import { useNowMinutes } from "@/lib/clock";
 import { localDate } from "@/lib/dates";
 import { hapticLift } from "@/lib/haptics";
 import { alpha } from "@/lib/theme";
@@ -48,9 +51,21 @@ export function TimeboxSheet({
   const open = useMemo(() => (tasks ?? []).filter((t) => !t.done_at), [tasks]);
   const scheduled = open.filter((t) => t.start_min > 0);
   const shelf = open.filter((t) => t.start_min <= 0);
+  // A ritual outside the ruled hours has no slot to be pinned to — it still
+  // shows on the list page, which isn't governed by the ruler.
+  const slots = useDayRituals(date).filter(
+    (s) => s.start_min >= DAY_START && s.start_min < DAY_END,
+  );
+  // Tasks and rituals compete for the same hour, so they pack into lanes
+  // together — otherwise a session would sit underneath the meeting it clashes
+  // with, which is exactly the clash worth seeing.
   const lanes = useMemo(
-    () => layoutLanes(scheduled.map((t) => ({ id: t.id, start_min: t.start_min, dur_min: t.dur_min }))),
-    [scheduled],
+    () =>
+      layoutLanes([
+        ...scheduled.map((t) => ({ id: t.id, start_min: t.start_min, dur_min: t.dur_min })),
+        ...slots.map((s) => ({ id: s.id, start_min: s.start_min, dur_min: s.dur_min })),
+      ]),
+    [scheduled, slots],
   );
 
   // A vanished shelf item (checked off elsewhere, or placed) ends placing mode.
@@ -75,7 +90,11 @@ export function TimeboxSheet({
   };
 
   return (
-    <PageSheet date={date} count={open.length} height={height}>
+    <PageSheet
+      date={date}
+      count={open.length + slots.filter((s) => s.state !== "kept").length}
+      height={height}
+    >
       {error && (
         <View
           style={[
@@ -123,6 +142,14 @@ export function TimeboxSheet({
               style={[styles.tapLayer, { left: GUTTER }]}
             />
             <View pointerEvents="box-none" style={[styles.blocks, { left: GUTTER }]}>
+              {slots.map((s) => (
+                <RitualBlock
+                  key={s.id}
+                  slot={s}
+                  pxPerMin={pxPerMin}
+                  lane={lanes.get(s.id) ?? { lane: 0, lanes: 1 }}
+                />
+              ))}
               {scheduled.map((t) => (
                 <TimeBlock
                   key={t.id}
@@ -139,7 +166,7 @@ export function TimeboxSheet({
               ))}
             </View>
           </View>
-          {scheduled.length === 0 && (
+          {scheduled.length === 0 && slots.length === 0 && (
             <Text style={[styles.emptyHint, type.sans, { color: colors.inkMuted }]}>
               {shelf.length > 0
                 ? "Tap an hour to add, or place a slip from the shelf."
@@ -212,16 +239,6 @@ function HourGrid({ pxPerMin, today }: { pxPerMin: number; today: boolean }) {
       )}
     </>
   );
-}
-
-function useNowMinutes(enabled: boolean): number | null {
-  const [now, setNow] = useState(() => new Date());
-  useEffect(() => {
-    if (!enabled) return;
-    const t = setInterval(() => setNow(new Date()), 60_000);
-    return () => clearInterval(t);
-  }, [enabled]);
-  return enabled ? now.getHours() * 60 + now.getMinutes() : null;
 }
 
 /** One boxed task: a grained paper slip pinned to its slot. Hold it a beat to

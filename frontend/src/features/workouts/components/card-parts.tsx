@@ -40,7 +40,7 @@ export function Watermark({
  * lean. Callers stack their own content in the padded area on top. */
 export function CardShell({
   hue,
-  emblem,
+  emblem = [],
   lean,
   markSize = 110,
   onPress,
@@ -48,7 +48,8 @@ export function CardShell({
   children,
 }: PropsWithChildren<{
   hue: CardHue;
-  emblem: Stroke[];
+  /** Left off by cards that put something of their own in the corner. */
+  emblem?: Stroke[];
   lean: string;
   markSize?: number;
   onPress: () => void;
@@ -67,6 +68,21 @@ export function CardShell({
         {children}
       </Panel>
     </PressableScale>
+  );
+}
+
+/** The card's name. One style wherever a card is named, so a wall of them
+ * scans as one list. Stops short of the ⋯ rather than running under it. */
+export function CardTitle({ title, size = 19 }: { title: string; size?: number }) {
+  const colors = usePalette();
+  const type = useType();
+  return (
+    <Text
+      numberOfLines={2}
+      style={[type.display, styles.title, { fontSize: size, color: colors.ink }]}
+    >
+      {title}
+    </Text>
   );
 }
 
@@ -93,12 +109,7 @@ export function CardFace({
   return (
     <>
       <View style={{ height: air }} />
-      <Text
-        numberOfLines={2}
-        style={[type.display, styles.title, { fontSize: titleSize, color: colors.ink }]}
-      >
-        {title}
-      </Text>
+      <CardTitle title={title} size={titleSize} />
       <Text numberOfLines={1} style={[type.sans, styles.meta, { color: colors.inkMuted }]}>
         {meta}
       </Text>
@@ -128,7 +139,7 @@ export function CardMenu({ label, menu }: { label: string; menu: () => Menu }) {
 const styles = StyleSheet.create({
   card: { padding: 16, overflow: "hidden" },
   mark: { position: "absolute" },
-  title: { letterSpacing: -0.4 },
+  title: { letterSpacing: -0.4, paddingRight: 24 },
   meta: { marginTop: 3, fontSize: 12 },
   tagRow: { flexDirection: "row", marginTop: 12 },
   tag: {

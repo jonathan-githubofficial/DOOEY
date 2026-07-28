@@ -37,26 +37,29 @@ Everything in the gym is one of four moves. The whole information architecture f
 
 ## Surfaces (the UI layer)
 
-Seven surfaces. Two are real routes pushed over the tabs (`(detail)/…`); two are in-place RN
-`Modal`s owned by the gym screen; the rest are the tab and an Account drill-in.
+Eight surfaces. Three are real routes pushed over the tabs (`(detail)/…`); two are in-place RN
+`Modal`s owned by the gym screen; the rest are the tab, its keypad, and an Account drill-in.
 
 ```
-(tabs)/gym.tsx  ── the hub (a file folder) ────────────────────────────────┐
-  │  "Gym" title + [Workout|History] folder tabs → an open folder body      │
-  │  Workout: [Explore][New] + collapsible program sections of routine cards│
-  │  History: finished sessions as rich cards → the read-only log           │
+(tabs)/gym.tsx  ── the hub ────────────────────────────────────────────────┐
+  │  "Gym" masthead + a History key                                        │
+  │  TrainingTicket: this week (counterfoil) / what to do next (stub)       │
+  │  collapsible program sections of routine cards, then [Browse programs]  │
   │                                                                         │
   ├─▶ ProgramsExplorer   (Modal)      Explore → program detail → start/add  │
   ├─▶ routine/[id]       (route)      shape a routine, Start workout         │
   │     └─▶ ExercisePicker (Modal)    pick exercises from the library        │
   ├─▶ workout/[id]       (route)      the live logger  /  read-only review   │
   │     └─▶ ExercisePicker (Modal)    add exercises mid-session              │
+  ├─▶ history            (route)      every week you've trained + sessions   │
   └─▶ (Account) → preferences.tsx     Gym banner: units, rest, buzz          │
 ```
 
 | File | Surface | Role |
 |---|---|---|
-| `app/(tabs)/gym.tsx` | **Gym home** | Hub styled as an **open file folder**: the "Gym" title with **folder tabs** (Workout / History) beside it on the right, the active tab merged flush into a **folder-body** surface that holds the content. The running session banner rides at the top of the folder on both tabs. **Workout:** `Explore`/`New` tools + **collapsible** program sections — each program (a folder of routines) heads a fold-away group of board-style routine cards + an "add routine" tile. **History:** finished sessions as rich cards (exercise-demo strip + time / volume / exercises / date) that open the read-only log. `New` creates an empty program (prompt sheet); seeds a starter program on first empty open. |
+| `app/(tabs)/gym.tsx` | **Gym home** | The **training ticket** up top (see below), then **collapsible** program sections — each program (a folder of routines) heads a fold-away group of board-style routine cards + an "add routine" tile — and `Browse programs` at the end. The masthead carries the space's one action, a **History** key. Seeds a starter program on first empty open. |
+| `features/workouts/components/TrainingTicket.tsx` | **The hero** | One object with two halves, drawn as a ticket: a **stamp-cut silhouette** (a scallop bitten out of every edge, a fold notch where the tear meets each side, perforation between them), tracked uppercase captions in tabular figures over every value, and art that bleeds off the paper. The **counterfoil** (paper) is the record: the week's dates, `1 of 4 days this week` against what your split asks, the seven day keys, and front/back figures standing in a full-bleed plate tinted with the hue the week came out. The **stub** below the perforation is the instruction, in the routine's own hue: `NEXT IN <PROGRAM>`, what to train, its one line of meta, and the page's only Start. Four states — a live session (captioned *IN PROGRESS*, the stamp reads *Resume*, and it deliberately carries no pause or stop), the next routine, an invitation when you own none, and a waiting note while the gym loads. |
+| `app/(detail)/history.tsx` | **History** | Every week you've trained as one grid (six months, compact rows above this week's full-size one), the session count, then finished sessions as rich cards that open the read-only log. Its own page rather than a second state of the ticket: how this week is going and what you've done since January are different questions. |
 | `features/workouts/components/ProgramsExplorer.tsx` | **Explore** | Program catalog → program detail. Start a routine (→ logger) or add the whole program (→ real routines). |
 | `app/(detail)/routine/[id].tsx` | **Routine editor** | Name + description, ordered exercise list with sets/reps/weight/rest steppers, `Start workout`. Debounced autosave, no save button. |
 | `features/workouts/components/ExercisePicker.tsx` | **Library** | Browse **by muscle group** — group cards → drill into a group's exercises (moving polaroid tiles); search cuts across all 1,500. Multi-select to add, ⓘ for the how-to (motion GIF + a male/female **muscle map** shading the worked muscle). Reused read-only as pure reference. |
@@ -83,9 +86,20 @@ other space:
   `PageDoodle` for the space header.
 - `PressableScale` gives every tap its spring-loaded depress; `Plate` is the cast-metal primary
   button (Start / Add).
-- **Board-style cards**: a routine card and a program card both wear a strip of exercise demo
-  GIFs with a `+N` overflow chip — the same move as the mood-board tiles, so routines read as
-  "objects" not rows.
+- **The routine card**: the name, the exercise count on the line under it as a numeral in the
+  routine's own accent, and below both the anatomy figures centred on a floor of their own. The
+  figures are the card's face, which is why there is no doodle behind them and no focus tag under
+  the count: a shaded chest says "push" faster than the word. Front and back render at the same
+  size and always in that order, so the same view sits in the same place on every card and a wall
+  of them can be compared at a glance. That equality is also why the count sits up by the name —
+  two figures this size sharing the bottom row with it would have to shrink by a third to fit a
+  column this narrow. Figure size carries the wall's rhythm instead (`twinScale()`): a
+  nine-exercise day literally looms larger on the board than a three-move finisher, which is a
+  better thing to vary than headroom. Two things to know before nudging any of it: the artwork
+  sits in a viewBox with ~7% dead margin over the head and under the feet, so box offsets are not
+  visual offsets (`TWIN_HEAD` / `TWIN_FOOT` crop it, and the dead margin left on the sides is what
+  holds the pair apart), and `routineHeight()` has to keep matching what the card actually renders
+  or the masonry packs its columns wrong.
 - **Motion**: `FadeInDown` staggers the routine cards in; `LinearTransition` (a stiff settle
   spring) reflows set/exercise lists on add/remove/reorder; `SlideInDown` brings the keypad, the
   rest bar and the batch-add bar up from the bottom edge. Everything settles, nothing snaps.
@@ -108,7 +122,7 @@ features/workouts/
 ├── library.ts      the exercise library: LIBRARY, exerciseGif, groupOf, searchLibrary, kindOf
 ├── programs.ts     the program catalog: POOL of libIds → 8 famous splits (static)
 ├── starters.ts     STARTER_ROUTINES — the PPL split, seeded on first open
-├── exercises.json  ~948KB slice of ExerciseDB v1 (id, name, targets, parts, equip, steps)
+├── exercises.json  ~1.2MB slice of ExerciseDB v1 (built by scripts/build-exercise-library.mjs)
 └── components/     ExercisePicker · KeyPad · ProgramsExplorer
 ```
 
@@ -230,7 +244,13 @@ a real program + its routines (`useAddProgram`); **save one routine** drops it i
 - Source: the open-source **ExerciseDB v1** fork (`bootstrapping-lab/exercisedb-api`, AGPL) —
   1,500 exercises, each with an animated 3D-model demo GIF (working muscle lit red) and step
   instructions.
-- `exercises.json` (~948 KB) is a slimmed slice: `{ id, name, targets, parts, equip, steps }`.
+- `exercises.json` (~1.2 MB) is a slimmed slice:
+  `{ id, name, targets, secondary, parts, equip, steps }`. **Built by
+  `scripts/build-exercise-library.mjs`**, pinned to the same SHA as the GIFs — run it, don't hand-edit.
+- `targets` is what the movement is *for* (upstream gives exactly **one** per exercise);
+  `secondary` is everything else it works. An earlier hand-built copy of this file **dropped
+  `secondary`**, which is why the figure showed a bench press as chest and nothing else until
+  2026-07-27.
 - Demos come in **two rungs**, and `exerciseGif(ex, res)` picks between them: **360px** by default,
   **180px** for the 40–60px list thumbnails where 360 is 3× the bytes for no visible gain. Both
   hosts are **pinned to a commit SHA** so the URLs can't drift, and both are served from
@@ -245,10 +265,24 @@ a real program + its routines (`useAddProgram`); **save one routine** drops it i
 - `MUSCLE_GROUPS` are the browse buckets — the dataset's real target muscles (Chest, Shoulders,
   Biceps, … Cardio) with friendly labels; `searchLibrary(query, muscle)` filters by
   `targets.includes(muscle)` (or, for `"all"`, matches name / muscle / equipment on the query).
-- The **muscle map** (`MuscleMap.tsx`) shades the worked muscle on a male/female figure via the
-  `react-native-body-highlighter` library (MIT, rides on the already-present `react-native-svg`).
-  ExerciseDB targets are mapped to the figure's `Slug`s (it's coarser — lats/traps → upper-back/
-  trapezius, no abductors slug). Gender comes from `useWorkoutPrefs`.
+- **Anatomy (`anatomy.ts`) is the single source of truth for muscles**, and every figure
+  (`MuscleMap`, `MuscleTwin`, the week body) renders through `WeekBody`, so they cannot disagree.
+  - `canonicalMuscle()` folds both vocabularies into one: upstream writes "shoulders", "deltoids"
+    and "rear deltoids" for the same muscle. Joints and grip ("wrists", "ankle stabilizers")
+    deliberately resolve to nothing.
+  - `TARGET_SLUG` says *which part of the figure* a muscle is, and `SLUGS_ON` says which views
+    draw that part — **read off the package's own assets, never asserted by hand**. Stating a
+    single side per muscle is what previously stopped shoulders, forearms, calves, triceps, traps
+    and adductors from lighting on half the body. `anatomy.test.ts` diffs `SLUGS_ON` against
+    `dist/assets/body{Front,Back}.js`, so a version bump that moves a part fails a test.
+  - The figure is coarser than the dataset, so several muscles share a slug (lats/rhomboids/upper
+    back → `upper-back`, abductors → `gluteal`). That fold is the honest limit of the artwork.
+  - **Primary shades solid, secondary at `SECONDARY_STRENGTH`.** Where two muscles land on one
+    slug the stronger claim wins, so a lat-focused pull day isn't washed out by its rhomboids.
+  - `focusOf()` counts **primary only** toward a card's label and hue: a chest day that involves
+    the shoulders is still a chest day, and a card that changed colour for what it brushes would
+    be telling you the wrong thing. Both lists feed the figures.
+  - Gender comes from `useWorkoutPrefs`.
 - `kindOf()` returns **`"weight_reps"` universally** — every set is weight × reps; bodyweight
   moves just leave weight at 0. (See rough edges.)
 
