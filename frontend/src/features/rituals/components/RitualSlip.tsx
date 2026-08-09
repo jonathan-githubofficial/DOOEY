@@ -53,7 +53,7 @@ export function RitualSlip({ slot }: { slot: DayRitual }) {
           ]}
         >
           <View style={[styles.disc, { backgroundColor: alpha(ink.solid, kept ? 0.22 : 0.16) }]}>
-            {kind === "gym" && emblem.length > 0 ? (
+            {kind === "training" && emblem.length > 0 ? (
               <View style={styles.emblem}>
                 <DoodleSvg strokes={emblem} strokeWidth={4} tint={ink.stamp} opacity={0.9} />
               </View>

@@ -37,7 +37,14 @@
       ],
       "@react-native-community/datetimepicker",
       "expo-audio",
-      "expo-video"
+      "expo-video",
+      [
+        "expo-speech-recognition",
+        {
+          "microphonePermission": "Allow $(PRODUCT_NAME) to use the microphone so you can ramble.",
+          "speechRecognitionPermission": "Allow $(PRODUCT_NAME) to use speech recognition so rambles become tasks."
+        }
+      ]
     ],
     "experiments": {
       "typedRoutes": true,

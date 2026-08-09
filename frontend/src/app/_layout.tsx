@@ -24,6 +24,7 @@ import { SafeAreaProvider } from "react-native-safe-area-context";
 import { BootIntro } from "@/components/BootIntro";
 import { Grain } from "@/components/grain";
 import { SheetHost } from "@/components/sheet";
+import { LogSheetHost } from "@/features/trackers/components/LogSheet";
 import { initSession } from "@/features/auth/api";
 import { COMPOSE_SHEET } from "@/features/tasks/compose-sheet";
 import { LiveBarHost } from "@/features/workouts/components/LiveBarHost";
@@ -143,6 +144,10 @@ export default function RootLayout() {
         {/* Menus, prompts and confirms all rise from here — after the live
             bar, so a sheet is never opened underneath it. */}
         <SheetHost />
+        {/* Logging, from wherever a ritual slot was tapped. Mounted once for
+            the same reason: the agenda, the timeline and the week grid all
+            draw slots, and none of them should own a sheet. */}
+        <LogSheetHost />
         {/* The front-door flourish, over everything, once per launch. */}
         <BootIntro onDone={() => {}} />
       </QueryClientProvider>

@@ -1,4 +1,4 @@
-import type { PropsWithChildren } from "react";
+import type { PropsWithChildren, ReactNode } from "react";
 import {
   Platform,
   StyleSheet,
@@ -12,8 +12,9 @@ import { Grain } from "@/components/grain";
 import { PressableScale } from "@/components/pressable-scale";
 import { StampEdge } from "@/components/stamp-edge";
 import { useCardRadius, useShadow } from "@/features/style/store";
+import { hapticTap } from "@/lib/haptics";
 import { alpha } from "@/lib/theme";
-import { usePalette, useType } from "@/stores/theme";
+import { usePalette, useElevation, useType } from "@/stores/theme";
 
 /** The skeuomorphic building block: a soft, rounded, grained, gently-shadowed
  * card. */
@@ -40,6 +41,84 @@ export function Panel({ style, children }: PropsWithChildren<{ style?: StyleProp
       <Grain radius={radius - 1} />
       {children}
     </View>
+  );
+}
+
+/** The app's secondary action: a small paper key, cut from the same stock as a
+ * Panel. Surface, grain, the user's rule, the user's soft light, and a press dip
+ * — an object you push, which is what every other pressable thing here is.
+ *
+ * It replaces the hairline pill each page had been rolling for itself (`surface`
+ * on a 999 lozenge with a faint border, twice on the gym page alone). That pill
+ * was a browser chip: flat, weightless, wearing a radius the user's slider could
+ * not reach, and the one thing on the page that looked bought rather than made.
+ * A key is paper with a shadow under it. Same job, told in the app's own voice.
+ *
+ * The label is tracked uppercase, so where a Plate shouts a page's one big move
+ * this murmurs a caption you can press. */
+export function Key({
+  icon,
+  label,
+  onPress,
+  accessibilityLabel,
+  tint,
+  selected,
+  style,
+}: {
+  icon?: ReactNode;
+  label: string;
+  onPress: () => void;
+  /** When the label alone undersells where this goes. */
+  accessibilityLabel?: string;
+  /** The hue a selected key wears. Ignored while unselected: a key at rest is
+   * paper, and a row of them would otherwise be a row of shouting. */
+  tint?: string;
+  /** One of a set, and this is the one. A key can say "you are here" as well as
+   * "press me", which is what kept every page from rolling its own tinted pill
+   * beside the plain ones. */
+  selected?: boolean;
+  style?: StyleProp<ViewStyle>;
+}) {
+  const colors = usePalette();
+  const type = useType();
+  const radius = useCardRadius();
+  const elevation = useElevation();
+  const lit = selected && tint;
+  // The user's radius, but a key is 34pt tall: past half its height the corners
+  // stop being corners and it turns back into the lozenge this replaced. So it
+  // follows their slider until the shape would stop being a key.
+  const keyRadius = Math.min(radius, KEY_H / 2 - 5);
+  return (
+    <PressableScale
+      scaleTo={0.96}
+      accessibilityRole="button"
+      accessibilityLabel={accessibilityLabel ?? label}
+      accessibilityState={{ selected }}
+      onPress={() => {
+        hapticTap();
+        onPress();
+      }}
+      style={[
+        styles.key,
+        elevation,
+        {
+          borderRadius: keyRadius,
+          backgroundColor: lit ? alpha(tint, 0.14) : colors.surface,
+          borderColor: lit ? alpha(tint, 0.5) : alpha(colors.rule, 0.7),
+        },
+        style,
+      ]}
+    >
+      {/* Inside the 1pt border, like the Panel's. */}
+      <Grain radius={keyRadius - 1} />
+      {icon}
+      <Text
+        numberOfLines={1}
+        style={[styles.keyText, type.sansSemiBold, { color: lit ? tint : colors.ink }]}
+      >
+        {label}
+      </Text>
+    </PressableScale>
   );
 }
 
@@ -130,7 +209,25 @@ export function StampButton({
   );
 }
 
+/** A key's height: a comfortable tap target that still reads as furniture beside
+ * a 30pt space title rather than as a button bar. */
+const KEY_H = 34;
+
 const styles = StyleSheet.create({
+  key: {
+    height: KEY_H,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 7,
+    paddingHorizontal: 14,
+    borderWidth: 1,
+  },
+  keyText: {
+    fontSize: 10.5,
+    letterSpacing: 1.4,
+    textTransform: "uppercase",
+  },
   panel: {
     borderWidth: 1,
     // The standard inset for card content — callers override with their own

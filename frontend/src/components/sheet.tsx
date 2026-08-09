@@ -1,3 +1,4 @@
+import { Check } from "lucide-react-native";
 import { useState } from "react";
 import {
   Modal,
@@ -266,6 +267,10 @@ function Choice({
       >
         {action.label}
       </Text>
+      {/* The tick UIKit draws for itself, drawn by hand where there is no
+          UIKit. It sits after the label, which is where both platforms put
+          "you are here". */}
+      {action.selected && <Check size={15} color={colors.zest} strokeWidth={2.6} />}
     </PressableScale>
   );
 }
@@ -349,7 +354,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 10,
     borderRadius: 10,
   },
-  menuLabel: { fontSize: 14.5 },
+  menuLabel: { fontSize: 14.5, flex: 1 },
   input: {
     marginTop: 10,
     borderBottomWidth: 1,

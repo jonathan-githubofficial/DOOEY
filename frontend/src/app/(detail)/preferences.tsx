@@ -6,14 +6,13 @@ import { Grain } from "@/components/grain";
 import { Masthead } from "@/components/Masthead";
 import { PressableScale } from "@/components/pressable-scale";
 import { Panel } from "@/components/surface";
-import { RitualsPanel } from "@/features/rituals/components/RitualsPanel";
 import { formatRest, useWorkoutPrefs, type Gender, type WeightUnit } from "@/features/workouts/store";
 import { Stepper } from "@/components/stepper";
 import { hapticTap } from "@/lib/haptics";
 import { alpha } from "@/lib/theme";
 import { usePalette, useType } from "@/stores/theme";
 
-/** App preferences — a drill-in of Account. Today it holds the Gym banner;
+/** App preferences — a drill-in of You. Today it holds the Gym banner;
  * other spaces can hang their settings here later. */
 export default function Preferences() {
   const colors = usePalette();
@@ -28,7 +27,7 @@ export default function Preferences() {
       <View style={styles.headRow}>
         <PressableScale
           scaleTo={0.85}
-          accessibilityLabel="Back to Account"
+          accessibilityLabel="Back to You"
           onPress={() => router.back()}
           style={styles.back}
         >
@@ -43,7 +42,6 @@ export default function Preferences() {
           { paddingBottom: page.paddingBottom },
         ]}
       >
-        <RitualsPanel />
         <GymPrefs />
       </ScrollView>
     </View>

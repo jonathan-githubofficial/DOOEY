@@ -22,7 +22,7 @@ export default function Style() {
       <View style={styles.headRow}>
         <PressableScale
           scaleTo={0.85}
-          accessibilityLabel="Back to Account"
+          accessibilityLabel="Back to You"
           onPress={() => router.back()}
           style={styles.back}
         >

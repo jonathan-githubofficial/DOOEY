@@ -1,13 +1,15 @@
 import { useRouter } from "expo-router";
-import { Minus, Plus } from "lucide-react-native";
-import { Fragment, useRef, useState } from "react";
+import { ChevronDown, Minus, Plus, Repeat } from "lucide-react-native";
+import { useRef, useState } from "react";
 import { Platform, ScrollView, StyleSheet, Text, View } from "react-native";
 import { Gesture, GestureDetector } from "react-native-gesture-handler";
 import Animated, { FadeIn } from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Grain } from "@/components/grain";
+import { MenuButton } from "@/components/menu-button";
 import { PressableScale } from "@/components/pressable-scale";
 import { Panel } from "@/components/surface";
+import { useLearningPrograms, useMaterializePrograms } from "@/features/learning/api";
 import { useShadow } from "@/features/style/store";
 import { usePrefetchAdjacentDays } from "@/features/tasks/api";
 import { AgendaSheet } from "@/features/tasks/components/AgendaSheet";
@@ -18,10 +20,12 @@ import { TimeboxSheet } from "@/features/tasks/components/TimeboxSheet";
 import { WeekGrid } from "@/features/tasks/components/WeekGrid";
 import { WeekStrip } from "@/features/tasks/components/WeekStrip";
 import { PX_DEFAULT, PX_MAX, PX_MIN, clampPx } from "@/features/tasks/timeGrid";
+import { useSeedTrackers, useTrackers } from "@/features/trackers/api";
 import { localDate } from "@/lib/dates";
 import { hapticTap } from "@/lib/haptics";
 import { DOCK_GAP, useDockTop, usePagePadding } from "@/lib/shell";
 import { alpha } from "@/lib/theme";
+import type { Menu } from "@/stores/sheet";
 import { usePalette, useType } from "@/stores/theme";
 import { useLiveBarInset } from "@/features/workouts/live-bar";
 import { settle } from "@/lib/motion";
@@ -40,23 +44,24 @@ const PAGE_BOTTOM_CLEARANCE = Platform.OS === "web" ? 116 : 108;
 // it). Shrink it and the page gets shorter, leaving air beneath.
 const PAGE_HEIGHT_SCALE = 0.90;
 
-/** Two axes on one row. `list` and `timeline` are the same day drawn two ways;
- * `week` is a different span. Grouping them in the toggle says so, without
- * costing the extra tap a two-level control would. The month is not a mode —
- * it unfolds out of the date shelf. */
+/** Three ways to look at your time. The month is not one of them — it unfolds
+ * out of the date shelf. */
 type Mode = "list" | "timeline" | "week";
 
-const MODES: { key: Mode; label: string; span: "day" | "week" }[] = [
-  { key: "list", label: "List", span: "day" },
-  { key: "timeline", label: "Timeline", span: "day" },
-  { key: "week", label: "Week", span: "week" },
+const MODES: { key: Mode; label: string; symbol: string }[] = [
+  { key: "list", label: "List", symbol: "list.bullet" },
+  { key: "timeline", label: "Timeline", symbol: "clock" },
+  { key: "week", label: "Week", symbol: "calendar" },
 ];
 
-/** The planner IS the calendar: one space, three ways to look at your time.
- * The date shelf up top pages weeks, unfolds into the month, and carries the
- * view keys; the new-task stamp floats above the tab bar. Switching days
- * flips the page over the rings, desk-calendar style. */
-export default function Planner() {
+/** Today: the day, and the one place things go in.
+ *
+ * It is also the calendar — three ways to look at your time, the date shelf
+ * paging weeks and unfolding into the month — but it opens on the day, because
+ * a space called Today that greets you with a week grid is arguing with its own
+ * name. The stamp floating above the tab bar is how anything gets said; the
+ * ritual slots laid across the day are how the day asks. */
+export default function Today() {
   const colors = usePalette();
   const insets = useSafeAreaInsets();
   const dockTop = useDockTop();
@@ -69,8 +74,18 @@ export default function Planner() {
   const [direction, setDirection] = useState(1);
   const [shelf, setShelf] = useState<"week" | "month">("week");
   const [month, setMonth] = useState(() => localDate().slice(0, 7));
-  // Home owns "today" now; the Planner is the calendar, so it opens on Week.
-  const [mode, setMode] = useState<Mode>("week");
+  // The day, not the week: this space is called Today.
+  const [mode, setMode] = useState<Mode>("list");
+  // Seeded here rather than where trackers are managed: an account that never
+  // opens Account still needs something to log against on its first morning.
+  const { data: trackers } = useTrackers();
+  useSeedTrackers(trackers);
+  // A programme pushed from a Claude Code session arrives as a record with no
+  // tasks behind it. This is where its sessions become real work — mounted on
+  // Today now that Projects is not a space, because the sessions *are* tasks
+  // and this is the page that draws them.
+  const { data: programs } = useLearningPrograms();
+  useMaterializePrograms(programs);
   // Vertical time zoom (day + week grids), in px per minute.
   const [px, setPx] = useState(PX_DEFAULT);
   // The height the time grids get to live in — they scroll inside it.
@@ -118,13 +133,23 @@ export default function Planner() {
                 // The week grid already heads itself with the seven days.
                 compact={mode === "week"}
                 leading={
-                  <ModeToggle
-                    mode={mode}
-                    onChange={(m) => {
-                      hapticTap();
-                      setMode(m);
-                    }}
-                  />
+                  <View style={styles.shelfKeys}>
+                    <ViewPicker mode={mode} onChange={setMode} />
+                    {/* The week's standing shape, edited from the page that
+                        draws it. It used to live under Account, two drill-ins
+                        deep, beside the gym's pounds-or-kilos. */}
+                    <PressableScale
+                      scaleTo={0.88}
+                      accessibilityLabel="Rituals"
+                      onPress={() => {
+                        hapticTap();
+                        router.push("/rituals");
+                      }}
+                      style={styles.shelfKey}
+                    >
+                      <Repeat size={15} color={colors.inkMuted} />
+                    </PressableScale>
+                  </View>
                 }
                 onToggleView={() => {
                   setMonth(selected.slice(0, 7));
@@ -243,50 +268,43 @@ export default function Planner() {
   );
 }
 
-/** The view keys: plain words in the pressed tray, the active one raised to
- * a paper key. */
-function ModeToggle({ mode, onChange }: { mode: Mode; onChange: (m: Mode) => void }) {
+/** Which view you are in, and the way to another.
+ *
+ * It was a segmented control: three keys in a tray, all three always on screen,
+ * eating the width the date shelf wanted. One button says the same thing — you
+ * are in List — and hands the other two to the platform's own menu, which draws
+ * its own tick beside the one you are on and needs no room until it is asked
+ * for. On iOS that is a real UIMenu out of the button itself. */
+function ViewPicker({ mode, onChange }: { mode: Mode; onChange: (m: Mode) => void }) {
   const colors = usePalette();
   const type = useType();
+  const current = MODES.find((m) => m.key === mode)!;
+
+  const menu = (): Menu => ({
+    actions: MODES.map((m) => ({
+      label: m.label,
+      symbol: m.symbol,
+      selected: m.key === mode,
+      onPress: () => {
+        hapticTap();
+        onChange(m.key);
+      },
+    })),
+  });
+
   return (
-    <View style={[styles.toggleWell, { backgroundColor: alpha(colors.ink, 0.05) }]}>
-      {MODES.map(({ key, label, span }, i) => {
-        const active = mode === key;
-        const opensGroup = i > 0 && MODES[i - 1].span !== span;
-        return (
-          <Fragment key={key}>
-            {opensGroup && (
-              <View style={[styles.toggleSplit, { backgroundColor: alpha(colors.ink, 0.12) }]} />
-            )}
-          <PressableScale
-            key={key}
-            scaleTo={0.93}
-            accessibilityLabel={`${label} view`}
-            accessibilityState={{ selected: active }}
-            onPress={() => onChange(key)}
-            style={[
-              styles.toggleKey,
-              active && {
-                backgroundColor: colors.surface,
-                borderColor: alpha(colors.rule, 0.7),
-                borderWidth: 1,
-              },
-            ]}
-          >
-            <Text
-              style={[
-                styles.toggleLabel,
-                type.sansMedium,
-                { color: active ? colors.ink : colors.inkMuted },
-              ]}
-            >
-              {label}
-            </Text>
-          </PressableScale>
-          </Fragment>
-        );
-      })}
-    </View>
+    <MenuButton
+      label={`View: ${current.label}`}
+      menu={menu}
+      style={[styles.viewKey, { backgroundColor: alpha(colors.ink, 0.05) }]}
+    >
+      <View style={styles.viewKeyInner}>
+        <Text style={[styles.viewKeyLabel, type.sansMedium, { color: colors.ink }]}>
+          {current.label}
+        </Text>
+        <ChevronDown size={12} color={colors.inkMuted} />
+      </View>
+    </MenuButton>
   );
 }
 
@@ -301,22 +319,11 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     paddingVertical: 10,
   },
-  toggleWell: {
-    flexDirection: "row",
-    borderRadius: 999,
-    padding: 3,
-    gap: 2,
-  },
-  toggleSplit: { width: 1, alignSelf: "stretch", marginVertical: 6, marginHorizontal: 4 },
-  toggleKey: {
-    height: 30,
-    justifyContent: "center",
-    paddingHorizontal: 12,
-    borderRadius: 999,
-  },
-  toggleLabel: {
-    fontSize: 11,
-  },
+  shelfKeys: { flexDirection: "row", alignItems: "center", gap: 4 },
+  shelfKey: { height: 30, width: 30, alignItems: "center", justifyContent: "center" },
+  viewKey: { height: 30, borderRadius: 999, justifyContent: "center", paddingHorizontal: 11 },
+  viewKeyInner: { flexDirection: "row", alignItems: "center", gap: 4 },
+  viewKeyLabel: { fontSize: 11 },
   body: {
     flex: 1,
     paddingHorizontal: 16,

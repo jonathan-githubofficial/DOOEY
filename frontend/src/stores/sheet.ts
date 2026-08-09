@@ -9,6 +9,9 @@ export interface SheetAction {
   icon?: ReactNode;
   symbol?: string;
   destructive?: boolean;
+  /** The one you are already on. A menu that switches between views has to say
+   * which view you are in, or it is a list of guesses. */
+  selected?: boolean;
   onPress: () => void;
 }
 

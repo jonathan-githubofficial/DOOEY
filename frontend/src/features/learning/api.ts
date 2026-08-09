@@ -70,7 +70,7 @@ export function useLearningProgram(id: string) {
  * Turn a program's SCHEDULE.md sessions into real tasks — once.
  *
  * A program's work is meant to be ordinary tasks: one `tasks` record per
- * session, carrying `project`, `gate` and `session_key`, so Planner, timeboxing
+ * session, carrying `project`, `gate` and `session_key`, so Today, timeboxing
  * and the task page all treat program work like any other work.
  *
  * Skips any session that already has a task, matched on `session_key`, so a

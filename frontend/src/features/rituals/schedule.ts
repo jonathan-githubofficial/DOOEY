@@ -18,13 +18,24 @@ export const WEEK: { day: number; letter: string; name: string }[] = [
 export const EVERY_DAY = WEEK.map((d) => d.day);
 
 /** What a fresh ritual of each kind blocks out, and when it first lands. A
- * training slot is an hour in the evening; a meal is a quarter hour at eight.
- * Both are only starting points — every one of these is a control on the
- * Rituals panel. */
+ * training slot is an hour in the evening; a tracker slot is a quarter hour in
+ * the morning, every day. Both are only starting points — every one of these
+ * is a control on the Rituals panel, and picking what the slot is for renames
+ * it after the thing. */
 const SEED: Record<RitualKind, { label: string; dur_min: number; times: number[]; days: number[] }> = {
-  gym: { label: "Training", dur_min: 60, times: [18 * 60], days: [1, 3, 5] },
-  journal: { label: "Meals", dur_min: 15, times: [8 * 60, 13 * 60, 19 * 60], days: EVERY_DAY },
+  training: { label: "Training", dur_min: 60, times: [18 * 60], days: [1, 3, 5] },
+  tracker: { label: "Log", dur_min: 15, times: [9 * 60], days: EVERY_DAY },
 };
+
+/** What the two kinds were called before rituals stopped knowing what a gym
+ * and a food diary are. Read on the way in so an arrangement made under the
+ * old names keeps its days and times instead of being silently dropped. */
+const LEGACY_KIND: Record<string, RitualKind> = { gym: "training", journal: "tracker" };
+
+function kindOf(raw: unknown): RitualKind | null {
+  if (raw === "training" || raw === "tracker") return raw;
+  return typeof raw === "string" ? (LEGACY_KIND[raw] ?? null) : null;
+}
 
 /** Slot times snap to the same quarter hour the timeline does, so a ritual
  * block always lands on a rule rather than between two. */
@@ -74,18 +85,19 @@ export function sanitizeRituals(raw: unknown): Ritual[] {
   for (const item of raw) {
     const r = item as Partial<Ritual> | null;
     if (!r || typeof r.id !== "string" || !r.id) continue;
-    if (r.kind !== "gym" && r.kind !== "journal") continue;
+    const kind = kindOf(r.kind);
+    if (!kind) continue;
     out.push({
       id: r.id,
-      kind: r.kind,
+      kind,
       ref: typeof r.ref === "string" ? r.ref : "",
-      label: typeof r.label === "string" && r.label.trim() ? r.label : SEED[r.kind].label,
+      label: typeof r.label === "string" && r.label.trim() ? r.label : SEED[kind].label,
       days: cleanDays(r.days),
       times: cleanTimes(r.times),
       dur_min:
         Number.isFinite(r.dur_min) && (r.dur_min as number) > 0
           ? Math.round(r.dur_min as number)
-          : SEED[r.kind].dur_min,
+          : SEED[kind].dur_min,
       enabled: r.enabled !== false,
     });
   }

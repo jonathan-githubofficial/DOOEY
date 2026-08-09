@@ -224,14 +224,13 @@ export const BACKDROPS = [
 ] as const;
 export type BackdropKey = (typeof BACKDROPS)[number]["key"];
 
-/** Pages that can wear a hand-drawn icon — keys shared with the web app's
- * user record, so doodles drawn on either client appear on both. */
+/** Pages that can wear a hand-drawn icon. One key per space, and only the
+ * spaces that exist: `calendar` was still listed here long after the planner
+ * absorbed it, offering the user a drawing that nothing would ever show. */
 export const DOODLE_PAGES = [
-  { key: "planner", label: "Planner" },
-  { key: "calendar", label: "Calendar" },
+  { key: "today", label: "Today" },
   { key: "boards", label: "Boards" },
-  { key: "learning", label: "Projects" },
   { key: "gym", label: "Gym" },
-  { key: "journal", label: "Journal" },
-  { key: "account", label: "Account" },
+  { key: "stamps", label: "Stamps" },
+  { key: "account", label: "You" },
 ] as const;

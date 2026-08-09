@@ -37,9 +37,9 @@ export function openTag(title: string): string {
  *
  * Everything else is yours and comes into being the moment you type it. These
  * three exist up front because a space in the app answers to them: a task
- * tagged `#gym` is training, `#food` is the journal, `#learning` is a programme
- * session. They are offered first in the picker and can't be un-invented by
- * deleting the last task that used one. */
+ * tagged `#gym` is training, `#food` is something you ate, `#learning` is a
+ * programme session. They are offered first in the picker and can't be
+ * un-invented by deleting the last task that used one. */
 export const RESERVED_TAGS: { tag: string; hint: string }[] = [
   { tag: "gym", hint: "training" },
   { tag: "food", hint: "what you ate" },

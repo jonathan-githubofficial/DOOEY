@@ -7,6 +7,7 @@ import {
   CalendarDays,
   ChevronRight,
   Clock,
+  Mic,
   Moon,
   Plus,
   Repeat,
@@ -42,6 +43,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { DoodleSvg } from "@/components/DoodleSvg";
 import { DrawerHead } from "@/components/drawer-head";
 import { Grain } from "@/components/grain";
+import { IconChip } from "@/components/icon-chip";
 import { PressableScale } from "@/components/pressable-scale";
 import { StampEdge } from "@/components/stamp-edge";
 import { useShadow, useStyleStore } from "@/features/style/store";
@@ -51,6 +53,7 @@ import { DOCK_GAP, SHEET_OVERHANG, useDockTop } from "@/lib/shell";
 import { appear, dur, timing } from "@/lib/motion";
 import { alpha } from "@/lib/theme";
 import { usePalette, useType } from "@/stores/theme";
+import { RambleSheet } from "@/features/rambler/components/RambleSheet";
 import { useCreateTask } from "../api";
 import { activeTagQuery, completeTag, harvestTags, openTag } from "../tags";
 import { MonthView } from "./MonthView";
@@ -126,10 +129,14 @@ function whenSummary(date: string, start: number | null, repeat: RepeatRule): st
 }
 
 /** The new-task button: a postage stamp pinned above the tab bar — and the
- * companion's home. Once he's drawn in the Style studio he lives IN the
- * stamp (flipping through his poses), a small zest + pinned beside him. On
- * native it opens the system form sheet (/compose); the web build slides up
- * its own drawer. */
+ * companion's home. Once he's drawn in the Style studio he lives IN the stamp
+ * (flipping through his poses), a small zest + pinned beside him.
+ *
+ * It opens the drawer, which is where both ways of saying something live: the
+ * form, and the ramble one chip away from it. Rambling was briefly the whole
+ * button, and that was wrong — talking is a way *into* the drawer, not a
+ * replacement for it, and a form is still the fastest way to put one clear
+ * thing on a specific day. */
 export function TaskComposer({ date }: { date: string }) {
   const colors = usePalette();
   const shadow = useShadow();
@@ -287,7 +294,11 @@ export function ComposerSheet({
 
 /** Everything you need to shape a task — title, details, notes, and (when
  * opened from a calendar slot) the time box. The host decides how it's
- * presented: native form sheet or web drawer. */
+ * presented: native form sheet or web drawer.
+ *
+ * The Mic chip swaps the body for the ramble in place rather than navigating.
+ * One drawer, two ways of filling it: the form when you know exactly what you
+ * want on which day, the ramble when you would rather just say it. */
 export function ComposerForm({
   date,
   initialStart,
@@ -301,6 +312,7 @@ export function ComposerForm({
   const type = useType();
   const create = useCreateTask();
   const isToday = date === localDate();
+  const [rambling, setRambling] = useState(false);
 
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
@@ -375,6 +387,10 @@ export function ComposerForm({
     setTitle(plain);
     if (found.length > 0) setTags((cur) => [...cur, ...found.filter((t) => !cur.includes(t))]);
   };
+
+  // Non-empty title: the corner stops offering to listen and starts offering
+  // to file.
+  const typing = !!title.trim();
 
   return (
     <View>
@@ -451,31 +467,52 @@ export function ComposerForm({
             titleRef.current?.focus();
           }}
         />
-
         <View style={styles.chipSpacer} />
 
-        {/* Same row and same square as the icons — it is one more thing you
-            can do here, not a slab across the bottom. Absent until there is
-            something to add, rather than greyed out. */}
-        {!!title.trim() && (
-          <Animated.View entering={appear()} exiting={FadeOut.duration(dur.instant)}>
-            <PressableScale
-              scaleTo={0.88}
-              accessibilityLabel="Add task"
-              accessibilityState={{ disabled: !ready }}
-              disabled={!ready}
-              onPress={submit}
-              style={[
-                styles.iconChip,
-                { backgroundColor: colors.zest, borderColor: colors.zest },
-                !ready && styles.addDiscOff,
-              ]}
-            >
+        {/* The corner is *the action*, and what the action is depends on what
+            you have done. Empty, the fastest way to say something is out loud,
+            so the corner is the mic. The moment there is a title the corner is
+            the thing that files it. One filled square either way: the drawer
+            never has two accents shouting at each other, and the corner never
+            sits empty waiting for you to earn it. */}
+        <Animated.View key={typing ? "send" : "talk"} entering={appear()}>
+          <PressableScale
+            scaleTo={0.88}
+            accessibilityLabel={typing ? "Add task" : "Say it instead"}
+            accessibilityState={{ disabled: typing && !ready }}
+            disabled={typing && !ready}
+            onPress={() => {
+              if (typing) {
+                submit();
+                return;
+              }
+              hapticTap();
+              Keyboard.dismiss();
+              setRambling(true);
+            }}
+            style={[
+              styles.iconChip,
+              { backgroundColor: colors.zest, borderColor: colors.zest },
+              typing && !ready && styles.addDiscOff,
+            ]}
+          >
+            {typing ? (
               <ArrowUp size={17} color={colors.paper} strokeWidth={2.8} />
-            </PressableScale>
-          </Animated.View>
-        )}
+            ) : (
+              <Mic size={16} color={colors.paper} strokeWidth={2.6} />
+            )}
+          </PressableScale>
+        </Animated.View>
       </View>
+
+      <RambleSheet
+        visible={rambling}
+        onClose={() => setRambling(false)}
+        onFiled={() => {
+          setRambling(false);
+          onDone();
+        }}
+      />
 
       {whenOpen && (
         <WhenSheet
@@ -493,40 +530,6 @@ export function ComposerForm({
       )}
 
     </View>
-  );
-}
-
-/** One square in the composer's icon row. A tick means "commit"; these mean
- * "this task also has one of these", so they light up rather than confirm. */
-function IconChip({
-  Icon,
-  label,
-  tint,
-  active,
-  onPress,
-}: {
-  Icon: typeof Tag;
-  label: string;
-  tint: string;
-  active: boolean;
-  onPress: () => void;
-}) {
-  const colors = usePalette();
-  return (
-    <PressableScale
-      scaleTo={0.9}
-      accessibilityLabel={label}
-      accessibilityState={{ selected: active }}
-      onPress={onPress}
-      style={[
-        styles.iconChip,
-        active
-          ? { borderColor: alpha(tint, 0.5), backgroundColor: alpha(tint, 0.12) }
-          : { borderColor: colors.rule },
-      ]}
-    >
-      <Icon size={15} color={active ? tint : colors.inkMuted} />
-    </PressableScale>
   );
 }
 

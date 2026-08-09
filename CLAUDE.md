@@ -16,26 +16,127 @@ This file is the canonical entry point. Deeper docs live in [docs/](docs/) and
 
 ---
 
-## Current state (updated 2026-07-27)
+## Current state (updated 2026-08-09)
 
 **Keep this section true.** Update it before you end a session. It is the only place that records
 where things actually stand, and it is what spares the next session from re-reading the repo.
 
-- **Branch** `feat/expo-migration`, working tree clean.
-- **Shipped in `frontend/`**: auth and onboarding, Planner (list/timeline/week views, timeboxing,
-  compose sheet), Boards, Projects (learning programs as folders), Journal (food log), Account,
-  the Style studio (runtime palette, fonts, backdrops, doodle icons), Gym, and Rituals.
-- **The Planner is the home page** (`frontend/src/app/(tabs)/index.tsx`). The separate Home widget
+- **The drawer's corner is one action, and it swaps** (`TaskComposer`). Empty, it is a filled mic:
+  the fastest way to say something is out loud. The moment there is a title it becomes the send
+  disc. One accent in the drawer either way, and the corner is never an empty square waiting for
+  you to earn it. **The stamp still opens the drawer** — talking is a way *into* composing, not a
+  replacement for it, which an earlier pass got wrong by making the stamp open the Rambler and
+  demoting the form to a key inside it. `IconChip` lives in `frontend/src/components/icon-chip.tsx`.
+- **Rambling takes the whole screen** (`frontend/src/features/rambler/components/RambleSheet.tsx`).
+  A full-bleed wash of the user's own accent (`relight()` off `colors.zest`, so a repainted accent
+  repaints this screen), an example prompt, the draft cards building as you speak, a waveform, and
+  pause / file at the bottom. **The only place in DOOEY that leaves the paper behind**, and the
+  reason is not drama: while you are talking there is exactly one thing to look at, and every piece
+  of furniture still on screen would compete for the glance. The mic starts on open — arriving here
+  *is* pressing it. `Waveform.tsx` is ambient by admission: the speech module reports transcripts,
+  not amplitude, so the bars say "the mic is open" and stop dead when it closes.
+- **`MenuButton`** (`frontend/src/components/menu-button.tsx`) is the platform-menu handling pulled
+  out of `DotsButton`, which is now one call site of it — a menu belongs to *pressing something*,
+  not to the ⋯ glyph. `SheetAction` gained `selected`, drawn as UIKit's own tick natively and by
+  hand in the popover. **Today's view switcher uses it**: List / Timeline / Week was a segmented
+  control eating the date shelf's width, and is now one button saying where you are.
+- **Stamps is a picture of a month** (2026-08-09). A calendar grid whose squares carry the day
+  itself: a photo attached to a task due that day, else the day's garden doodle, else a mark per
+  tracker kept plus a bar if you trained. Picking a day opens it with its photos, the muscle figure
+  for that day's session (the same `MuscleMap` the gym draws) and everything logged. The grid
+  arithmetic is `features/trackers/album.ts` (`monthGrid`, pure and tested); `useMonthAttachments`
+  in the tasks feature is the only query that exists to fetch pictures. **This app is looked at**:
+  a table of counts would be the same information with the pleasure taken out.
+- **The dock is fixed and `features/home/` is gone.** Arrangeable spaces cost a store, a persistence
+  path onto `users.shell`, a page of list arithmetic, `ArrangeList`, and a race in the native tab
+  bar that took two attempts to close — for a feature that only mattered when there were too many
+  spaces. `SPACES` is now the bar, both bars map over it, and `resolveDock`/`DOCK_CHOICES`/`spaceOf`
+  are deleted. `users.shell` is still in the schema and no longer written. The garden panel went
+  with it: the day doodles surface on Stamps, where they mean something.
+- **One door in, one door back** (2026-08-09, the second pass of the same day). **Today** is where
+  everything is logged; **Stamps** is where you look at what you collected. They were briefly one
+  page and it was wrong in both directions: a composer you had to leave your day to reach, over a
+  list too short to be a record. **The rule this settled: a page either takes input or shows
+  history, and if it does both, neither is any good.**
+- **Ritual slots log in place** (`frontend/src/features/trackers/components/LogSheet.tsx`, mounted
+  once in the root layout beside `SheetHost`). Tapping an unkept tracker slot opens the composer
+  for that slot's tracker over the day you are already looking at; a ritual pointed at "any" asks
+  which. The sheet also lists what that tracker already collected today, editable, because "did I
+  already log lunch?" is most of why anyone opens it twice.
+- **Five spaces, not six.** Planner became **Today** (and now opens on the day, not the week — a
+  space called Today that greets you with a week grid is arguing with its own name). Projects is
+  gone: a programme *is* its tasks, they already materialize onto the planner, and the folder stays
+  reachable from any task carrying a `project` via a Key on its page. **Rituals moved out of
+  Preferences** onto a `(detail)/rituals.tsx` reached from Today's shelf, so the week is edited on
+  the page that draws it.
+- **Trackers are managed on Account**, under "what you track" (`TrackersPanel`). Deciding to track
+  your sleep belongs beside choosing your palette, not on the page you walk through to see last
+  week. `useSeedTrackers` is mounted on Today, so an account that never opens Account still gets
+  its first tracker.
+- **What the app tracks is now data, not code** (2026-08-09, migration 033, `frontend/src/features/trackers/`).
+  A **tracker** is an aspect the user created: name, stable `slug`, a `hue` from the palette, and a
+  **shape** that is the only thing the client switches on — `text`, `scale`, `amount`, `duration`,
+  `tick`. An **entry** is one moment of one tracker (`at`, optional `body`, optional `value`;
+  minutes for a duration). Every shape may carry words, because "78, felt bloated" is worth more
+  than either half. This replaced `journal_entries`, which was this table with `"food"` hardcoded
+  into it, and the Journal space, which was this page with food hardcoded into it. **Before adding
+  a branch for one kind of thing, check whether it wants to be a tracker instead** — that is the
+  mistake this change existed to undo, and `RitualKind` and `look.ts` are where it had grown.
+- **`Ritual.kind` is `"training" | "tracker"`**, was `"gym" | "journal"`. A tracker ritual's `ref`
+  is a tracker id and an empty `ref` means "anything of that sort counts", matching what an empty
+  ref already meant on a training ritual. `sanitizeRituals` reads the old names on the way in
+  (`LEGACY_KIND`), so an arrangement made before the rename keeps its days and times. `useDayRituals`
+  now joins against `entries` filtered by tracker, one code path instead of a switch.
+- **Each shape gets the control it deserves** (`EntryComposer`, used by the log sheet). A scale logs
+  on the tap itself — there is nothing to confirm about pressing the number 4 — and
+  `amount`/`duration` open holding **last time's value** (`useLastEntry`) rather than a blank.
+  Nodding at 78 beats typing 78, and that rule belongs to the whole app, not just the gym.
+- **The boot chime is gone** (2026-08-09). `playDooey` played at the front door *regardless* of the
+  paper-sounds switch, which made it the one sound the user did not own. Removed with its asset;
+  `flip` and `scratch` remain and both sit behind the switch (default off).
+- **`<Key>` gained `tint` + `selected`**, so a row of keys can say "you are here" without every page
+  rolling its own tinted pill beside the plain ones. Used by the log sheet's tracker picker and the
+  shape picker.
+- **Branch** `feat/expo-migration`; the Rambler feature below is written but uncommitted.
+- **Rambler landed (2026-07-29, first cut, not yet exercised against a live model).** Talk or type
+  a ramble in the compose drawer's Mic mode and a draft of tasks and entries
+  builds live; a send disc files the lot. The parse endpoint is
+  `backend/pb_hooks/rambler.pb.js` (`POST /api/rambler/parse`, auth-required, stateless: whole
+  transcript in, complete intended state out, which is what makes mid-sentence corrections free).
+  It calls any OpenAI-compatible provider, configured by env: `RAMBLER_API_URL`,
+  `RAMBLER_API_KEY`, `RAMBLER_MODEL` (unset returns 503 and the client shows its hiccup state).
+  Client code is `frontend/src/features/rambler/`: `loop.ts` (single-flight, rev-gated parse
+  policy) and `commit.ts` (draft to record mapping) are pure and tested; `stt.ts` wraps
+  **expo-speech-recognition, a new native module, so the dev client needs a rebuild**
+  (`eas build --profile development`) before the mic works on a device (web uses the browser's
+  Web Speech API where present; typing works everywhere). **`stt.ts` requires that package inside
+  a `try`/`catch`** (2026-08-01). It resolves its native module at *import* time, so on a dev
+  client built before the module existed the import threw `Cannot find native module
+  'ExpoSpeechRecognition'` and took the whole `/rambler` route with it — including the "typing
+  works" fallback the screen already drew, which the throw made unreachable. A missing module is
+  now just `available: false`. **An optional native module wants this treatment every time**: a
+  plain import quietly makes it mandatory, and nothing fails until a device without it opens the
+  route. `useCreateTask` learned an optional `checklist`. **Entries stay unparsed by design**: the
+  model routes and datestamps the speaker's words, never itemizes them. Since 2026-08-09 the client
+  sends the user's trackers with each parse and they are **the only vocabulary the route may route
+  into** — it will not invent a slug, and an entity naming an unknown one is dropped server-side.
+  Adding a tracker in the app is therefore also how you teach the rambler a word.
+- **`npm run lint` currently fails on 32 pre-existing errors** (react-hooks 7 immutability/ref
+  rules vs reanimated shared-value idioms in LiveBar, Dock, ArrangeList, BoardCanvas, account,
+  index, DoodleEditor, pressable-scale). None are in the tracker change; they need either rule
+  configuration for reanimated or targeted rewrites.
+- **Shipped in `frontend/`**: auth and onboarding, Today (list/timeline/week views, timeboxing,
+  ritual slots, the Rambler and the compose sheet behind it), Boards, Stamps (the album), Account,
+  the Style studio (runtime palette, fonts, backdrops, doodle icons), Gym, Rituals, and learning
+  programmes as tasks.
+- **Today is the home page** (`frontend/src/app/(tabs)/index.tsx`). The separate Home widget
   stack was removed on 2026-07-27: it duplicated the planner's today view without adding anything.
-  Its mode toggle is grouped by span — `List` and `Timeline` are one day drawn two ways, `Week` is
-  a different span, and a divider in the toggle says so. The month unfolds out of the date shelf
-  rather than being a fourth mode, and `WeekStrip` takes a `compact` prop so Week mode doesn't
-  print the seven days twice. The dock stays user-configurable from Account's **"Your dock"**
-  panel: reorder or hide any space except Planner and Account, which stay pinned so you can never
-  lock yourself out. Order and hidden set live in the `users.shell` JSON field (migration 029).
-- **A jest-expo test rig exists**: `cd frontend && npm test` runs 71 tests — shell-layout
-  arithmetic, `SPACES`/`resolveDock`/`spaceFor`, the ritual schedule engine, the muscle-figure
-  mapping tables, tag parsing, and the compose sheet's presentation options.
+  The month unfolds out of the date shelf rather than being a fourth view, and `WeekStrip` takes a
+  `compact` prop so Week mode does not print the seven days twice.
+- **A jest-expo test rig exists**: `cd frontend && npm test` runs 109 tests — the album's month
+  grid and streaks, `SPACES`/`spaceFor`, the ritual schedule engine (including the legacy
+  kind mapping), tracker slugs and value formatting, the rambler's loop and draft mapping, the
+  muscle-figure mapping tables, tag parsing, and the compose sheet's presentation options.
 - **The iOS launch crash is fixed** (2026-07-27). `timing()` in `frontend/src/lib/motion.ts` was a
   plain function called from five UI-thread worklets, one of them `ArrangeList`'s `useAnimatedStyle`
   — which runs on mount, and iOS instantiates every tab at once, so signing in aborted the process
@@ -66,13 +167,50 @@ where things actually stand, and it is what spares the next session from re-read
   `stamp-edge.tsx`'s numbers), tracked uppercase captions in tabular figures over every value, and
   art that bleeds off the paper (the counterfoil's figures stand in a plate tinted with the hue the
   week came out; the stub's run off the bottom edge). **No barcode** — it would encode nothing,
-  which is the decoration-without-a-job a metaphor is not allowed to be here. **Every bite is paper
-  painted on top, not a real cutout**: a mask would stop the colour fields reaching the card's
-  edges, and would cost the shadow on Android, where elevation follows a view's bounds and not its
-  paint. **The tear is split between the halves rather than straddling them**, so neither paints
-  outside its own box and no platform's overflow or z-order rules can break it. History left
-  the card for `(detail)/history.tsx`: how this week is going and what you have done since January
-  are different questions, and the second was never a state of the first.
+  which is the decoration-without-a-job a metaphor is not allowed to be here. **Nothing on the card
+  is outlined** (2026-08-04): no stroke on any cut, and `styles.ticket` takes the Panel's border off
+  too. The edge is a tone step, eight points of lightness from the card to the page, which is what
+  torn paper is; a line around a tear is a line real paper does not have. Both halves of that were
+  bugs first. The Panel's border, because absolute children sit *inside* a View's border, so an edge
+  painted into a bordered card drew a second outline chasing it a point in from the first: a fence
+  around the hero, rings the eye had to resolve before it reached the week. Then a single stroked
+  `silhouette()` path replacing those loose arcs, which was better and still one line too many.
+  Removing the scallops instead is also wrong and was tried first: it leaves an ordinary rounded card.
+  **Every bite is page painted on top, not a real cutout** — a disc in each bite, the very circle its
+  arc came from, clipped to the inward half by the SVG's viewport. A mask would stop the colour fields
+  reaching the edges (the art plate bleeding off the leading edge is the point of the counterfoil) and
+  would cost the shadow on Android, which follows a view's bounds and not its paint.
+  **Only the bites are painted.** Filling the whole region outside the silhouette (an `evenodd` mat)
+  was the second wrong fix: the Panel's radius has already rounded the card at a corner, so covering
+  the corner sliver cut nothing and instead laid a flat ungrained slab there, which read as the ticket
+  being glued to a square patch of paper. There is nothing to remove at a corner, so nothing is
+  painted at one.
+- **`useGrainedPaper()` is what a hole through to the page is filled with** (2026-08-04,
+  `frontend/src/components/grain.tsx`). **`colors.paper` is the page's base, not its appearance**: the
+  noise layer over it costs about 4% of its lightness in light mode, which is ten points a channel. So
+  every cut on the training ticket, filled with flat `paper`, came out *lighter* than the page it was
+  meant to be a hole through to and read as a white blob stuck on the card — the third wrong fix, and
+  the one that survived two rounds of looking at it before pixel-sampling a screenshot settled it
+  (page `(235, 233, 228)`, bite `(238, 234, 227)` after, off by eleven before). The hook flattens
+  paper-plus-noise to one colour, from the same speck opacity and user grain strength `Grain` itself
+  uses, through a new `veil()` in `lib/theme.ts`. **Anything that paints a piece of one surface on top
+  of another needs it**, because it cannot show the real thing through. Getting the tone right is also
+  what let every rim come off the cuts: against flat `paper` a bite was four points from the card and
+  needed a line to read as an edge at all, and against the page's true tone it is eight. **The tear is split between the halves rather than straddling them**, so neither
+  paints outside its own box and no platform's overflow or z-order rules can break it; the halves
+  round to the *full* radius, not `radius - 1`, now that there is no border to sit inside. The side
+  bites drop out near the tear (`scallops(…, near)`), because the fold notch is a bite three times
+  their size and does not want three little ones chewing at its mouth. History left the card for
+  `(detail)/history.tsx`: how this week is going and what you have done since January are different
+  questions, and the second was never a state of the first.
+- **`<Key>` is the app's secondary action** (2026-08-04, `frontend/src/components/surface.tsx`). A
+  small paper key: Panel stock (surface, grain, the user's rule, `useElevation()`, the user's radius
+  clamped so a 34pt-tall control cannot round into a lozenge) with a tracked uppercase label. Where a
+  `Plate` shouts a page's one big move, a Key murmurs a caption you can press. It exists because
+  every page had been rolling its own hairline 999 pill — the gym had two, History and Browse
+  programs — which was a browser chip: flat, weightless, and wearing a radius the user's slider could
+  not reach. **Reach for it before hand-rolling another pill**; the gym's two are the only call sites
+  so far, so the rest are still there to migrate.
 - **The muscle figures were wrong until 2026-07-27**, in three ways, all now fixed and tested
   (`frontend/src/features/workouts/anatomy.test.ts`). (1) `exercises.json` had been hand-built
   without upstream's `secondaryMuscles`, so every exercise had exactly one muscle — a bench press
@@ -88,20 +226,19 @@ where things actually stand, and it is what spares the next session from re-read
   `target_reps`/`target_weight` instead of `emptySet()`, so a catalog rep scheme reaches the logger.
   Steps 1 to 4 and the training ticket are done; what is left is persisting the live timers and the
   shared plan/perform visual language.
-- **Rituals tie the spaces together** (2026-07-27, `frontend/src/features/rituals/`). A ritual is a
-  standing commitment — a routine on chosen weekdays at chosen times, or meals once or several
-  times a day — and its slots lay themselves out on all three planner views, styled per kind: a
-  training slot wears its routine's card hue and emblem and its play disc starts the session from
-  the planner; a meal slot is honey and opens the Journal. **Nothing records whether a slot was
-  kept.** `useDayRituals` derives that by joining the schedule against the workouts and journal
-  entries that already exist, so deleting a session un-keeps its slot. Each slot owns a *band* (to
-  the midpoints between neighbouring times), which is what lets three meal slots resolve
-  independently against one flat list of entries. Schedules live in `users.rituals` (migration 031)
-  and sync exactly like `users.shell`. Edited on Preferences, under **Rituals**.
-- **Two migrations are written but NOT applied**: `030_journal_entries` and `031_users_rituals`.
-  PocketBase runs them on start, so both land on the next `backend/pocketbase.exe serve`. Until
-  then the Journal cannot read or write, and ritual schedules stay device-local (the sync PATCH
-  fails on the unknown field and is swallowed).
+- **Rituals tie the spaces together** (2026-07-27, generalized 2026-08-09,
+  `frontend/src/features/rituals/`). A ritual is a standing commitment — a routine on chosen
+  weekdays at chosen times, or a tracker once or several times a day — and its slots lay themselves
+  out on all three planner views, styled per kind: a training slot wears its routine's card hue and
+  emblem and its play disc starts the session from the planner; a tracker slot wears the tracker's
+  own hue and opens Stamps. **Nothing records whether a slot was kept.** `useDayRituals` derives
+  that by joining the schedule against the workouts and entries that already exist, so deleting a
+  session un-keeps its slot. Each slot owns a *band* (to the midpoints between neighbouring times),
+  which is what lets three meal slots resolve independently against one flat list of entries.
+  Schedules live in `users.rituals` (migration 031) and sync exactly like `users.shell`. Edited on
+  Preferences, under **Rituals** — which is the wrong home for them and the next thing to move.
+- **Migrations through 033 are applied** in `backend/pb_data`. PocketBase runs pending ones on
+  start, so a new file lands on the next `backend/pocketbase.exe serve`.
 - **Not built**: Google Calendar two-way sync, Google OAuth sign-in.
 - **Design system**: retargeted to `frontend/` on 2026-07-25.
   [docs/design-system.md](docs/design-system.md) and [docs/design-audit.md](docs/design-audit.md)
@@ -121,30 +258,27 @@ where things actually stand, and it is what spares the next session from re-read
 
 ## The spaces
 
-Six spaces behind the tab bar, declared in
+Five spaces behind the tab bar, declared in
 [frontend/src/lib/spaces.ts](frontend/src/lib/spaces.ts) (`SPACES`) and rendered by both tab bars
 from [frontend/src/app/(tabs)/_layout.tsx](frontend/src/app/(tabs)/_layout.tsx):
 
-1. **Planner** (`index`): the front door and the calendar in one. List, Timeline and Week views,
-   timeboxing, the month unfolding out of the date shelf, and the day's ritual slots laid out
-   above the tasks.
+1. **Today** (`index`): the front door, the calendar, and the one place things go in. List,
+   Timeline and Week views, timeboxing, the month unfolding out of the date shelf, and the day's
+   ritual slots laid out above the tasks — each of them loggable where it sits.
 2. **Boards**: free-form mood boards (notes, text, links, photos, stickers, doodles, sections) on
    a pannable, zoomable canvas with a freehand ink layer. See
    [frontend/docs/boards.md](frontend/docs/boards.md).
-3. **Projects**: learning programs as file-folder cards.
-4. **Gym**: programs, routines, live logging, history.
-5. **Journal**: what you ate, in your own words, grouped by daypart. Never parsed, by design.
-6. **Account**.
+3. **Gym**: programs, routines, live logging, history.
+4. **Stamps**: the album. A month at a time, each day's square carrying its photo, its doodle, or a
+   mark per thing you kept; picking one opens what that day actually was. Streaks underneath. Read
+   only — nothing is logged or edited here.
+5. **Account**: identity, appearance, the Style studio, what you track, and your dock.
 
-**The dock is user-composable**, not fixed. Reorder or hide any space but Planner and Account from
-Account's "Your dock" panel (`frontend/src/features/home/components/DockPanel.tsx`); the resolved
-order comes from `useDock()` in `frontend/src/features/home/store.ts`. Native builds get the
-platform's own tab bar (`NativeTabs` from `expo-router/unstable-native-tabs`) — every space
-registers a trigger whether it's in the dock or not, so a hidden space stays reachable by deep
-link or from a ritual slot on the planner — and the hand-drawn page doodles are rasterized off-screen into bitmap icons
-when "doodle icons in dock" is on. The web build keeps the DOOEY dock island
-(`frontend/src/components/Dock.tsx`) behind a `Tabs` that likewise registers all six screens
-regardless of dock membership.
+**The dock is fixed**: `SPACES` is the bar, and both tab bars map straight over it. Native builds get
+the platform's own (`NativeTabs` from `expo-router/unstable-native-tabs`), with the hand-drawn page
+doodles rasterized off-screen into bitmap icons when "doodle icons in dock" is on; the web build
+keeps the DOOEY dock island (`frontend/src/components/Dock.tsx`). Add a space to `SPACES` and both
+grow it. It used to be arrangeable — see the Current state note for what that cost.
 
 **Tasks are pages, not rows.** Every task opens its own page with fixed, well-designed sections:
 notes, checklist, resources (links and video embeds), attachments. Notion-ish depth, but structured,
@@ -201,7 +335,7 @@ happens `npm run typecheck` fails with `Type '"/"' is not assignable to type ...
 `router.replace` call sites in `login.tsx`, `onboarding.tsx` or `compose.tsx` that were never
 touched. It is not a code bug: delete the file (or all of `frontend/.expo/`) and run `npx expo
 start` once to let Metro regenerate it, then re-run typecheck. Recurred moving Planner between
-`/planner` and `/` and adding the Journal route.
+`/planner` and `/`, and again renaming the Journal route to `/stamps`.
 
 **`backend/pb_data` is live user data.** Never delete, reset or hand-edit it. Schema changes go through
 `backend/pb_migrations/`.
@@ -211,7 +345,7 @@ start` once to let Metro regenerate it, then re-run typecheck. Recurred moving P
 ## Data (PocketBase)
 
 Collections, all owner-scoped: `users`, `tasks`, `moodboards`, `routines`, `workouts`,
-`workout_programs`, `learning_programs`, `journal_entries`.
+`workout_programs`, `learning_programs`, `trackers`, `entries`.
 
 Two things live on the `users` record rather than in a collection of their own, because the client
 always reads them whole and they belong to the account: `shell` (dock order and hidden set) and
@@ -224,6 +358,12 @@ always reads them whole and they belong to the account: `shell` (dock order and 
   so backgrounding the app cannot drift them.
 - **Timestamps** are stored UTC and rendered in the user's timezone.
 - Tasks belonging to a learning program carry `project`, `gate` and `session_key`.
+- A **tracker** is the user's own definition of an aspect; an **entry** is one moment of one. `slug`
+  is unique per owner because the rambler resolves speech by it. Deleting a tracker cascades to its
+  entries, which is why `archived` exists: it is the ordinary way to stop tracking something and
+  keep what you logged.
+- `entries.value` is a plain number, not a JSON bag. Something needing three numbers is three
+  trackers, or it is the gym.
 
 Full gym data model: [frontend/docs/gym.md](frontend/docs/gym.md), section "Server collections".
 
@@ -305,7 +445,7 @@ DOOEY/
 │   └── src/
 │       ├── app/              ← expo-router routes
 │       ├── components/       ← shared primitives (Dock, sheet, plate, surface, doodles)
-│       ├── features/         ← tasks, workouts, boards, learning, style, auth
+│       ├── features/         ← tasks, workouts, boards, learning, trackers, rituals, rambler, style, auth
 │       ├── lib/              ← pb, theme, dates, haptics, sounds, doodle, confirm, shell
 │       └── stores/           ← auth, theme, sheet, garden (Zustand)
 ├── backend/                  ← PocketBase: binary, pb_hooks, pb_migrations, pb_data
@@ -320,9 +460,9 @@ once `mobile/` started shipping the web build too. Renamed 2026-07-26; the conta
 image is still `/pb`, because that is PocketBase's own convention and the volume mount depends on
 it.
 
-Routes in `frontend/src/app/`: `(tabs)/` for the six spaces, `(detail)/` for `task/[id]`,
+Routes in `frontend/src/app/`: `(tabs)/` for the five spaces, `(detail)/` for `task/[id]`,
 `project/[id]`, `routine/[id]`, `workout/[id]`, `board/[id]`, `tag/[tag]`, `history`,
-`preferences`, `style`, `wordmark`, and at the root `compose`, `login`, `onboarding`.
+`preferences`, `rituals`, `style`, `wordmark`, and at the root `compose`, `login`, `onboarding`, `rambler`.
 
 A feature's code lives **entirely** inside `frontend/src/features/<feature>/`: `components/` for its
 UI, `api.ts` for its PB queries and mutations, `types.ts`, `store.ts` when it needs one. If two
@@ -372,8 +512,9 @@ npm run push-program   -- <dir>
 ```
 
 Full procedure and file formats: [docs/learning-programs.md](docs/learning-programs.md). Sessions
-become tasks in the app now (`useMaterializePrograms`, mounted on the Projects tab), so push then
-open Projects and the work is there.
+become tasks in the app now (`useMaterializePrograms`, mounted on Today), so push then open Today
+and the sessions are on the days they belong to. The programme folder itself
+(`(detail)/project/[id]`) is reachable from any of its tasks.
 
 ---
 

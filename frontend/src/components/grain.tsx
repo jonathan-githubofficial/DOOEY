@@ -9,6 +9,10 @@ import { usePalette, useThemeStore } from "@/stores/theme";
 
 const TILE = 160; // the noise PNGs' intrinsic size
 
+/** How hard the texture prints, before the user's grain slider scales it. Dark
+ * mode's specks are white and a fifth as strong: the same 16% would frost it. */
+const SPECK = { light: 0.16, dark: 0.05 };
+
 /** The chosen backdrop under the grain — only full-bleed page grain carries
  * it, never cards. A photo (blurred and faded into the paper) sits lowest,
  * then the whisper-quiet colour wash. */
@@ -75,7 +79,7 @@ export function Grain({ radius = 0, tone }: { radius?: number; tone?: "light" })
   const source = dark
     ? require("../../assets/images/grain-dark.png")
     : require("../../assets/images/grain-light.png");
-  const opacity = (dark ? 0.05 : 0.16) * strength;
+  const opacity = (dark ? SPECK.dark : SPECK.light) * strength;
 
   if (Platform.OS === "web") {
     const tile = {

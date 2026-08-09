@@ -1,5 +1,6 @@
 import { useMemo } from "react";
-import { useJournalDay } from "@/features/journal/api";
+import { useEntriesDay, useTrackers } from "@/features/trackers/api";
+import { formatValue, type Entry, type Tracker } from "@/features/trackers/types";
 import { useRoutines, useWorkouts } from "@/features/workouts/api";
 import {
   formatElapsed,
@@ -28,8 +29,12 @@ export interface DayRitual extends Occurrence {
   workoutId: string;
   /** One line about what happened, or what is meant to. */
   note: string;
-  /** The routine behind a gym slot, for its colour, emblem and length. */
+  /** The routine behind a training slot, for its colour, emblem and length. */
   routine: Routine | null;
+  /** The tracker behind a tracker slot, for its colour and how its entries read
+   * back. Null when the ritual has not been pointed at one yet, which means
+   * anything logged in the band answers it. */
+  tracker: Tracker | null;
 }
 
 /** Only ever called on a session that has ended, so `workoutElapsed` reads
@@ -41,44 +46,55 @@ function summarize(w: Workout): string {
   return sets > 0 ? `${sets} sets · ${time}` : time;
 }
 
+/** What an entry says it was, in one line: the words if there are any, the
+ * measurement otherwise. A tick has neither and simply reads as kept. */
+function describe(entry: Entry, tracker: Tracker | null): string {
+  if (entry.body.trim()) return entry.body;
+  const measured = tracker ? formatValue(tracker, entry.value) : "";
+  return measured || "Logged";
+}
+
 /** The day's ritual slots, each resolved against what actually happened.
  *
- * Reads three sources and joins them in memory rather than asking the server a
- * fourth question: the schedule (local), recent sessions (already cached for
- * the gym space and the live bar) and the day's journal entries. */
+ * Joins in memory rather than asking the server a question per slot: the
+ * schedule (local), recent sessions (already cached for the gym space and the
+ * live bar), the trackers, and the day's entries. */
 export function useDayRituals(date: string): DayRitual[] {
   const rituals = useRituals();
   const occurrences = useMemo(() => occurrencesFor(date, rituals), [date, rituals]);
 
-  const wantsGym = occurrences.some((o) => o.ritual.kind === "gym");
-  const wantsJournal = occurrences.some((o) => o.ritual.kind === "journal");
+  const wantsTraining = occurrences.some((o) => o.ritual.kind === "training");
+  const wantsEntries = occurrences.some((o) => o.ritual.kind === "tracker");
 
   const { data: workouts } = useWorkouts();
   const { data: routines } = useRoutines();
-  // Only asked for when a meal slot actually falls on this day — the week grid
-  // mounts seven of these at once.
-  const { data: entries } = useJournalDay(date, wantsJournal);
+  const { data: trackers } = useTrackers();
+  // Only asked for when a tracker slot actually falls on this day — the week
+  // grid mounts seven of these at once.
+  const { data: entries } = useEntriesDay(date, wantsEntries);
 
   const isToday = date === localDate();
   const nowMin = useNowMinutes(isToday);
 
   return useMemo(() => {
-    const dayWorkouts = wantsGym
+    const dayWorkouts = wantsTraining
       ? (workouts ?? []).filter((w) => localDateOf(w.started_at) === date)
       : [];
     const byRoutine = new Map((routines ?? []).map((r) => [r.id, r]));
+    const byTracker = new Map((trackers ?? []).map((t) => [t.id, t]));
 
     return occurrences.map((o) => {
       const { kind } = o.ritual;
-      const routine = kind === "gym" ? (byRoutine.get(o.ritual.ref) ?? null) : null;
-      // A ritual pointing at a deleted routine falls back to "any training"
+      const routine = kind === "training" ? (byRoutine.get(o.ritual.ref) ?? null) : null;
+      const tracker = kind === "tracker" ? (byTracker.get(o.ritual.ref) ?? null) : null;
+      // A ritual pointing at something deleted falls back to "anything counts"
       // rather than becoming permanently unkeepable.
-      const ref = routine ? o.ritual.ref : "";
+      const ref = (kind === "training" ? routine : tracker) ? o.ritual.ref : "";
 
-      // A session counts for the slot whose band it started in; a ritual with
-      // no routine picked yet is answered by any training that day.
+      // Whatever happened counts for the slot whose band it landed in; a ritual
+      // with nothing picked yet is answered by anything of its sort that day.
       const filled =
-        kind === "gym"
+        kind === "training"
           ? dayWorkouts.find((w) => {
               if (ref && w.routine !== ref) return false;
               const m = minutesOfDay(w.started_at);
@@ -86,9 +102,10 @@ export function useDayRituals(date: string): DayRitual[] {
             })
           : undefined;
       const entry =
-        kind === "journal"
+        kind === "tracker"
           ? (entries ?? []).find((e) => {
-              const m = minutesOfDay(e.eaten_at);
+              if (ref && e.tracker !== ref) return false;
+              const m = minutesOfDay(e.at);
               return m >= o.from_min && m < o.to_min;
             })
           : undefined;
@@ -103,31 +120,34 @@ export function useDayRituals(date: string): DayRitual[] {
         note = summarize(filled);
       } else if (entry) {
         state = "kept";
-        note = entry.body;
+        // An unpointed ritual is answered by any tracker's entry, so the words
+        // come from whichever one actually filled it.
+        note = describe(entry, tracker ?? byTracker.get(entry.tracker) ?? null);
       } else if (nowMin === null) {
         // Not today: the past is missed, the future is still to come.
         state = date < localDate() ? "missed" : "upcoming";
-        note = plan(o, routine);
+        note = plan(o, routine, tracker);
       } else if (nowMin < o.start_min) {
         state = "upcoming";
-        note = plan(o, routine);
+        note = plan(o, routine, tracker);
       } else if (nowMin < o.to_min) {
         state = "due";
-        note = plan(o, routine);
+        note = plan(o, routine, tracker);
       } else {
         state = "missed";
-        note = plan(o, routine);
+        note = plan(o, routine, tracker);
       }
 
-      return { ...o, state, note, workoutId: filled?.id ?? "", routine };
+      return { ...o, state, note, workoutId: filled?.id ?? "", routine, tracker };
     });
-  }, [occurrences, workouts, routines, entries, date, nowMin, wantsGym]);
+  }, [occurrences, workouts, routines, trackers, entries, date, nowMin, wantsTraining]);
 }
 
 /** What the slot is *for*, shown until something fills it. */
-function plan(o: Occurrence, routine: Routine | null): string {
-  if (o.ritual.kind === "journal") {
-    return o.count > 1 ? `Meal ${o.index} of ${o.count}` : "Write down what you ate";
+function plan(o: Occurrence, routine: Routine | null, tracker: Tracker | null): string {
+  if (o.ritual.kind === "tracker") {
+    if (o.count > 1) return `${o.index} of ${o.count}`;
+    return tracker ? `No ${tracker.name.toLowerCase()} yet` : "Nothing logged yet";
   }
   if (!routine) return "Any session counts";
   const n = routine.items.length;

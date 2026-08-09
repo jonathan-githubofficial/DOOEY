@@ -13,7 +13,6 @@ import Animated, {
 import { Grain } from "@/components/grain";
 import { fontStyle } from "@/features/style/tokens";
 import { hapticSuccess, hapticTap } from "@/lib/haptics";
-import { playDooey } from "@/lib/sounds";
 import { usePalette } from "@/stores/theme";
 
 // Once per app launch — module scope survives remounts, not a fresh process.
@@ -23,9 +22,9 @@ const LETTERS = ["D", "O", "O", "E", "Y"];
 const STAGGER = 130; // ms between letters landing
 const HOLD = 620; // ms the finished wordmark sits before it clears
 
-/** The front-door flourish: DOOEY springs on letter by letter — each with a
- * light tick — over a chime that sings the name, the zest full-stop pops
- * last, then the whole thing lifts away to reveal the app. Plays once. */
+/** The front-door flourish: DOOEY springs on letter by letter, each with a
+ * light tick, the zest full-stop pops last, then the whole thing lifts away to
+ * reveal the app. Plays once. */
 export function BootIntro({ onDone }: { onDone: () => void }) {
   const [gone, setGone] = useState(played);
   if (gone) return null;
@@ -43,7 +42,6 @@ function BootIntroPlaying({
 
   useEffect(() => {
     played = true;
-    playDooey();
     const timers = LETTERS.map((_, i) => setTimeout(hapticTap, i * STAGGER));
     const total = LETTERS.length * STAGGER;
     const end = setTimeout(() => {

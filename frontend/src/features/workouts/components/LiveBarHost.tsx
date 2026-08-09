@@ -5,7 +5,7 @@ import { BAR_GAP } from "../live-bar";
 import { LiveBar } from "./LiveBar";
 
 /** The six spaces — the only routes that draw a dock for the bar to clear. */
-const TAB_PATHS = new Set(["/", "/planner", "/boards", "/projects", "/gym", "/account"]);
+const TAB_PATHS = new Set(["/", "/boards", "/gym", "/stamps", "/account"]);
 
 /** Routes the bar keeps out of: the front door, and the compose sheet it would
  * otherwise float over. The live session's own page is excluded too — the bar

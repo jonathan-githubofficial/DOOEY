@@ -1,6 +1,6 @@
 import { useRouter } from "expo-router";
 import { Pencil, Send, Trash2 } from "lucide-react-native";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   Modal,
   Platform,
@@ -46,6 +46,7 @@ import { settle } from "@/lib/motion";
 
 const ROW_H = 56;
 const CHECK_LINE_H = 26; // one checklist line tucked under the title
+const TITLE_LINE_H = 20; // each line a wrapped title takes past the first
 const REVEAL_W = 72; // how far a row swipes left to bare its delete
 const FLY_T = 96; // rightward pull past this and the row flies to tomorrow
 const FLY_MAX = Math.round(FLY_T * 1.35); // the deepest the pull itself goes
@@ -53,10 +54,22 @@ const FLY_X = 400; // how far off the page the paper plane sails
 const DAY_MS = 86_400_000;
 const LIFT = { stiffness: 420, damping: 34 };
 
-/** A row grows with its checklist — heights come from data, so the drag math
- * and the layout can never disagree. */
-const rowHeight = (t: Task) =>
-  ROW_H + (t.checklist.length ? t.checklist.length * CHECK_LINE_H + 8 : 0);
+/** A row grows with its checklist and with its title.
+ *
+ * Rows are absolutely positioned by summing the heights above them, so a
+ * height the layout knows and the drag math doesn't is a row that jumps under
+ * your finger. The title used to be pinned to one line for exactly that
+ * reason, and a task called anything longer than a few words simply lost its
+ * end — the app quietly deciding your words were too many.
+ *
+ * `lines` is *measured*, not guessed: the title reports its own line count
+ * through `onTextLayout`, which is the only number that survives the user
+ * changing their font. One line until it has been laid out once, which is what
+ * it very nearly always is. */
+const rowHeight = (t: Task, lines = 1) =>
+  ROW_H +
+  Math.max(0, lines - 1) * TITLE_LINE_H +
+  (t.checklist.length ? t.checklist.length * CHECK_LINE_H + 8 : 0);
 
 /** One planner page: the day's open tasks in a hold-to-drag reorderable list,
  * and the day's done pile. Rows open the task's page. */
@@ -296,9 +309,17 @@ function ReorderableRows({ rows, date }: { rows: Task[]; date: string }) {
   const positions = useSharedValue<Record<string, number>>(
     Object.fromEntries(rows.map((r, i) => [r.id, i])),
   );
+  // How many lines each title actually took, reported back by the rows. Kept
+  // here rather than in each row because the sums that place every row need
+  // all of them.
+  const [lines, setLines] = useState<Record<string, number>>({});
+  const onLines = useCallback((id: string, n: number) => {
+    setLines((cur) => (cur[id] === n ? cur : { ...cur, [id]: n }));
+  }, []);
+
   const heightsObj = useMemo(
-    () => Object.fromEntries(rows.map((r) => [r.id, rowHeight(r)])),
-    [rows],
+    () => Object.fromEntries(rows.map((r) => [r.id, rowHeight(r, lines[r.id])])),
+    [rows, lines],
   );
   const heights = useSharedValue<Record<string, number>>(heightsObj);
   // Which row is baring its delete — swiping (or lifting) one closes the rest.
@@ -333,7 +354,7 @@ function ReorderableRows({ rows, date }: { rows: Task[]; date: string }) {
     }
   };
 
-  const listHeight = rows.reduce((sum, r) => sum + rowHeight(r), 0);
+  const listHeight = rows.reduce((sum, r) => sum + rowHeight(r, lines[r.id]), 0);
 
   return (
     <View style={[styles.list, { height: listHeight }]}>
@@ -344,6 +365,8 @@ function ReorderableRows({ rows, date }: { rows: Task[]; date: string }) {
           index={i}
           count={rows.length}
           date={date}
+          titleLines={lines[t.id]}
+          onLines={onLines}
           positions={positions}
           heights={heights}
           revealed={revealed}
@@ -359,6 +382,8 @@ function DraggableRow({
   index,
   count,
   date,
+  titleLines,
+  onLines,
   positions,
   heights,
   revealed,
@@ -368,6 +393,8 @@ function DraggableRow({
   index: number;
   count: number;
   date: string;
+  titleLines: number | undefined;
+  onLines: (id: string, n: number) => void;
   positions: SharedValue<Record<string, number>>;
   heights: SharedValue<Record<string, number>>;
   revealed: SharedValue<string | null>;
@@ -379,7 +406,7 @@ function DraggableRow({
   const update = useUpdateTask();
   const del = useDeleteTask();
   const id = task.id;
-  const h = rowHeight(task);
+  const h = rowHeight(task, titleLines);
   const web = Platform.OS === "web";
   const [hovered, setHovered] = useState(false);
 
@@ -625,8 +652,10 @@ function DraggableRow({
                 <View style={styles.rowMain}>
                   <View style={styles.rowTitleLine}>
                     {task.gate && <Text style={{ color: colors.zest }}>⛳</Text>}
+                    {/* Uncapped, and it reports what it took: a task is called
+                        whatever you called it, and the row grows to hold it. */}
                     <Text
-                      numberOfLines={1}
+                      onTextLayout={(e) => onLines(id, e.nativeEvent.lines.length)}
                       style={[styles.rowTitle, type.sans, { color: colors.ink }]}
                     >
                       {task.title}
@@ -948,7 +977,9 @@ const styles = StyleSheet.create({
     minWidth: 0,
   },
   rowMain: {
-    height: ROW_H,
+    // Grows with a wrapped title. `rowHeight` is told the same line count, so
+    // the layout and the drag math cannot drift apart.
+    minHeight: ROW_H,
     justifyContent: "center",
   },
   rowTitleLine: {
@@ -960,6 +991,8 @@ const styles = StyleSheet.create({
     flexShrink: 1,
     minWidth: 0,
     fontSize: 15,
+    // Pinned, because `TITLE_LINE_H` is what the row height is measured in.
+    lineHeight: TITLE_LINE_H,
   },
   rowDone: {
     textDecorationLine: "line-through",

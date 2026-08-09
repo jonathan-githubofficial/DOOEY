@@ -6,10 +6,10 @@ import { Stepper } from "@/components/stepper";
 import { Eyebrow, Panel } from "@/components/surface";
 import { useCardRadius } from "@/features/style/store";
 import { fmtMin } from "@/features/tasks/timeGrid";
+import { liveTrackers, useTrackers } from "@/features/trackers/api";
 import { useRoutines } from "@/features/workouts/api";
 import { hueOf } from "@/features/workouts/focus";
 import { useCardInk } from "@/features/workouts/hues";
-import type { Routine } from "@/features/workouts/types";
 import { confirmDestructive } from "@/lib/confirm";
 import { hapticTap } from "@/lib/haptics";
 import { settle } from "@/lib/motion";
@@ -32,9 +32,9 @@ import type { Ritual } from "../types";
 /** Where the planner's shape gets decided: which weekdays a thing comes back
  * on, and at what times.
  *
- * A ritual is only ever a schedule. Nothing here records whether you kept it —
- * the workout and the journal entry are the record, and the planner reads them
- * back. That is why there is no "mark done" anywhere on this page. */
+ * A ritual is only ever a schedule. Nothing here records whether you kept it:
+ * the session and the entry are the record, and the planner reads them back.
+ * That is why there is no "mark done" anywhere on this page. */
 export function RitualsPanel() {
   const colors = usePalette();
   const type = useType();
@@ -45,7 +45,7 @@ export function RitualsPanel() {
     <>
       <View style={styles.banner}>
         <View style={[styles.bannerIcon, { backgroundColor: alpha(colors.leaf, 0.15) }]}>
-          <RITUAL_ICON.gym size={20} color={colors.leaf} />
+          <RITUAL_ICON.training size={20} color={colors.leaf} />
         </View>
         <View style={styles.bannerText}>
           <Text style={[styles.bannerTitle, type.display, { color: colors.ink }]}>Rituals</Text>
@@ -60,8 +60,8 @@ export function RitualsPanel() {
       ))}
 
       <View style={styles.addRow}>
-        <AddButton label="Training" onPress={() => add("gym")} />
-        <AddButton label="Meals" onPress={() => add("journal")} />
+        <AddButton label="Training" onPress={() => add("training")} />
+        <AddButton label="Something you track" onPress={() => add("tracker")} />
       </View>
     </>
   );
@@ -95,15 +95,18 @@ function RitualEditor({ ritual }: { ritual: Ritual }) {
   const patch = useRitualStore((s) => s.patch);
   const remove = useRitualStore((s) => s.remove);
   const { data: routines } = useRoutines();
+  const { data: trackers } = useTrackers();
   const ink = useCardInk();
 
-  const routine = routines?.find((r) => r.id === ritual.ref) ?? null;
-  const shade = ink(ritual.kind === "journal" ? "honey" : routine ? hueOf(routine) : "zest");
+  const isTracker = ritual.kind === "tracker";
+  const routine = isTracker ? null : (routines?.find((r) => r.id === ritual.ref) ?? null);
+  const tracker = isTracker ? (liveTrackers(trackers).find((t) => t.id === ritual.ref) ?? null) : null;
+  const shade = ink(isTracker ? (tracker?.hue ?? "zest") : routine ? hueOf(routine) : "zest");
   const Icon = RITUAL_ICON[ritual.kind];
 
-  // Picking a routine renames the ritual to match, so the planner has one
-  // title and it is the one you can still edit by hand afterwards.
-  const pick = (next: Routine | null) => {
+  // Picking what the slot is for renames the ritual to match, so the planner
+  // has one title and it is the one you can still edit by hand afterwards.
+  const pick = (next: { id: string; name: string } | null) => {
     hapticTap();
     patch(ritual.id, next ? { ref: next.id, label: next.name } : { ref: "" });
   };
@@ -118,7 +121,7 @@ function RitualEditor({ ritual }: { ritual: Ritual }) {
           <TextInput
             value={ritual.label}
             onChangeText={(label) => patch(ritual.id, { label })}
-            placeholder={ritual.kind === "gym" ? "Training" : "Meals"}
+            placeholder={isTracker ? "Log" : "Training"}
             placeholderTextColor={alpha(colors.inkMuted, 0.5)}
             accessibilityLabel="Ritual name"
             style={[styles.name, type.display, { color: colors.ink }]}
@@ -222,46 +225,44 @@ function RitualEditor({ ritual }: { ritual: Ritual }) {
           </PressableScale>
         </View>
 
-        {ritual.kind === "gym" && (
-          <>
-            <Divider />
-            <Eyebrow>the routine</Eyebrow>
-            <View style={styles.routines}>
-              <Chip label="Any" on={!ritual.ref} accent={shade.solid} onPress={() => pick(null)} />
-              {(routines ?? []).map((r) => (
-                <Chip
-                  key={r.id}
-                  label={r.name}
-                  on={ritual.ref === r.id}
-                  accent={shade.solid}
-                  onPress={() => pick(r)}
-                />
-              ))}
-            </View>
+        <Divider />
+        {/* One picker, two lists. "Any" is not a placeholder: an unpointed
+            ritual is answered by anything of its sort, which is the useful
+            default for someone who trains without following a split, or who
+            just wants a nudge to write something down. */}
+        <Eyebrow>{isTracker ? "what you log" : "the routine"}</Eyebrow>
+        <View style={styles.routines}>
+          <Chip label="Any" on={!ritual.ref} accent={shade.solid} onPress={() => pick(null)} />
+          {(isTracker ? liveTrackers(trackers) : (routines ?? [])).map((it) => (
+            <Chip
+              key={it.id}
+              label={it.name}
+              on={ritual.ref === it.id}
+              accent={shade.solid}
+              onPress={() => pick(it)}
+            />
+          ))}
+        </View>
 
-            <Divider />
-            <View style={styles.lengthRow}>
-              <View style={styles.lengthText}>
-                <Text style={[styles.rowLabel, type.sansMedium, { color: colors.ink }]}>
-                  Length
-                </Text>
-                <Text style={[styles.rowHint, type.sans, { color: colors.inkMuted }]}>
-                  How much of the timeline it blocks out.
-                </Text>
-              </View>
-              <Stepper
-                name="minutes"
-                value={ritual.dur_min}
-                display={`${ritual.dur_min}m`}
-                step={15}
-                min={15}
-                max={4 * 60}
-                width={44}
-                onChange={(dur_min) => patch(ritual.id, { dur_min })}
-              />
-            </View>
-          </>
-        )}
+        <Divider />
+        <View style={styles.lengthRow}>
+          <View style={styles.lengthText}>
+            <Text style={[styles.rowLabel, type.sansMedium, { color: colors.ink }]}>Length</Text>
+            <Text style={[styles.rowHint, type.sans, { color: colors.inkMuted }]}>
+              How much of the timeline it blocks out.
+            </Text>
+          </View>
+          <Stepper
+            name="minutes"
+            value={ritual.dur_min}
+            display={`${ritual.dur_min}m`}
+            step={15}
+            min={15}
+            max={4 * 60}
+            width={44}
+            onChange={(dur_min) => patch(ritual.id, { dur_min })}
+          />
+        </View>
 
         <Divider />
         <PressableScale

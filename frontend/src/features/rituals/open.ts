@@ -1,4 +1,5 @@
 import { useRouter } from "expo-router";
+import { openLog } from "@/features/trackers/components/LogSheet";
 import { useLiveWorkout, useStartWorkout } from "@/features/workouts/api";
 import { hapticTap } from "@/lib/haptics";
 import type { DayRitual } from "./api";
@@ -17,8 +18,10 @@ export function useOpenSlot(): (slot: DayRitual) => void {
 
   return (slot) => {
     hapticTap();
-    if (slot.ritual.kind === "journal") {
-      router.push("/journal");
+    if (slot.ritual.kind === "tracker") {
+      // Answered where it was asked. Sending you to another space to log is
+      // what made logging feel like an errand.
+      openLog(slot.tracker?.id ?? "", slot.ritual.label);
       return;
     }
     // At most one session is ever open. If one is running — this slot's or

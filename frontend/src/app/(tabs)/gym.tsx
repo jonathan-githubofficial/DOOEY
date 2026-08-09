@@ -16,6 +16,7 @@ import { DotsButton } from "@/components/dots-button";
 import { Grain } from "@/components/grain";
 import { Masthead } from "@/components/Masthead";
 import { PressableScale } from "@/components/pressable-scale";
+import { Key } from "@/components/surface";
 import { PageDoodle } from "@/features/style/components/PageDoodle";
 import { useCardRadius } from "@/features/style/store";
 import {
@@ -74,7 +75,6 @@ type CardItem = { kind: "routine"; routine: Routine } | { kind: "add" };
  * your routines as a board. The running session rides above both. */
 export default function Gym() {
   const colors = usePalette();
-  const type = useType();
   const liveInset = useLiveBarInset();
   const page = usePagePadding(liveInset);
   const router = useRouter();
@@ -255,24 +255,12 @@ export default function Gym() {
               opens a page rather than growing the ticket: every week you have
               trained is a different question from how this week is going, and
               the card that tried to answer both had to be two cards. */}
-          <PressableScale
-            scaleTo={0.96}
-            accessibilityRole="button"
+          <Key
+            icon={<Clock size={13} color={colors.inkMuted} />}
+            label="History"
             accessibilityLabel="Show every week you've trained"
-            onPress={() => {
-              hapticTap();
-              router.push("/history");
-            }}
-            style={[
-              styles.histKey,
-              { backgroundColor: colors.surface, borderColor: alpha(colors.rule, 0.7) },
-            ]}
-          >
-            <Clock size={14} color={colors.inkMuted} />
-            <Text style={[styles.histKeyText, type.sansMedium, { color: colors.ink }]}>
-              History
-            </Text>
-          </PressableScale>
+            onPress={() => router.push("/history")}
+          />
         </Masthead>
       </View>
       <ScrollView
@@ -318,24 +306,12 @@ export default function Gym() {
             offered is somebody else's plan. It waits at the end of your own
             programs, where you'd go looking for it only when you'd run out of
             them. */}
-        <PressableScale
-          scaleTo={0.97}
-          accessibilityRole="button"
-          accessibilityLabel="Browse programs"
-          onPress={() => {
-            hapticTap();
-            setExploring(true);
-          }}
-          style={[
-            styles.browse,
-            { backgroundColor: colors.surface, borderColor: alpha(colors.rule, 0.7) },
-          ]}
-        >
-          <BookOpen size={15} color={colors.inkMuted} />
-          <Text style={[styles.browseText, type.sansMedium, { color: colors.ink }]}>
-            Browse programs
-          </Text>
-        </PressableScale>
+        <Key
+          icon={<BookOpen size={14} color={colors.inkMuted} />}
+          label="Browse programs"
+          onPress={() => setExploring(true)}
+          style={styles.browse}
+        />
       </ScrollView>
 
       <ProgramsExplorer
@@ -518,16 +494,6 @@ const styles = StyleSheet.create({
   scrollContent: { paddingHorizontal: 16 },
 
 
-  histKey: {
-    height: 32,
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 6,
-    borderWidth: 1,
-    borderRadius: 999,
-    paddingHorizontal: 12,
-  },
-  histKeyText: { fontSize: 12 },
   ticketWrap: { marginTop: 22 },
 
   program: { marginTop: 24 },
@@ -563,16 +529,5 @@ const styles = StyleSheet.create({
   },
   addText: { fontSize: 12.5 },
 
-  browse: {
-    marginTop: 26,
-    alignSelf: "center",
-    height: 36,
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 7,
-    borderWidth: 1,
-    borderRadius: 999,
-    paddingHorizontal: 16,
-  },
-  browseText: { fontSize: 12.5 },
+  browse: { marginTop: 26, alignSelf: "center" },
 });

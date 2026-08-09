@@ -4,22 +4,22 @@ import { useEffect, useRef } from "react";
 import { Animated, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { usePagePadding } from "@/lib/shell";
 import { AvatarDoodle } from "@/components/AvatarDoodle";
-import { DoodleSvg } from "@/components/DoodleSvg";
 import { Grain } from "@/components/grain";
 import { Masthead } from "@/components/Masthead";
 import { PressableScale } from "@/components/pressable-scale";
-import { Eyebrow, Panel, StampButton } from "@/components/surface";
+import { Eyebrow, Panel } from "@/components/surface";
 import { signOut } from "@/features/auth/api";
-import { DockPanel } from "@/features/home/components/DockPanel";
 import { PageDoodle } from "@/features/style/components/PageDoodle";
+import { TrackersPanel } from "@/features/trackers/components/TrackersPanel";
 import { alpha } from "@/lib/theme";
 import { useAuthStore } from "@/stores/auth";
-import { useGardenStore } from "@/stores/garden";
 import { usePalette, useThemeStore, useType } from "@/stores/theme";
 import { useLiveBarInset } from "@/features/workouts/live-bar";
 
-/** The account space: your doodled self, email, appearance, the door to the
- * Style studio, and sign-out. The tab guard guarantees a session. */
+/** You: your doodled self, your email, appearance, the doors to the Style
+ * studio and Preferences, what you track, and the way out. Called Account
+ * until 2026-08-09 — the page is about the person, not the record. The tab
+ * guard guarantees a session. */
 export default function Account() {
   const colors = usePalette();
   const type = useType();
@@ -34,7 +34,7 @@ export default function Account() {
       {/* Pinned above the scroller: the space's name stays put while its
           contents run under it. */}
       <View style={styles.head}>
-        <Masthead avatar={<PageDoodle page="account" />} title="Account" />
+        <Masthead avatar={<PageDoodle page="account" />} title="You" />
       </View>
       <ScrollView
         showsVerticalScrollIndicator={false}
@@ -116,46 +116,29 @@ export default function Account() {
           </Panel>
         </PressableScale>
 
-        <DockPanel />
+        <TrackersPanel />
 
-        <GardenPanel />
-
-        {/* The way out, at the very bottom. Stamp-sized, not stretched: pulled
-            across the page the perforations read as a torn bar, not a stamp. */}
-        <StampButton onPress={signOut} style={styles.signOut}>
-          <LogOut size={16} color={colors.inkMuted} />
+        {/* The way out, at the very bottom, and a real button across the page.
+            It was a stamp, which is the shape this app uses for *filing
+            something* — pressing it down, keeping it. Leaving is the opposite
+            of that, and it should be as easy to hit as it is to mean. */}
+        <PressableScale
+          scaleTo={0.98}
+          accessibilityRole="button"
+          accessibilityLabel="Sign out"
+          onPress={signOut}
+          style={[
+            styles.signOut,
+            { borderColor: alpha(colors.rule, 0.9), backgroundColor: colors.surface },
+          ]}
+        >
+          <LogOut size={17} color={colors.inkMuted} />
           <Text style={[styles.signOutLabel, type.sansMedium, { color: colors.inkMuted }]}>
             Sign out
           </Text>
-        </StampButton>
+        </PressableScale>
       </ScrollView>
     </View>
-  );
-}
-
-/** The garden: every signed-off day planted a little drawing here. */
-function GardenPanel() {
-  const colors = usePalette();
-  const type = useType();
-  const signatures = useGardenStore((s) => s.signatures);
-  const days = Object.keys(signatures).sort();
-  if (days.length === 0) return null;
-
-  return (
-    <Panel style={styles.gardenPanel}>
-      <Eyebrow>your garden</Eyebrow>
-      <View style={styles.garden}>
-        {days.map((d) => (
-          <View key={d} style={styles.gardenCell} accessibilityLabel={d}>
-            <DoodleSvg strokes={signatures[d]} strokeWidth={5} />
-          </View>
-        ))}
-      </View>
-      <Text style={[styles.gardenCount, type.sans, { color: colors.inkMuted }]}>
-        <Text style={{ color: colors.zest }}>{days.length}</Text>
-        {days.length === 1 ? " day" : " days"} of growth
-      </Text>
-    </Panel>
   );
 }
 
@@ -271,13 +254,16 @@ const styles = StyleSheet.create({
   },
   signOut: {
     marginTop: 28,
-    alignSelf: "center",
+    height: 52,
+    flexDirection: "row",
+    alignItems: "center",
     justifyContent: "center",
-    paddingHorizontal: 20,
-    paddingVertical: 11,
+    gap: 10,
+    borderWidth: 1,
+    borderRadius: 14,
   },
   signOutLabel: {
-    fontSize: 13,
+    fontSize: 15,
   },
   styleCard: {
     marginTop: 16,

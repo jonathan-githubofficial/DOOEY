@@ -3,7 +3,7 @@ import type { RecordModel } from "pocketbase";
 import { addDays, localDate, nextMonth } from "@/lib/dates";
 import { pb } from "@/lib/pb";
 import { useAuthStore } from "@/stores/auth";
-import type { Task, TaskPatch } from "./types";
+import type { ChecklistItem, Task, TaskPatch } from "./types";
 
 export const taskKeys = {
   all: ["tasks"] as const,
@@ -98,6 +98,37 @@ export function useMonthOpenCounts(month: string) {
   });
 }
 
+/** Every picture attached to a task due in one month, keyed by the day it is
+ * due — what Stamps puts inside a day cell.
+ *
+ * A photo is the strongest thing a day can show, so it is worth a query of its
+ * own: no other record in the app carries an image with a date on it. Only the
+ * fields the grid needs come back, because a month of full task bodies to draw
+ * thirty thumbnails is a lot of rows for a picture. */
+export function useMonthAttachments(month: string) {
+  const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
+  return useQuery({
+    queryKey: ["tasks", "monthPhotos", month] as const,
+    enabled: isAuthenticated,
+    queryFn: async () => {
+      const records = await pb.collection("tasks").getFullList({
+        filter: pb.filter("attachments != '' && due_date >= {:start} && due_date < {:end}", {
+          start: new Date(`${month}-01T00:00:00.000Z`),
+          end: new Date(`${nextMonth(month)}-01T00:00:00.000Z`),
+        }),
+        fields: "id,due_date,attachments",
+      });
+      const byDay: Record<string, string[]> = {};
+      for (const r of records) {
+        const day = (r.due_date as string).slice(0, 10);
+        const files = (r.attachments as string[]) ?? [];
+        (byDay[day] ??= []).push(...files.map((f) => attachmentUrl(r.id, f)));
+      }
+      return byDay;
+    },
+  });
+}
+
 /** Every task belonging to one project (program), across all dates. */
 export function useProjectTasks(projectId: string | undefined) {
   const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
@@ -157,6 +188,7 @@ export function useCreateTask() {
       start_min,
       dur_min,
       tags,
+      checklist,
     }: {
       title: string;
       description?: string;
@@ -165,6 +197,7 @@ export function useCreateTask() {
       start_min?: number;
       dur_min?: number;
       tags?: string[];
+      checklist?: ChecklistItem[];
     }) =>
       pb.collection("tasks").create(
         {
@@ -176,6 +209,7 @@ export function useCreateTask() {
           start_min: start_min ?? 0,
           dur_min: dur_min ?? 60,
           tags: tags ?? [],
+          checklist: checklist ?? [],
           sort_order: Date.now(),
         },
         { requestKey: null },

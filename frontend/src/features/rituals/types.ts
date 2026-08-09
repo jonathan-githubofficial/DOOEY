@@ -1,7 +1,13 @@
-/** The two things that recur on a clock rather than a to-do list: training,
- * and writing down what you ate. Both already have a space that tracks them —
- * a ritual only says *when you meant to*. */
-export type RitualKind = "gym" | "journal";
+/** The two shapes a standing commitment can take.
+ *
+ * This used to be `"gym" | "journal"`: the app's two tracked things, spelled
+ * out. Adding a third meant editing this union, the icon map, the hue map, the
+ * slot renderer and the kept/unkept join. Five files to keep one more number.
+ *
+ * Now a ritual either starts a training session or is answered by an entry
+ * against some tracker, and which tracker is a record the user made. Tracking
+ * one more thing costs nothing here at all. */
+export type RitualKind = "training" | "tracker";
 
 /** A standing commitment. Days and times are the whole schedule: no end date,
  * no every-other-week, no exceptions list. If you skip a day the slot simply
@@ -9,9 +15,9 @@ export type RitualKind = "gym" | "journal";
 export interface Ritual {
   id: string;
   kind: RitualKind;
-  /** Gym: the routine record this slot starts. Journal: always "". An empty
-   * ref on a gym ritual means "any training", which is what a freshly added
-   * one is until you pick the routine. */
+  /** Training: the routine record this slot starts. Tracker: the tracker it is
+   * answered by. Empty either way means "anything of that sort counts", which
+   * is what a freshly added ritual is until you point it somewhere. */
   ref: string;
   label: string;
   /** Local weekdays, 0 = Sunday, matching `Date.getDay()`. */

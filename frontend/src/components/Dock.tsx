@@ -1,11 +1,10 @@
 import { Tabs } from "expo-router";
 import {
   Dumbbell,
-  FolderOpen,
   NotebookPen,
   Shapes,
+  Stamp,
   UserRound,
-  Utensils,
   type LucideIcon,
 } from "lucide-react-native";
 import { useEffect, useRef } from "react";
@@ -21,7 +20,6 @@ import Animated, {
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { DoodleSvg } from "@/components/DoodleSvg";
 import { Grain } from "@/components/grain";
-import { useDock } from "@/features/home/store";
 import { useShadow, useStyleStore } from "@/features/style/store";
 import { fontStyle } from "@/features/style/tokens";
 import type { Stroke } from "@/lib/doodle";
@@ -29,23 +27,21 @@ import { alpha } from "@/lib/theme";
 import { useAuthStore } from "@/stores/auth";
 import { usePalette, useType } from "@/stores/theme";
 import { settle } from "@/lib/motion";
-import { spaceFor, spaceOf, type Space, type SpaceRoute } from "@/lib/spaces";
+import { SPACES, spaceFor, type Space, type SpaceRoute } from "@/lib/spaces";
 
 // A pure deceleration curve — the pill glides and stops dead, no overshoot.
 const GLIDE = { duration: 260, easing: Easing.bezier(0.2, 0, 0, 1) };
 
 type TabBarProps = Parameters<NonNullable<React.ComponentProps<typeof Tabs>["tabBar"]>>[0];
 
-/** The dock's glyphs. The list of spaces itself lives in `lib/spaces` and the
- * user's arrangement in features/home/store; only the icons are the dock's
- * own business. Account is absent on purpose — your doodled self at the left
- * end of the island is its door. */
+/** The dock's glyphs. The list of spaces itself lives in `lib/spaces`; only the
+ * icons are the dock's own business. Account is absent on purpose — your
+ * doodled self at the left end of the island is its door. */
 const DOCK_ICONS: Partial<Record<SpaceRoute, LucideIcon>> = {
   index: NotebookPen,
   boards: Shapes,
-  projects: FolderOpen,
   gym: Dumbbell,
-  journal: Utensils,
+  stamps: Stamp,
 };
 
 /** The dock: a floating island. The wordmark anchors the left end (its zest
@@ -87,14 +83,10 @@ export function Dock({ state, navigation }: TabBarProps) {
     if (key === active) place(key, true);
   };
 
-  let dockSpaces: Space[] = useDock().filter((s) => s.route !== "account");
-  // Standing in a hidden space (a widget link, a deep link) must not leave
-  // the pill with nowhere to land: give the active space a stop of its own
-  // when the user's dock doesn't otherwise carry it.
-  const activeSpace = spaceOf(active);
-  if (activeSpace && active !== "account" && !dockSpaces.some((s) => s.route === active)) {
-    dockSpaces = [...dockSpaces, activeSpace];
-  }
+  // Account is absent on purpose: your doodled self at the left end of the
+  // island is its door. Every other space is here, always — the pill can never
+  // be left without a stop to land on now that nothing can be hidden.
+  const dockSpaces: readonly Space[] = SPACES.filter((s) => s.route !== "account");
   const dockKey = dockSpaces.map((s) => s.route).join(",");
 
   useEffect(() => {
@@ -190,7 +182,7 @@ function AccountCluster({
 
   return (
     <Pressable
-      accessibilityLabel="Account"
+      accessibilityLabel="You"
       accessibilityState={{ selected: active }}
       onLayout={onLayout}
       onPress={onPress}

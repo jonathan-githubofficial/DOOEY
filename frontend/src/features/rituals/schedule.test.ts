@@ -17,7 +17,7 @@ const TUESDAY = "2026-01-06";
 const SUNDAY = "2026-01-11";
 
 const gym = (over: Partial<Ritual> = {}): Ritual => ({
-  ...newRitual("gym", "r1", "routine1", "Push"),
+  ...newRitual("training", "r1", "routine1", "Push"),
   ...over,
 });
 
@@ -58,7 +58,7 @@ describe("occurrencesFor", () => {
     expect(occurrencesFor(MONDAY, [gym({ days: [1], times: [] })])).toEqual([]);
   });
   it("interleaves rituals in clock order", () => {
-    const meals = { ...newRitual("journal", "r2"), days: [1], times: [8 * 60, 19 * 60] };
+    const meals = { ...newRitual("tracker", "r2"), days: [1], times: [8 * 60, 19 * 60] };
     const occ = occurrencesFor(MONDAY, [gym({ days: [1], times: [12 * 60] }), meals]);
     expect(occ.map((o) => o.ritual.id)).toEqual(["r2", "r1", "r2"]);
   });
@@ -86,10 +86,20 @@ describe("sanitizeRituals", () => {
     expect(sanitizeRituals([{ id: "a", kind: "gym", times: [1439] }])[0].times).toEqual([1425]);
   });
   it("falls back to the kind's defaults for a missing label and duration", () => {
-    const [r] = sanitizeRituals([{ id: "a", kind: "gym", label: "  " }]);
+    const [r] = sanitizeRituals([{ id: "a", kind: "training", label: "  " }]);
     expect(r.label).toBe("Training");
     expect(r.dur_min).toBe(60);
     expect(r.enabled).toBe(true);
+  });
+  it("reads the old kind names, so an arrangement survives the rename", () => {
+    const out = sanitizeRituals([
+      { id: "a", kind: "gym", days: [1, 3], times: [18 * 60] },
+      { id: "b", kind: "journal", days: [0], times: [13 * 60] },
+    ]);
+    expect(out.map((r) => r.kind)).toEqual(["training", "tracker"]);
+    // The schedule is the part worth keeping, and it comes through untouched.
+    expect(out[0].days).toEqual([1, 3]);
+    expect(out[1].times).toEqual([13 * 60]);
   });
 });
 

@@ -1,6 +1,7 @@
 import { useLocalSearchParams, useRouter } from "expo-router";
 import {
   ChevronLeft,
+  FolderOpen,
   Link2,
   ListChecks,
   Paperclip,
@@ -26,7 +27,8 @@ import { usePagePadding } from "@/lib/shell";
 import { Check } from "@/components/Check";
 import { Grain } from "@/components/grain";
 import { PressableScale } from "@/components/pressable-scale";
-import { Eyebrow, Panel, Stamp } from "@/components/surface";
+import { Eyebrow, Key, Panel, Stamp } from "@/components/surface";
+import { useLearningProgram } from "@/features/learning/api";
 import { TagChips } from "@/features/tasks/components/TagChips";
 import { harvestTags } from "@/features/tasks/tags";
 import { attachmentUrl, useDeleteTask, useTask, useUpdateTask } from "@/features/tasks/api";
@@ -214,14 +216,21 @@ function TaskHead({ task }: { task: Task }) {
           style={[styles.title, type.display, { color: colors.ink }]}
         />
       </View>
-      {!!task.due_date && (
+      {(!!task.due_date || !!task.project) && (
         <View style={styles.stampRow}>
-          <Stamp rotate={-3} color={alpha(colors.inkMuted, 0.8)}>
-            {toLocalNoon(dateOnly(task.due_date)).toLocaleDateString("en", {
-              month: "short",
-              day: "numeric",
-            })}
-          </Stamp>
+          {!!task.due_date && (
+            <Stamp rotate={-3} color={alpha(colors.inkMuted, 0.8)}>
+              {toLocalNoon(dateOnly(task.due_date)).toLocaleDateString("en", {
+                month: "short",
+                day: "numeric",
+              })}
+            </Stamp>
+          )}
+          {/* The way back to the folder this session came out of. It is the
+              only one now that Projects is not a space: a programme is its
+              tasks, and this is the task saying which programme it belongs
+              to rather than a shelf you have to go and browse. */}
+          {!!task.project && <ProgramKey id={task.project} />}
         </View>
       )}
       <TextInput
@@ -246,6 +255,25 @@ function TaskHead({ task }: { task: Task }) {
         style={styles.tags}
       />
     </View>
+  );
+}
+
+/** The programme a session belongs to, as a key you can press. Absent until the
+ * record loads rather than showing a placeholder: a key with no name on it is
+ * worse than nothing to press. */
+function ProgramKey({ id }: { id: string }) {
+  const colors = usePalette();
+  const router = useRouter();
+  const { data: program } = useLearningProgram(id);
+  if (!program) return null;
+  return (
+    <Key
+      label={program.goal}
+      icon={<FolderOpen size={13} color={colors.inkMuted} />}
+      accessibilityLabel={`Open the ${program.goal} programme`}
+      onPress={() => router.push(`/project/${id}`)}
+      style={styles.programKey}
+    />
   );
 }
 
@@ -491,7 +519,8 @@ const styles = StyleSheet.create({
   headTitleRow: { flexDirection: "row", alignItems: "flex-start", gap: 12 },
   title: { flex: 1, fontSize: 26, letterSpacing: -0.5, paddingTop: 0 },
   tags: { marginTop: 10 },
-  stampRow: { marginTop: 10, flexDirection: "row" },
+  stampRow: { marginTop: 10, flexDirection: "row", alignItems: "center", gap: 10, flexWrap: "wrap" },
+  programKey: { maxWidth: 240 },
   description: { marginTop: 8, fontSize: 14 },
   panel: { marginTop: 16, padding: 20 },
   panelHead: {
