@@ -31,15 +31,17 @@ import { DoodleEditor } from "@/components/DoodleEditor";
 import { DoodleSvg } from "@/components/DoodleSvg";
 import { PressableScale } from "@/components/pressable-scale";
 import { Eyebrow, Panel, Stamp } from "@/components/surface";
-import { useDayRituals } from "@/features/rituals/api";
-import { RitualSlip } from "@/features/rituals/components/RitualSlip";
+import { useEntriesDay, useTrackers } from "@/features/trackers/api";
+import { formatValue } from "@/features/trackers/types";
 import { addDays, dayTitle, dueInfo, localDate, toLocalNoon, toPbDate } from "@/lib/dates";
 import { hapticLift, hapticSuccess, hapticTap, hapticWarn } from "@/lib/haptics";
 import { alpha } from "@/lib/theme";
 import { useGardenStore } from "@/stores/garden";
 import { usePalette, useType } from "@/stores/theme";
 import { useDayTasks, useDeleteTask, useUpdateTask } from "../api";
+import { useCardInk } from "@/features/workouts/hues";
 import { TagChips } from "./TagChips";
+import { hueOfTag } from "../tags";
 import type { Task } from "../types";
 import { BINDING_INSET, RING_COUNT } from "./PlannerBook";
 import { settle } from "@/lib/motion";
@@ -77,15 +79,13 @@ export function AgendaSheet({ date, height }: { date: string; height?: number })
   const colors = usePalette();
   const type = useType();
   const { data: tasks, isPending, error } = useDayTasks(date);
-  const slots = useDayRituals(date);
+  const { data: logged } = useEntriesDay(date);
 
   const open = useMemo(() => (tasks ?? []).filter((t) => !t.done_at), [tasks]);
   const done = (tasks ?? []).filter((t) => t.done_at);
-  const standing = slots.filter((s) => s.state !== "kept").length;
-  // A day with work behind it and nothing left: it earns the stamp,
-  // the signature line, and the companion's little jump. A ritual still
-  // waiting keeps the day open, the same as an unchecked task.
-  const complete = !!tasks && open.length === 0 && standing === 0 && done.length > 0;
+  // A day with work behind it and nothing left earns the stamp, the signature
+  // line, and the companion's little jump.
+  const complete = !!tasks && open.length === 0 && done.length > 0;
 
   const body = (
     <>
@@ -103,31 +103,25 @@ export function AgendaSheet({ date, height }: { date: string; height?: number })
       )}
       {isPending && !error && <GhostLines />}
 
-      {/* Above the tasks, because they are the shape of the day rather than
-          items in it: what recurs is already decided, the list is what you
-          decide today. */}
-      {slots.length > 0 && (
-        <Animated.View layout={settle()} style={styles.rituals}>
-          <Eyebrow>rituals</Eyebrow>
-          <View style={styles.ritualStack}>
-            {slots.map((s) => (
-              <RitualSlip key={s.id} slot={s} />
-            ))}
-          </View>
-        </Animated.View>
-      )}
-
       {tasks && (
         <>
           <ReorderableRows rows={open} date={date} />
 
-          {open.length === 0 && done.length === 0 && slots.length === 0 && (
+          {open.length === 0 && done.length === 0 && (logged?.length ?? 0) === 0 && (
             <Text style={[styles.empty, type.sans, { color: colors.inkMuted }]}>
               Nothing planned — the day is yours.
             </Text>
           )}
 
           {complete && <SignDay date={date} />}
+
+          {/* What happened, under what is still to happen.
+              A task and a log are different animals and the page has to say
+              so: "do the dishes" is something you owe the day, "ate eggs" is
+              something the day already has. So a log gets no checkbox and no
+              drag handle — there is nothing to complete about a fact — just
+              its hour, its tracker's colour, and what you said. */}
+          <LoggedToday date={date} />
 
           {done.length > 0 && (
             <Animated.View layout={settle()} style={styles.donePile}>
@@ -143,9 +137,50 @@ export function AgendaSheet({ date, height }: { date: string; height?: number })
   );
 
   return (
-    <PageSheet date={date} count={open.length + standing} height={height}>
+    <PageSheet date={date} count={open.length} height={height}>
       {body}
     </PageSheet>
+  );
+}
+
+/** The day's records: entries stamped against whatever you track.
+ *
+ * Deliberately not a list of rows like the tasks above it. Tasks are a queue
+ * you work down; these are a receipt. Reading them should feel like reading
+ * back, not like being handed more to do. */
+function LoggedToday({ date }: { date: string }) {
+  const colors = usePalette();
+  const type = useType();
+  const ink = useCardInk();
+  const { data: entries } = useEntriesDay(date);
+  const { data: trackers } = useTrackers();
+
+  if (!entries?.length) return null;
+  const byId = new Map((trackers ?? []).map((t) => [t.id, t]));
+
+  return (
+    <Animated.View layout={settle()} style={styles.logged}>
+      <Eyebrow>logged</Eyebrow>
+      {entries.map((entry) => {
+        const tracker = byId.get(entry.tracker);
+        if (!tracker) return null;
+        const shade = ink(tracker.hue);
+        const measured = formatValue(tracker, entry.value);
+        return (
+          <View key={entry.id} style={styles.logRow}>
+            <Stamp color={shade.stamp} rotate={-3} style={styles.logTime}>
+              {new Date(entry.at).toLocaleTimeString(undefined, {
+                hour: "numeric",
+                minute: "2-digit",
+              })}
+            </Stamp>
+            <Text numberOfLines={2} style={[styles.logBody, type.sans, { color: colors.ink }]}>
+              {[measured, entry.body].filter(Boolean).join(" · ") || tracker.name}
+            </Text>
+          </View>
+        );
+      })}
+    </Animated.View>
   );
 }
 
@@ -325,6 +360,45 @@ function ReorderableRows({ rows, date }: { rows: Task[]; date: string }) {
   // Which row is baring its delete — swiping (or lifting) one closes the rest.
   const revealed = useSharedValue<string | null>(null);
 
+  /** Where each row's top edge sits, summed once.
+   *
+   * Every row used to work this out for itself, inside its own
+   * `useAnimatedStyle`: a `for…in` over every other row, on the UI thread,
+   * every frame of a drag. Twenty tasks meant four hundred iterations and
+   * twenty object-key enumerations per frame, all computing the same twenty
+   * numbers. Now the sum runs once whenever the order or a height actually
+   * changes, and a row's style is a lookup. */
+  const offsetsObj = useMemo(() => {
+    const next: Record<string, number> = {};
+    let top = 0;
+    for (const r of rows) {
+      next[r.id] = top;
+      top += rowHeight(r, lines[r.id]);
+    }
+    return next;
+  }, [rows, lines]);
+  // Seeded from the server order, then owned entirely by the reaction below:
+  // `positions` and `heights` are the only things a row's top depends on, and
+  // both already get written whenever the list or a title changes, so a JS
+  // effect writing this too would only be a second route to the same value.
+  const offsets = useSharedValue<Record<string, number>>(offsetsObj);
+
+  // Re-summed on the UI thread, where a mid-drag reorder happens and React
+  // cannot reach — once per reorder rather than once per row per frame.
+  useAnimatedReaction(
+    () => ({ p: positions.value, h: heights.value }),
+    ({ p, h }) => {
+      const ids = Object.keys(p).sort((a, b) => p[a] - p[b]);
+      const next: Record<string, number> = {};
+      let top = 0;
+      for (const key of ids) {
+        next[key] = top;
+        top += h[key] ?? ROW_H;
+      }
+      offsets.value = next;
+    },
+  );
+
   // Re-sync slots whenever the server list changes (adds, deletes, check-offs).
   const signature = rows.map((r) => r.id).join("|");
   useEffect(() => {
@@ -369,6 +443,7 @@ function ReorderableRows({ rows, date }: { rows: Task[]; date: string }) {
           onLines={onLines}
           positions={positions}
           heights={heights}
+          offsets={offsets}
           revealed={revealed}
           onDrop={commit}
         />
@@ -386,6 +461,7 @@ function DraggableRow({
   onLines,
   positions,
   heights,
+  offsets,
   revealed,
   onDrop,
 }: {
@@ -397,6 +473,7 @@ function DraggableRow({
   onLines: (id: string, n: number) => void;
   positions: SharedValue<Record<string, number>>;
   heights: SharedValue<Record<string, number>>;
+  offsets: SharedValue<Record<string, number>>;
   revealed: SharedValue<string | null>;
   onDrop: (id: string) => void;
 }) {
@@ -409,6 +486,8 @@ function DraggableRow({
   const h = rowHeight(task, titleLines);
   const web = Platform.OS === "web";
   const [hovered, setHovered] = useState(false);
+  // The first tag is the one that names the task's kind; the rest qualify it.
+  const tagInk = useCardInk()(hueOfTag(task.tags[0] ?? ""));
 
   const dragging = useSharedValue(false);
   const y = useSharedValue(0);
@@ -438,11 +517,8 @@ function DraggableRow({
       dragging.value = true;
       revealed.value = null;
       runOnJS(hapticLift)();
-      let top = 0;
-      const idx = positions.value[id] ?? index;
-      for (const k in positions.value) {
-        if (k !== id && positions.value[k] < idx) top += heights.value[k] ?? ROW_H;
-      }
+      // Where it already is. Once per lift, so no sum needed.
+      const top = offsets.value[id] ?? 0;
       startY.value = top;
       y.value = top;
     })
@@ -530,10 +606,8 @@ function DraggableRow({
   const rule = alpha(colors.rule, 0.5);
   const rowStyle = useAnimatedStyle(() => {
     const idx = positions.value[id] ?? index;
-    let top = 0;
-    for (const k in positions.value) {
-      if (k !== id && positions.value[k] < idx) top += heights.value[k] ?? ROW_H;
-    }
+    // Summed for the whole list in one place; this is a lookup.
+    const top = offsets.value[id] ?? 0;
     return dragging.value
       ? {
           top: y.value,
@@ -637,6 +711,17 @@ function DraggableRow({
               onHoverIn={web ? () => setHovered(true) : undefined}
               onHoverOut={web ? () => setHovered(false) : undefined}
             >
+              {/* The day's colour, from the task's own first tag. Two points
+                  wide and it is the whole reason a list of rows reads as a
+                  shape before you read a word of it — the same trick the
+                  Stamps grid runs on trackers. An untagged task gets none,
+                  which is information too. */}
+              {!!task.tags.length && (
+                <View
+                  pointerEvents="none"
+                  style={[styles.rowSpine, { backgroundColor: tagInk.solid }]}
+                />
+              )}
               <View style={styles.rowCheck}>
                 <Check
                   done={false}
@@ -851,13 +936,10 @@ const styles = StyleSheet.create({
     fontSize: 11,
     fontVariant: ["tabular-nums"],
   },
-  rituals: {
-    marginTop: 14,
-  },
-  ritualStack: {
-    marginTop: 8,
-    gap: 8,
-  },
+  logged: { marginTop: 18, gap: 8 },
+  logRow: { flexDirection: "row", alignItems: "flex-start", gap: 10 },
+  logTime: { marginTop: 1 },
+  logBody: { flex: 1, fontSize: 14.5, lineHeight: 20 },
   list: {
     marginTop: 4,
   },
@@ -879,6 +961,14 @@ const styles = StyleSheet.create({
   rowCard: {
     flex: 1,
     borderRadius: 14,
+  },
+  rowSpine: {
+    position: "absolute",
+    left: 0,
+    top: 10,
+    bottom: 10,
+    width: 2,
+    borderRadius: 999,
   },
   deleteUnder: {
     position: "absolute",

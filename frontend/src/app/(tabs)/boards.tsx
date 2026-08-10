@@ -1,6 +1,7 @@
 import { useRouter } from "expo-router";
 import { Pencil, Plus, Trash2 } from "lucide-react-native";
-import { Image, ScrollView, StyleSheet, Text, View, useWindowDimensions } from "react-native";
+import { useState } from "react";
+import { Image, ScrollView, StyleSheet, Text, View } from "react-native";
 import { usePagePadding } from "@/lib/shell";
 import { DotsButton } from "@/components/dots-button";
 import { Grain } from "@/components/grain";
@@ -30,9 +31,14 @@ const GAP = 12;
 
 /** How many boards sit side by side. Two on a phone, three once there is
  * genuinely room for them: a card narrower than about a thumb stops showing
- * enough of the board to be worth tapping. */
+ * enough of the board to be worth tapping.
+ *
+ * The width this takes is the *grid's* own, not the window's. On the web the
+ * app is capped at `FRAME_W`, so a desktop browser reported 1920 here while
+ * the row it was laying out was 840 wide: three cards sized for a window they
+ * were never in, wrapping down to one per line. Ask the box you are filling. */
 function columnsFor(width: number): number {
-  return width >= 900 ? 3 : 2;
+  return width >= 700 ? 3 : 2;
 }
 
 /** The wall of boards: a card per board — title, edit date, and a fan of the
@@ -44,12 +50,14 @@ export default function Boards() {
   const page = usePagePadding(liveInset);
   const router = useRouter();
   const radius = useCardRadius();
-  const { width } = useWindowDimensions();
   const { data: boards, isPending } = useBoards();
   const create = useCreateBoard();
 
-  const cols = columnsFor(width);
-  const cardW = (width - GUTTER * 2 - GAP * (cols - 1)) / cols;
+  // Measured rather than assumed: see `columnsFor`. Zero until the first
+  // layout, which is why the grid holds off drawing cards for one frame.
+  const [gridW, setGridW] = useState(0);
+  const cols = columnsFor(gridW);
+  const cardW = (gridW - GAP * (cols - 1)) / cols;
 
   const newBoard = () =>
     create.mutate("Untitled board", {
@@ -71,7 +79,9 @@ export default function Boards() {
           { paddingBottom: page.paddingBottom },
         ]}
       >
-        <View style={styles.grid}>
+        <View style={styles.grid} onLayout={(e) => setGridW(e.nativeEvent.layout.width)}>
+          {gridW > 0 && (
+          <>
           <PressableScale
             scaleTo={0.97}
             accessibilityLabel="New board"
@@ -94,6 +104,8 @@ export default function Boards() {
           {(boards ?? []).map((b) => (
             <BoardCard key={b.id} board={b} width={cardW} />
           ))}
+          </>
+          )}
         </View>
 
         {!isPending && boards?.length === 0 && (

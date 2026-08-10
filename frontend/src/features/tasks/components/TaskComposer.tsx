@@ -1,6 +1,7 @@
 import DateTimePicker, { DateTimePickerAndroid } from "@react-native-community/datetimepicker";
 import { useRouter } from "expo-router";
 import {
+  ArrowLeftRight,
   ArrowUp,
   CalendarArrowUp,
   CalendarClock,
@@ -54,8 +55,11 @@ import { appear, dur, timing } from "@/lib/motion";
 import { alpha } from "@/lib/theme";
 import { usePalette, useType } from "@/stores/theme";
 import { RambleSheet } from "@/features/rambler/components/RambleSheet";
+import { liveTrackers, useAddEntry, useResolveTracker, useTrackers } from "@/features/trackers/api";
+import { SHAPE_SPEC, parseDuration, type Tracker } from "@/features/trackers/types";
+import { useCardInk } from "@/features/workouts/hues";
 import { useCreateTask } from "../api";
-import { activeTagQuery, completeTag, harvestTags, openTag } from "../tags";
+import { activeTagQuery, completeTag, harvestTags, hueOfTag, openTag } from "../tags";
 import { MonthView } from "./MonthView";
 import { TagChips } from "./TagChips";
 import { TagPicker } from "./TagPicker";
@@ -126,6 +130,36 @@ function whenSummary(date: string, start: number | null, repeat: RepeatRule): st
   const time = start != null ? `, ${fmtMin(start)}` : "";
   const rep = repeat !== "none" ? ` · ${REPEATS.find((r) => r.key === repeat)!.label.toLowerCase()}` : "";
   return `${day}${time}${rep}`;
+}
+
+/** What the box should ask for, given what is being recorded. The tracker's
+ * own shape writes the prompt, so a new tracker arrives already knowing how to
+ * ask for itself. */
+function askFor(tracker: Tracker): string {
+  switch (tracker.shape) {
+    case "scale":
+      return `${tracker.min} to ${tracker.max}`;
+    case "amount":
+      return tracker.unit ? `How many ${tracker.unit}?` : "How much?";
+    case "duration":
+      return "7h 20m";
+    case "tick":
+      return "Anything to add? (optional)";
+    default:
+      return SHAPE_SPEC.text.hint;
+  }
+}
+
+/** The number a measured shape is holding, or null while the box says nothing
+ * it can file. A scale outside its own ends is refused rather than clamped: 8
+ * out of 5 is a typo, and quietly storing 5 would put a number in the record
+ * that nobody typed. */
+function readValue(tracker: Tracker, text: string): number | null {
+  if (tracker.shape === "duration") return parseDuration(text);
+  const n = parseFloat(text.trim().replace(",", "."));
+  if (!Number.isFinite(n)) return null;
+  if (tracker.shape === "scale") return n >= tracker.min && n <= tracker.max ? n : null;
+  return n;
 }
 
 /** The new-task button: a postage stamp pinned above the tab bar — and the
@@ -231,6 +265,10 @@ export function ComposerSheet({
 }) {
   const colors = usePalette();
   const insets = useSafeAreaInsets();
+  // Null while the drawer is making a task. Once it is recording something
+  // instead, the form hands up the tracker's colour and the paper takes it —
+  // the one signal that says "this is not going on your list" without a word.
+  const [tint, setTint] = useState<string | null>(null);
 
   // Drag the drawer down to put it away. The grabber promises this, and the
   // form has no cancel button on the strength of that promise.
@@ -280,10 +318,22 @@ export function ComposerSheet({
               ]}
             >
               <Grain radius={23} />
+              {tint && (
+                <Animated.View
+                  entering={FadeIn.duration(dur.quick)}
+                  pointerEvents="none"
+                  style={[styles.tintWash, { backgroundColor: alpha(tint, 0.09) }]}
+                />
+              )}
               <View style={styles.handleRow}>
                 <View style={[styles.handle, { backgroundColor: alpha(colors.ink, 0.15) }]} />
               </View>
-              <ComposerForm date={date} initialStart={initialStart} onDone={onClose} />
+              <ComposerForm
+                date={date}
+                initialStart={initialStart}
+                onDone={onClose}
+                onTint={setTint}
+              />
             </Animated.View>
           </GestureDetector>
         </KeyboardAvoidingView>
@@ -298,26 +348,68 @@ export function ComposerSheet({
  *
  * The Mic chip swaps the body for the ramble in place rather than navigating.
  * One drawer, two ways of filling it: the form when you know exactly what you
- * want on which day, the ramble when you would rather just say it. */
+ * want on which day, the ramble when you would rather just say it.
+ *
+ * It is also the one place a log gets written. "Do the dishes" and "ate eggs"
+ * are not the same kind of sentence — one is owed to the day, the other is
+ * something the day already has — but they are the same *gesture*: open the
+ * drawer, say the thing, send it. So the form does not change when you switch;
+ * the pill next to the date says what you are filing, and the paper changes
+ * colour to prove it heard you. */
 export function ComposerForm({
   date,
   initialStart,
   onDone,
+  onTint,
 }: {
   date: string;
   initialStart?: number;
   onDone: () => void;
+  /** The drawer's paper, told what colour to be: a tracker's hue while
+   * recording, null while making a task. */
+  onTint?: (color: string | null) => void;
 }) {
   const colors = usePalette();
   const type = useType();
+  const ink = useCardInk();
   const create = useCreateTask();
+  const add = useAddEntry();
   const isToday = date === localDate();
   const [rambling, setRambling] = useState(false);
+
+  // Two things this drawer can be, and that is the whole question. It used to
+  // offer the trackers by name, which made the first decision "which of my
+  // aspects is this" — a menu that grows every time you track something new,
+  // asked before you have typed a word. The kind is binary; *which* kind of log
+  // is a tag, the same way it is for a task.
+  const [kind, setKind] = useState<"todo" | "log">("todo");
+  const logging = kind === "log";
 
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
   const titleRef = useRef<TextInput>(null);
   const [tags, setTags] = useState<string[]>([]);
+
+  // A log carries one tag, and that tag is what it goes under. If a tracker
+  // already answers to it, the drawer picks up its shape too: `#weight` on an
+  // amount tracker turns the box into a keypad and the placeholder into its
+  // unit. Otherwise the tag is simply a name, and the tracker behind it starts
+  // existing when the log is filed.
+  const { data: allTrackers } = useTrackers();
+  const tag = logging ? (tags[0] ?? "") : "";
+  const tracker = tag ? (liveTrackers(allTrackers).find((t) => t.slug === tag) ?? null) : null;
+  const measured = logging && tracker ? SHAPE_SPEC[tracker.shape].value : false;
+  const digits = tracker != null && measured && tracker.shape !== "duration";
+  const resolveTracker = useResolveTracker();
+
+  const hue = tracker?.hue ?? (tag ? hueOfTag(tag) : null);
+  // Untagged, a log is still not a task, so it still is not zest.
+  const accent = !logging ? colors.zest : hue ? ink(hue).stamp : colors.leaf;
+
+  useEffect(() => {
+    onTint?.(logging ? accent : null);
+  }, [accent, logging, onTint]);
+
   const [start, setStart] = useState<number | null>(initialStart ?? null);
   const [end, setEnd] = useState<number | null>(initialStart != null ? initialStart + 60 : null);
   // Where the task lands: null = the viewed day's default. Editing "when"
@@ -327,6 +419,37 @@ export function ComposerForm({
   const [whenOpen, setWhenOpen] = useState(false);
 
   const effDate = due ?? date;
+  // What the number in the box comes to, or null while it says nothing usable.
+  const value = tracker && measured ? readValue(tracker, title) : null;
+
+  /** When the thing happened, which is not the same as when it was typed.
+   *
+   * The when pill already answers this — it is the same pill a task uses, and
+   * it means the same thing. Today with no hour named is *now*, because the
+   * time beside an entry is half of what an entry is; any other day with no
+   * hour lands at noon rather than at a midnight it did not mean. */
+  const entryAt = (): Date => {
+    if (start == null && effDate === localDate()) return new Date();
+    const at = toLocalNoon(effDate);
+    if (start != null) at.setHours(Math.floor(start / 60), start % 60, 0, 0);
+    return at;
+  };
+
+  const record = () => {
+    // The corner disables itself, but the keyboard's Done key does not go
+    // through it — without this, "abt 7" on a duration files a zero.
+    if (!ready) return;
+    hapticSuccess();
+    const note = description.trim();
+    const body = measured ? note : [title.trim(), note].filter(Boolean).join("\n");
+    // The tag names the tracker, and naming it is what creates it. Untagged
+    // goes to Notes. If that round trip fails the drawer stays open with the
+    // words still in it, which is the only outcome worth having here.
+    resolveTracker(tag).then(
+      (id: string) => add.mutate({ tracker: id, body, value: value ?? undefined, at: entryAt() }, { onSuccess: onDone }),
+      () => {},
+    );
+  };
 
   const submit = () => {
     if (!title.trim()) return;
@@ -375,22 +498,46 @@ export function ComposerForm({
     }
   };
 
-  const ready = !!title.trim() && !create.isPending;
+  /** Is there enough here to file? A tick is the one thing that is ready with
+   * an empty box: `#vitamins` on a tick tracker is the whole record. */
+  const ready = logging
+    ? (measured ? value != null : tracker?.shape === "tick" || !!title.trim()) && !add.isPending
+    : !!title.trim() && !create.isPending;
   // Non-null exactly while a tag is being typed at the end of the title.
   const tagQuery = activeTagQuery(title);
 
   /** Every keystroke: a tag closed by a space leaves the text and becomes a
    * chip. The title in state is therefore always the plain sentence, which is
-   * what gets stored and what every other screen shows. */
+   * what gets stored and what every other screen shows.
+   *
+   * A log keeps one tag, not a set. A task can be about several things at once;
+   * a log is one thing that happened, filed under one heading, so a second tag
+   * takes the first one's place rather than piling up beside it. */
   const type_ = (next: string) => {
     const { title: plain, tags: found } = harvestTags(next);
     setTitle(plain);
-    if (found.length > 0) setTags((cur) => [...cur, ...found.filter((t) => !cur.includes(t))]);
+    if (found.length === 0) return;
+    if (logging) setTags([found[found.length - 1]]);
+    else setTags((cur) => [...cur, ...found.filter((t) => !cur.includes(t))]);
   };
 
-  // Non-empty title: the corner stops offering to listen and starts offering
-  // to file.
-  const typing = !!title.trim();
+  // Something in the box: the corner stops offering to listen and starts
+  // offering to file.
+  const typing = logging ? tracker?.shape === "tick" || !!title.trim() : !!title.trim();
+  const send = () => (logging ? record() : submit());
+
+  /** Switching what the drawer is filing. The words survive it — "ate eggs" is
+   * still "ate eggs" whether it is going on a list or into the record — but
+   * repeats do not: there is nothing recurring about something that already
+   * happened, and a log keeps only the last tag. */
+  const pickKind = (next: "todo" | "log") => {
+    hapticTap();
+    if (next === "log") {
+      setRepeat("none");
+      setTags((cur) => cur.slice(-1));
+    }
+    setKind(next);
+  };
 
   return (
     <View>
@@ -399,14 +546,20 @@ export function ComposerForm({
         autoFocus
         value={title}
         onChangeText={type_}
-        onSubmitEditing={submit}
-        placeholder="What needs doing?"
+        onSubmitEditing={send}
+        placeholder={
+          !logging ? "What needs doing?" : tracker ? askFor(tracker) : "What happened?"
+        }
         placeholderTextColor={alpha(colors.inkMuted, 0.5)}
+        // A scale and an amount are digits; a duration is "7h 20m", which needs
+        // the letters, and words are words.
+        keyboardType={digits ? "decimal-pad" : "default"}
         returnKeyType="done"
         style={[styles.titleInput, type.display, { color: colors.ink }]}
       />
-      {/* The tags this task has already collected, and — while one is being
-          typed — the list to finish it from. */}
+      {/* The tags it has already collected, and — while one is being typed —
+          the list to finish it from. On a log this is the one that says what
+          kind of thing it was. */}
       <TagChips
         tags={tags}
         onRemove={(t) => setTags((cur) => cur.filter((x) => x !== t))}
@@ -433,6 +586,37 @@ export function ComposerForm({
       {/* One square per thing a task can carry, each opening its own field
           below. A row meant to grow: the next one slots in beside the tag. */}
       <View style={styles.chips}>
+        {/* What this is, next to when it is. It is a switch, not a menu: with
+            two answers, a popup asks you to open a list, read two words and
+            aim at one of them to do what a tap already says. What *kind* of log
+            it is belongs to the tag beside it, which is where the same question
+            already gets answered for tasks. */}
+        <PressableScale
+          scaleTo={0.94}
+          accessibilityRole="switch"
+          accessibilityLabel={logging ? "Filing a log. Switch to a task" : "Filing a task. Switch to a log"}
+          accessibilityState={{ checked: logging }}
+          onPress={() => pickKind(logging ? "todo" : "log")}
+          style={[
+            styles.kindPill,
+            { borderColor: alpha(accent, 0.45), backgroundColor: alpha(accent, 0.12) },
+          ]}
+        >
+          <View style={styles.kindInner}>
+            <View style={[styles.kindDot, { backgroundColor: accent }]} />
+            {/* Keyed so the word crossfades on the switch rather than
+                swapping between frames. */}
+            <Animated.View key={logging ? "log" : "todo"} entering={appear()}>
+              <Text
+                numberOfLines={1}
+                style={[styles.kindText, type.sansMedium, { color: colors.ink }]}
+              >
+                {logging ? "Log" : "To do"}
+              </Text>
+            </Animated.View>
+            <ArrowLeftRight size={11} color={alpha(colors.inkMuted, 0.7)} />
+          </View>
+        </PressableScale>
         {/* The "when" key is the wide one — it reads the current plan back to
             you, so it needs words where the others need only an icon. */}
         <PressableScale
@@ -449,7 +633,7 @@ export function ComposerForm({
             numberOfLines={1}
             style={[styles.whenText, type.sansMedium, { color: colors.ink }]}
           >
-            {whenSummary(effDate, start, repeat)}
+            {whenSummary(effDate, start, logging ? "none" : repeat)}
           </Text>
           <ChevronRight size={13} color={alpha(colors.inkMuted, 0.6)} />
         </PressableScale>
@@ -458,7 +642,7 @@ export function ComposerForm({
             and the title lights it up wherever the task is shown. */}
         <IconChip
           Icon={Tag}
-          label="Add a tag"
+          label={logging ? "What kind" : "Add a tag"}
           tint={colors.sky}
           active={tags.length > 0}
           onPress={() => {
@@ -478,12 +662,12 @@ export function ComposerForm({
         <Animated.View key={typing ? "send" : "talk"} entering={appear()}>
           <PressableScale
             scaleTo={0.88}
-            accessibilityLabel={typing ? "Add task" : "Say it instead"}
+            accessibilityLabel={typing ? (logging ? "Log it" : "Add task") : "Say it instead"}
             accessibilityState={{ disabled: typing && !ready }}
             disabled={typing && !ready}
             onPress={() => {
               if (typing) {
-                submit();
+                send();
                 return;
               }
               hapticTap();
@@ -492,7 +676,7 @@ export function ComposerForm({
             }}
             style={[
               styles.iconChip,
-              { backgroundColor: colors.zest, borderColor: colors.zest },
+              { backgroundColor: accent, borderColor: accent },
               typing && !ready && styles.addDiscOff,
             ]}
           >
@@ -518,6 +702,9 @@ export function ComposerForm({
         <WhenSheet
           date={date}
           initial={{ due, start, end, repeat }}
+          // Nothing recurs about something that already happened, so the
+          // sheet doesn't offer it rather than offering it and ignoring it.
+          repeatable={!logging}
           onClose={() => setWhenOpen(false)}
           onConfirm={(next) => {
             setDue(next.due);
@@ -609,11 +796,14 @@ interface WhenValue {
 function WhenSheet({
   date,
   initial,
+  repeatable = true,
   onConfirm,
   onClose,
 }: {
   date: string;
   initial: WhenValue;
+  /** Whether the thing being scheduled can recur at all. */
+  repeatable?: boolean;
   onConfirm: (v: WhenValue) => void;
   onClose: () => void;
 }) {
@@ -871,7 +1061,9 @@ function WhenSheet({
           {/* One settled row per remaining decision, its answer on the right.
               Repeat is the only one so far: a reminder row would need
               notifications, which this app doesn't have, and a row that does
-              nothing is worse than no row. */}
+              nothing is worse than no row. Which is also why it goes entirely
+              when the thing being dated cannot recur. */}
+          {repeatable && (
           <View style={[styles.rowList, { borderTopColor: alpha(colors.rule, 0.6) }]}>
             <PressableScale
               scaleTo={0.99}
@@ -930,6 +1122,7 @@ function WhenSheet({
               </Animated.View>
             )}
           </View>
+          )}
         </Animated.View>
       </View>
     </Modal>
@@ -1032,6 +1225,24 @@ const styles = StyleSheet.create({
   /** Shoves the send button to the far end of the icon row. */
   chipSpacer: { flex: 1 },
   addDiscOff: { opacity: 0.35 },
+  // Full-bleed, and square-cornered everywhere but the top: the sheet's own
+  // rounded lip is the only edge that shows.
+  tintWash: {
+    ...StyleSheet.absoluteFillObject,
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+  },
+  kindPill: {
+    flexShrink: 0,
+    height: 34,
+    justifyContent: "center",
+    borderWidth: 1,
+    borderRadius: 999,
+    paddingHorizontal: 11,
+  },
+  kindInner: { flexDirection: "row", alignItems: "center", gap: 6 },
+  kindDot: { height: 7, width: 7, borderRadius: 999 },
+  kindText: { fontSize: 13 },
   titleInput: {
     marginTop: 2,
     fontSize: 20,

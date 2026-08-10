@@ -35,7 +35,8 @@ export function TrackersPanel() {
     <Panel style={styles.panel}>
       <Eyebrow>what you track</Eyebrow>
       <Text style={[styles.hint, type.sans, { color: colors.inkMuted }]}>
-        Each one gets its own colour, its own way of being logged, and a place on your day.
+        These appear on their own: tag a log and whatever you tagged it starts being tracked. Come
+        here to give one a shape — a number, a scale, a length — or to stop keeping it.
       </Text>
 
       <View style={styles.list}>

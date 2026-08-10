@@ -15,6 +15,8 @@
  * this tags "#travail" and "#日本語" just as well.
  */
 
+import { CARD_HUES, type CardHue } from "@/features/workouts/types";
+
 /** Punctuation that ends a sentence rather than belonging to the tag, so
  * "call mum #family." tags "family". */
 const TRAILING = /[.,;:!?)\]}'"]+$/;
@@ -50,6 +52,34 @@ const RESERVED_SET = new Set(RESERVED_TAGS.map((r) => r.tag));
 
 export function isReserved(tag: string): boolean {
   return RESERVED_SET.has(tag);
+}
+
+/** The three the app itself means something by keep the hue that thing already
+ * wears everywhere else, so a `#gym` task and a training slot agree. */
+const RESERVED_HUE: Record<string, CardHue> = {
+  gym: "zest",
+  food: "honey",
+  learning: "sky",
+};
+
+/** A tag's colour, and it is the *same colour every time*.
+ *
+ * Tags were all sky, which meant a day of them was one blue smear and the page
+ * carried no information you could read without reading. A hue per tag lets
+ * the day have a shape you take in before a single word — the same trick the
+ * Stamps grid runs on trackers.
+ *
+ * Derived rather than stored: a tag has no record behind it (it exists only
+ * while a task carries it), so its colour has to come from its name or it
+ * would change every time the last task using it was deleted. A cheap string
+ * hash over the palette's five card hues — stable across devices, across
+ * reinstalls, and it costs nothing to look up. */
+export function hueOfTag(tag: string): CardHue {
+  const reserved = RESERVED_HUE[tag];
+  if (reserved) return reserved;
+  let hash = 0;
+  for (let i = 0; i < tag.length; i++) hash = (hash * 31 + tag.charCodeAt(i)) % 100_000;
+  return CARD_HUES[hash % CARD_HUES.length];
 }
 
 /** The tag being typed right now, or null.

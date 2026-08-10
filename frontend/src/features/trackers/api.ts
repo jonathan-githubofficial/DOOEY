@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useEffect } from "react";
 import type { RecordModel } from "pocketbase";
+import { hueOfTag } from "@/features/tasks/tags";
 import { isCardHue, type CardHue } from "@/features/workouts/types";
 import { addDays } from "@/lib/dates";
 import { pb } from "@/lib/pb";
@@ -221,19 +221,42 @@ export function useDeleteEntry() {
   });
 }
 
-/** The one tracker a new account starts with, so the page has something to be
- * on the first morning. Everything else is theirs to add. */
-const FIRST: NewTracker = { name: "Food", shape: "text", hue: "honey" };
+/** Where an untagged log goes. Somewhere has to hold "I ate eggs" when you
+ * didn't say what kind of thing it was. */
+const NOTES_SLUG = "notes";
 
-/** Lays down that first tracker the once. Mounted where trackers are shown,
- * the same way Projects materializes a pushed program: an empty list is only
- * empty after it has actually loaded, so this waits for the query. */
-export function useSeedTrackers(trackers: Tracker[] | undefined) {
+/** The tracker a tag names, brought into being by being used.
+ *
+ * This is what makes a tag *the type of a log*: `#sleep` files under Sleep, and
+ * if you have never logged sleep before, Sleep starts existing. Nothing is
+ * seeded up front and no menu of aspects has to be maintained — the record
+ * grows the shape of what you actually write down, which is the same bargain
+ * tags already offer tasks.
+ *
+ * A tag naming a tracker you archived un-archives it. Archiving is "stop
+ * showing me this", and typing its name again is the plainest possible way of
+ * taking that back.
+ */
+export function useResolveTracker() {
+  const qc = useQueryClient();
   const create = useCreateTracker();
-  const seeded = trackers !== undefined && trackers.length === 0;
-  const idle = create.isIdle;
-  useEffect(() => {
-    if (seeded && idle) create.mutate(FIRST);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [seeded, idle]);
+  const patch = usePatchTracker();
+
+  return async (tag: string): Promise<string> => {
+    const slug = tag || NOTES_SLUG;
+    const all = qc.getQueryData<Tracker[]>(trackerKeys.all) ?? [];
+    const found = all.find((t) => t.slug === slug);
+    if (found) {
+      if (found.archived) await patch.mutateAsync({ id: found.id, patch: { archived: false } });
+      return found.id;
+    }
+    const made = await create.mutateAsync({
+      name: slug === NOTES_SLUG ? "Notes" : slug[0].toUpperCase() + slug.slice(1),
+      // A tag says what kind of thing it is, not how it is measured. Give it a
+      // shape on the You page and the drawer picks up the keypad next time.
+      shape: "text",
+      hue: hueOfTag(slug),
+    });
+    return made.id;
+  };
 }

@@ -1,14 +1,13 @@
 import { useRouter } from "expo-router";
-import { ChevronDown, Minus, Plus, Repeat } from "lucide-react-native";
-import { useRef, useState } from "react";
-import { Platform, ScrollView, StyleSheet, Text, View } from "react-native";
+import { ChevronDown, Minus, Plus } from "lucide-react-native";
+import { useCallback, useState } from "react";
+import { Platform, StyleSheet, Text, View } from "react-native";
 import { Gesture, GestureDetector } from "react-native-gesture-handler";
-import Animated, { FadeIn } from "react-native-reanimated";
+import Animated, { FadeIn, runOnJS, useSharedValue } from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Grain } from "@/components/grain";
 import { MenuButton } from "@/components/menu-button";
 import { PressableScale } from "@/components/pressable-scale";
-import { Panel } from "@/components/surface";
 import { useLearningPrograms, useMaterializePrograms } from "@/features/learning/api";
 import { useShadow } from "@/features/style/store";
 import { usePrefetchAdjacentDays } from "@/features/tasks/api";
@@ -17,10 +16,8 @@ import { MonthView } from "@/features/tasks/components/MonthView";
 import { PlannerBook } from "@/features/tasks/components/PlannerBook";
 import { ComposerSheet, TaskComposer } from "@/features/tasks/components/TaskComposer";
 import { TimeboxSheet } from "@/features/tasks/components/TimeboxSheet";
-import { WeekGrid } from "@/features/tasks/components/WeekGrid";
 import { WeekStrip } from "@/features/tasks/components/WeekStrip";
-import { PX_DEFAULT, PX_MAX, PX_MIN, clampPx } from "@/features/tasks/timeGrid";
-import { useSeedTrackers, useTrackers } from "@/features/trackers/api";
+import { PX_DEFAULT, PX_MAX, PX_MIN, clampPx, snapPx } from "@/features/tasks/timeGrid";
 import { localDate } from "@/lib/dates";
 import { hapticTap } from "@/lib/haptics";
 import { DOCK_GAP, useDockTop, usePagePadding } from "@/lib/shell";
@@ -28,39 +25,48 @@ import { alpha } from "@/lib/theme";
 import type { Menu } from "@/stores/sheet";
 import { usePalette, useType } from "@/stores/theme";
 import { useLiveBarInset } from "@/features/workouts/live-bar";
-import { settle } from "@/lib/motion";
+import { dur } from "@/lib/motion";
 
 
 // ── TUNING KNOBS ────────────────────────────────────────────────────────────
 // The gap (px) between the date shelf and the top of the notebook. SMALLER =
 // notebook sits HIGHER on the page. This is the one to nudge if the notebook
 // feels too low.
-const PAGE_TOP_GAP = 24;
-// How far the notebook's bottom edge sits ABOVE the tab bar / dock island
-// (safe-area inset is added on top of this). Bigger = higher notebook, more
-// room for the companion peeking over the page edge.
+const PAGE_TOP_GAP = 12;
+// How far the notebook's box is held off the tab bar / dock island (the
+// safe-area inset is added on top of this). It sets the frame, not the page:
+// the page's own height comes from the scale below.
 const PAGE_BOTTOM_CLEARANCE = Platform.OS === "web" ? 116 : 108;
 // How much of the remaining planner area the notebook page fills (1 = all of
 // it). Shrink it and the page gets shorter, leaving air beneath.
-const PAGE_HEIGHT_SCALE = 0.90;
+//
+// This and PAGE_TOP_GAP move together: pixels taken off the gap are handed to
+// the page, so lifting the notebook lengthens it instead of sliding it up and
+// leaving the same amount of dead air at the bottom.
+const PAGE_HEIGHT_SCALE = 0.925;
 
-/** Three ways to look at your time. The month is not one of them — it unfolds
- * out of the date shelf. */
-type Mode = "list" | "timeline" | "week";
+/** Two ways to look at a day: as a list, or against the clock. The month is
+ * not one of them — it unfolds out of the date shelf.
+ *
+ * There was a Week here too. It was a third grid to maintain, it made the
+ * shelf print its seven days twice, and it answered a question the month
+ * already answers better: nobody plans a week by reading seven columns of
+ * blocks on a phone. */
+type Mode = "list" | "timeline";
 
 const MODES: { key: Mode; label: string; symbol: string }[] = [
   { key: "list", label: "List", symbol: "list.bullet" },
   { key: "timeline", label: "Timeline", symbol: "clock" },
-  { key: "week", label: "Week", symbol: "calendar" },
 ];
 
 /** Today: the day, and the one place things go in.
  *
- * It is also the calendar — three ways to look at your time, the date shelf
- * paging weeks and unfolding into the month — but it opens on the day, because
- * a space called Today that greets you with a week grid is arguing with its own
- * name. The stamp floating above the tab bar is how anything gets said; the
- * ritual slots laid across the day are how the day asks. */
+ * It is also the calendar — the day drawn two ways, the shelf paging weeks and
+ * unfolding into the month — but it opens on the day, because a space called
+ * Today that greets you with a grid of other days is arguing with its own name.
+ * The stamp floating above the tab bar is how anything gets in: a task you owe
+ * the day on one side of the drawer, a record of something the day already has
+ * on the other. */
 export default function Today() {
   const colors = usePalette();
   const insets = useSafeAreaInsets();
@@ -76,10 +82,6 @@ export default function Today() {
   const [month, setMonth] = useState(() => localDate().slice(0, 7));
   // The day, not the week: this space is called Today.
   const [mode, setMode] = useState<Mode>("list");
-  // Seeded here rather than where trackers are managed: an account that never
-  // opens Account still needs something to log against on its first morning.
-  const { data: trackers } = useTrackers();
-  useSeedTrackers(trackers);
   // A programme pushed from a Claude Code session arrives as a record with no
   // tasks behind it. This is where its sessions become real work — mounted on
   // Today now that Projects is not a space, because the sessions *are* tasks
@@ -101,82 +103,99 @@ export default function Today() {
     setSelected(date);
   };
 
-  const openSlot = (date: string, start: number) =>
-    Platform.OS === "web"
-      ? setSlot({ date, start })
-      : router.push({ pathname: "/compose", params: { date, start: String(start) } });
+  const openSlot = useCallback(
+    (date: string, start: number) =>
+      Platform.OS === "web"
+        ? setSlot({ date, start })
+        : router.push({ pathname: "/compose", params: { date, start: String(start) } }),
+    [router],
+  );
 
-  // Two fingers zoom the time axis, exactly like the legacy web grid.
-  const pinchBase = useRef(PX_DEFAULT);
+  // Two fingers zoom the time axis.
+  //
+  // The gesture stays on the UI thread and only tells React when the zoom
+  // crosses a stop. It used to run `.runOnJS(true)` and `setPx` on every
+  // update: a full re-layout of every tick, block and label per frame, with
+  // the next gesture event queued behind it. That is what "steppy pinch"
+  // actually was — not the animation, the render.
+  const pinchBase = useSharedValue(PX_DEFAULT);
+  const pxLive = useSharedValue(PX_DEFAULT);
+  const commitPx = useCallback((next: number) => setPx(next), []);
   const pinch = Gesture.Pinch()
     .enabled(mode !== "list")
-    .runOnJS(true)
     .onStart(() => {
-      pinchBase.current = px;
+      pinchBase.value = pxLive.value;
     })
-    .onUpdate((e) => setPx(clampPx(pinchBase.current * e.scale)));
+    .onUpdate((e) => {
+      const next = snapPx(clampPx(pinchBase.value * e.scale));
+      if (next === pxLive.value) return;
+      pxLive.value = next;
+      runOnJS(commitPx)(next);
+    });
 
   // Room for the binder above the page and the pad edges below it, scaled by
   // the height knob.
   const pageH = Math.max(240, Math.round((vh - 34) * PAGE_HEIGHT_SCALE));
 
+  // Stable across day changes, on purpose: the book memoises its pages on this
+  // function's identity, so an inline arrow here would rebuild BOTH days on
+  // every flip — the page being animated included. That inline arrow is what
+  // made the flip stutter through two rounds of animation "fixes".
+  const renderPage = useCallback(
+    (d: string) =>
+      mode === "list" ? (
+        <AgendaSheet date={d} height={pageH} />
+      ) : (
+        <TimeboxSheet date={d} pxPerMin={px} height={pageH} onAddSlot={openSlot} />
+      ),
+    [mode, px, pageH, openSlot],
+  );
+
   return (
     <View style={[styles.screen, { backgroundColor: colors.paper, paddingTop: page.paddingTop }]}>
       <Grain />
-      <Animated.View layout={settle()} style={styles.strip}>
-        <Panel style={styles.stripPanel}>
-          <Animated.View key={shelf} entering={FadeIn.duration(180)}>
-            {shelf === "week" ? (
-              <WeekStrip
-                selected={selected}
-                onSelect={select}
-                // The week grid already heads itself with the seven days.
-                compact={mode === "week"}
-                leading={
-                  <View style={styles.shelfKeys}>
-                    <ViewPicker mode={mode} onChange={setMode} />
-                    {/* The week's standing shape, edited from the page that
-                        draws it. It used to live under Account, two drill-ins
-                        deep, beside the gym's pounds-or-kilos. */}
-                    <PressableScale
-                      scaleTo={0.88}
-                      accessibilityLabel="Rituals"
-                      onPress={() => {
-                        hapticTap();
-                        router.push("/rituals");
-                      }}
-                      style={styles.shelfKey}
-                    >
-                      <Repeat size={15} color={colors.inkMuted} />
-                    </PressableScale>
-                  </View>
-                }
-                onToggleView={() => {
-                  setMonth(selected.slice(0, 7));
-                  setShelf("month");
-                }}
-              />
-            ) : (
-              <MonthView
-                month={month}
-                onMonth={setMonth}
-                selected={selected}
-                onSelect={(d) => {
-                  select(d);
-                  setShelf("week");
-                }}
-                onToggleView={() => setShelf("week")}
-              />
-            )}
-          </Animated.View>
-        </Panel>
-      </Animated.View>
+      {/* The week, then the notebook, and only the notebook is a card.
+          There was a day plate above this for a while — the weekday large, the
+          date, a count of what was left. Every one of those facts is already on
+          the page: the strip says which day, the list says what is on it. It
+          bought a hero at the cost of the vertical space the day itself needed.
+
+          Nothing here carries `layout` either. A layout transition tweens a
+          container's box while its children run their own entrances inside it
+          (the page flip, the pad resize, the shelf's fade): animations on the
+          same pixels, none aware of the others, and the stutter is them
+          disagreeing about where the box is this frame. */}
+      <View style={styles.strip}>
+        <Animated.View key={shelf} entering={FadeIn.duration(dur.quick)}>
+          {shelf === "week" ? (
+            <WeekStrip
+              selected={selected}
+              onSelect={select}
+              leading={<ViewPicker mode={mode} onChange={setMode} />}
+              onToggleView={() => {
+                setMonth(selected.slice(0, 7));
+                setShelf("month");
+              }}
+            />
+          ) : (
+            <MonthView
+              month={month}
+              onMonth={setMonth}
+              selected={selected}
+              onSelect={(d) => {
+                select(d);
+                setShelf("week");
+              }}
+              onToggleView={() => setShelf("week")}
+            />
+          )}
+        </Animated.View>
+      </View>
 
       {/* Every view lives in a pinned frame: the shelf and the page stay put,
           only the page's own content scrolls. */}
       <GestureDetector gesture={pinch}>
         <Animated.View
-          layout={settle()}
           collapsable={false}
           style={[
             styles.body,
@@ -187,38 +206,8 @@ export default function Today() {
           ]}
           onLayout={(e) => setVh(e.nativeEvent.layout.height)}
         >
-          {vh > 0 && mode !== "week" && (
-            <PlannerBook
-              page={selected}
-              direction={direction}
-              renderPage={(d) =>
-                mode === "list" ? (
-                  <AgendaSheet date={d} height={pageH} />
-                ) : (
-                  <TimeboxSheet date={d} pxPerMin={px} height={pageH} onAddSlot={openSlot} />
-                )
-              }
-            />
-          )}
-          {vh > 0 && mode === "week" && (
-            <Animated.View key={selected} entering={FadeIn.duration(200)}>
-              <Panel style={[styles.gridPanel, { height: Math.round(vh * PAGE_HEIGHT_SCALE) }]}>
-                <ScrollView
-                  nestedScrollEnabled
-                  showsVerticalScrollIndicator={false}
-                  contentContainerStyle={styles.gridScroll}
-                >
-                  <WeekGrid
-                    anchor={selected}
-                    pxPerMin={px}
-                    onPickDay={(d) => {
-                      select(d);
-                      setMode("timeline");
-                    }}
-                  />
-                </ScrollView>
-              </Panel>
-            </Animated.View>
+          {vh > 0 && (
+            <PlannerBook page={selected} direction={direction} renderPage={renderPage} />
           )}
         </Animated.View>
       </GestureDetector>
@@ -314,12 +303,8 @@ const styles = StyleSheet.create({
   },
   strip: {
     paddingHorizontal: 16,
+    paddingTop: 6,
   },
-  stripPanel: {
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-  },
-  shelfKeys: { flexDirection: "row", alignItems: "center", gap: 4 },
   shelfKey: { height: 30, width: 30, alignItems: "center", justifyContent: "center" },
   viewKey: { height: 30, borderRadius: 999, justifyContent: "center", paddingHorizontal: 11 },
   viewKeyInner: { flexDirection: "row", alignItems: "center", gap: 4 },
@@ -327,12 +312,6 @@ const styles = StyleSheet.create({
   body: {
     flex: 1,
     paddingHorizontal: 16,
-  },
-  gridScroll: {
-    paddingBottom: 8,
-  },
-  gridPanel: {
-    padding: 12,
   },
   zoom: {
     position: "absolute",

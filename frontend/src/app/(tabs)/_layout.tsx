@@ -1,16 +1,15 @@
 import { Redirect, Tabs } from "expo-router";
-import { Icon, Label, NativeTabs, VectorIcon } from "expo-router/unstable-native-tabs";
+import { Icon, Label, NativeTabs } from "expo-router/unstable-native-tabs";
 import { useEffect, useRef, useState } from "react";
 import { PixelRatio, Platform, StyleSheet, View, type ImageSourcePropType } from "react-native";
 import Svg, { Path } from "react-native-svg";
 import ViewShot from "react-native-view-shot";
-import { MaterialIcons } from "@expo/vector-icons";
 import { Dock } from "@/components/Dock";
 import { useStyleStore } from "@/features/style/store";
 import { fontStyle } from "@/features/style/tokens";
 import { strokePath, type Stroke } from "@/lib/doodle";
 import { SPACES } from "@/lib/spaces";
-import { alpha, type Palette } from "@/lib/theme";
+import { type Palette } from "@/lib/theme";
 import { useAuthStore } from "@/stores/auth";
 import { usePalette } from "@/stores/theme";
 
@@ -18,9 +17,15 @@ import { usePalette } from "@/stores/theme";
 const LABEL_FONT = fontStyle("outfit", "500").fontFamily;
 
 /** Every space lives behind this guard — /login is the only public route.
- * Native gets the platform's own tab bar (system materials, fonts and
- * keyboard behaviour); the web build keeps the DOOEY island, which is the
- * dock the web app used to have.
+ *
+ * **iOS gets the platform's own bar; everyone else gets the island.** A system
+ * tab bar is worth having when the system gives you something: on iOS it is
+ * liquid glass, the platform's own materials and keyboard behaviour, and it
+ * looks like the phone. Material's bar gives a stark surface, a loud
+ * secondary-container pill and a grey ripple, and no amount of theming those
+ * three made it look like this app — it looked like a themed Android bar. So
+ * Android runs the same floating island the web does, which is DOOEY's own
+ * shape and was already written.
  *
  * **The bar is the space list, and nothing else.** It used to be arrangeable,
  * which meant a space could be hidden, which meant every space still needed a
@@ -38,7 +43,7 @@ export default function TabsLayout() {
 
   if (!isAuthenticated) return <Redirect href="/login" />;
 
-  if (Platform.OS !== "web") {
+  if (Platform.OS === "ios") {
     // A native tab bar wants bitmaps, not React views — so each doodle is
     // rasterized off-screen in its real ink colors and handed to the bar
     // as-is (the patched Icon keeps it from being tinted as a template).
@@ -59,15 +64,7 @@ export default function TabsLayout() {
           tintColor={colors.zest}
           labelStyle={{ fontFamily: LABEL_FONT, fontSize: 11 }}
           iconColor={{ default: colors.inkMuted, selected: colors.zest }}
-          // Android's Material chrome is what looked "off": a stark surface, a
-          // loud secondary-container pill, a grey ripple. Theme all three to
-          // DOOEY — a paper-surface bar, a soft zest indicator + ripple. iOS
-          // keeps its native translucency instead of a flat fill.
-          indicatorColor={alpha(colors.zest, 0.16)}
-          rippleColor={alpha(colors.zest, 0.12)}
-          {...(Platform.OS === "android"
-            ? { backgroundColor: colors.surface }
-            : { blurEffect: "systemChromeMaterial" as const })}
+          blurEffect="systemChromeMaterial"
         >
           {SPACES.map((space) => {
             const uri = doodles[space.route] ? icons[space.route] : undefined;
@@ -80,10 +77,8 @@ export default function TabsLayout() {
                   <Icon
                     src={{ uri, scale: ICON_SCALE, __keepColor: true } as ImageSourcePropType}
                   />
-                ) : Platform.OS === "ios" ? (
-                  <Icon sf={space.sf} />
                 ) : (
-                  <Icon src={<VectorIcon family={MaterialIcons} name={space.md} />} />
+                  <Icon sf={space.sf} />
                 )}
                 <Label>{space.label}</Label>
               </NativeTabs.Trigger>

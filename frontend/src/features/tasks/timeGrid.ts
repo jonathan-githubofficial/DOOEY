@@ -13,6 +13,30 @@ export const PX_MAX = 2.8;
 export const PX_DEFAULT = 1;
 export const clampPx = (px: number) => Math.min(PX_MAX, Math.max(PX_MIN, px));
 
+/** Zoom stops, geometric so each feels like the same step as the last.
+ *
+ * The grid is laid out in React — every tick, block and label is positioned
+ * from `pxPerMin` in plain JS — so a *continuous* pinch means a full re-render
+ * per frame, and the gesture ends up queued behind its own consequences. Eight
+ * stops means a pinch commits a handful of times instead of sixty a second,
+ * and each one is a clean relayout rather than one of sixty fighting.
+ *
+ * It is a real trade: the zoom steps rather than glides. Stepping crisply beats
+ * gliding badly, and the stops are close enough that the hand reads it as
+ * resistance rather than as stairs. */
+export const PX_STOPS = [0.5, 0.65, 0.85, 1, 1.3, 1.7, 2.2, 2.8];
+
+/** The stop nearest a raw pinch value. A worklet: the gesture that calls it
+ * runs on the UI thread, and the whole point is not to hop off it. */
+export function snapPx(px: number): number {
+  "worklet";
+  let best = PX_STOPS[0];
+  for (let i = 1; i < PX_STOPS.length; i++) {
+    if (Math.abs(PX_STOPS[i] - px) < Math.abs(best - px)) best = PX_STOPS[i];
+  }
+  return best;
+}
+
 export const clamp = (v: number, min: number, max: number) => Math.min(max, Math.max(min, v));
 export const snap = (min: number) => Math.round(min / SNAP) * SNAP;
 

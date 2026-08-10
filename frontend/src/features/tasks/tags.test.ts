@@ -1,7 +1,9 @@
+import { CARD_HUES } from "@/features/workouts/types";
 import {
   activeTagQuery,
   completeTag,
   harvestTags,
+  hueOfTag,
   openTag,
   suggestTags,
 } from "./tags";
@@ -78,5 +80,33 @@ describe("harvestTags", () => {
   });
   it("ignores a bare hash", () => {
     expect(harvestTags("Read # this ")).toEqual({ title: "Read # this ", tags: [] });
+  });
+});
+
+describe("hueOfTag", () => {
+  it("gives the reserved tags the hue their space already wears", () => {
+    expect(hueOfTag("gym")).toBe("zest");
+    expect(hueOfTag("food")).toBe("honey");
+    expect(hueOfTag("learning")).toBe("sky");
+  });
+
+  it("is stable: the same tag is the same colour every time", () => {
+    expect(hueOfTag("errands")).toBe(hueOfTag("errands"));
+    // Across a rebuild too — a tag has no record behind it, so a colour that
+    // moved would repaint the planner every time the last task using it went.
+    expect(hueOfTag("errands")).toBe(hueOfTag("errand" + "s"));
+  });
+
+  it("only ever answers with a card hue", () => {
+    for (const tag of ["errands", "family", "deep-work", "日本語", "", "x"]) {
+      expect(CARD_HUES).toContain(hueOfTag(tag));
+    }
+  });
+
+  it("spreads different tags across more than one hue", () => {
+    const spread = new Set(
+      ["errands", "family", "admin", "reading", "money", "house"].map(hueOfTag),
+    );
+    expect(spread.size).toBeGreaterThan(1);
   });
 });

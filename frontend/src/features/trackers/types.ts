@@ -79,6 +79,38 @@ export function defaultsFor(shape: Shape): Pick<Tracker, "unit" | "min" | "max">
   return { unit: "", min: 0, max: 0 };
 }
 
+/** The way people say a length of time, back into minutes. `null` when it says
+ * nothing usable, which is how the composer knows there is nothing to file.
+ *
+ * The drawer types a duration into the same box every other shape uses, so
+ * there is no stepper to constrain what arrives — "7h 20m", "7h", "45m",
+ * "1:20" and a bare "90" all have to land on the same number. Anything else is
+ * refused rather than guessed at: a silent 0 would file an empty night's sleep.
+ */
+export function parseDuration(input: string): number | null {
+  const text = input.trim().toLowerCase();
+  if (!text) return null;
+
+  const clock = /^(\d+):([0-5]\d)$/.exec(text);
+  if (clock) return positive(Number(clock[1]) * 60 + Number(clock[2]));
+
+  // The `m` is optional, which is what makes "7h20" and a bare "90" work:
+  // once the hours are named the rest can only be minutes, and minutes are the
+  // unit the value is stored in anyway.
+  const spoken =
+    /^(?:(\d+(?:[.,]\d+)?)\s*h(?:rs?|ours?)?)?\s*(?:(\d+(?:[.,]\d+)?)\s*(?:m(?:ins?|inutes?)?)?)?$/.exec(
+      text,
+    );
+  if (!spoken || (!spoken[1] && !spoken[2])) return null;
+  return positive(decimal(spoken[1]) * 60 + decimal(spoken[2]));
+}
+
+const decimal = (part: string | undefined): number =>
+  part ? parseFloat(part.replace(",", ".")) : 0;
+
+const positive = (minutes: number): number | null =>
+  minutes > 0 ? Math.round(minutes) : null;
+
 /** Minutes as the way people say them: "7h 20m", "45m", "2h". */
 export function formatDuration(minutes: number): string {
   const h = Math.floor(minutes / 60);

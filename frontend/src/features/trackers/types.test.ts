@@ -1,4 +1,11 @@
-import { defaultsFor, formatDuration, formatValue, slugify, type Tracker } from "./types";
+import {
+  defaultsFor,
+  formatDuration,
+  formatValue,
+  parseDuration,
+  slugify,
+  type Tracker,
+} from "./types";
 
 const tracker = (over: Partial<Tracker>): Tracker => ({
   id: "t1",
@@ -29,6 +36,41 @@ describe("slugify", () => {
   it("tails a collision rather than colliding, because the index is unique", () => {
     expect(slugify("Water", ["water"])).toBe("water-2");
     expect(slugify("Water", ["water", "water-2"])).toBe("water-3");
+  });
+});
+
+describe("parseDuration", () => {
+  it("takes a length the way it gets said", () => {
+    expect(parseDuration("7h 20m")).toBe(440);
+    expect(parseDuration("7h20")).toBe(440);
+    expect(parseDuration("7 hours 20 mins")).toBe(440);
+    expect(parseDuration("7h")).toBe(420);
+    expect(parseDuration("45m")).toBe(45);
+    expect(parseDuration("1:20")).toBe(80);
+  });
+
+  it("reads a bare number as minutes, the unit it is stored in", () => {
+    expect(parseDuration("90")).toBe(90);
+    expect(parseDuration(" 90 ")).toBe(90);
+  });
+
+  it("takes halves, comma or point", () => {
+    expect(parseDuration("7.5h")).toBe(450);
+    expect(parseDuration("7,5h")).toBe(450);
+  });
+
+  it("refuses what it cannot read rather than filing a zero", () => {
+    expect(parseDuration("")).toBeNull();
+    expect(parseDuration("slept well")).toBeNull();
+    expect(parseDuration("0")).toBeNull();
+    expect(parseDuration("0h 0m")).toBeNull();
+    expect(parseDuration("1:75")).toBeNull();
+  });
+
+  it("round-trips what formatDuration prints", () => {
+    for (const minutes of [15, 45, 60, 90, 440]) {
+      expect(parseDuration(formatDuration(minutes))).toBe(minutes);
+    }
   });
 });
 

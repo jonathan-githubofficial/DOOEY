@@ -16,11 +16,9 @@ import {
 } from "react-native";
 import Animated, { FadeIn, FadeOut } from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { DoodleFlipbook } from "@/components/DoodleFlipbook";
 import { Grain } from "@/components/grain";
 import { StampButton } from "@/components/surface";
 import { signIn, signUp } from "@/features/auth/api";
-import { useStyleStore } from "@/features/style/store";
 import { fontStyle } from "@/features/style/tokens";
 import { hapticSuccess, hapticTap, hapticWarn } from "@/lib/haptics";
 import { alpha, type Palette } from "@/lib/theme";
@@ -83,9 +81,6 @@ export default function Login() {
   const [error, setError] = useState<string | null>(null);
 
   const strength = useMemo(() => strengthOf(password), [password]);
-  // Doodled in the wordmark studio; persisted locally, so it greets pre-auth.
-  const logo = useStyleStore((s) => s.logoDoodle);
-  const logoInterval = useStyleStore((s) => s.logoInterval);
 
   const { width: screenW, height: screenH } = useWindowDimensions();
   const player = useVideoPlayer(require("../../assets/video/peas.mp4"), (p) => {
@@ -192,23 +187,12 @@ export default function Login() {
           <View style={[styles.card, { backgroundColor: colors.surface, shadowColor: "#282018" }]}>
             <Grain radius={24} tone="light" />
 
-            {/* The wordmark, with the studio-doodled animation playing on
-                and around it. Same square geometry as the drawing pad, so
-                every stroke lands exactly where it was drawn. */}
-            {logo.length > 0 ? (
-              <View style={styles.stage}>
-                <Text style={[styles.wordmark, fontStyle("fraunces", "900"), { color: colors.ink }]}>
-                  DOOEY<Text style={{ color: colors.zest }}>.</Text>
-                </Text>
-                <View pointerEvents="none" style={StyleSheet.absoluteFill}>
-                  <DoodleFlipbook frames={logo} interval={logoInterval} />
-                </View>
-              </View>
-            ) : (
-              <Text style={[styles.wordmark, fontStyle("fraunces", "900"), { color: colors.ink }]}>
-                DOOEY<Text style={{ color: colors.zest }}>.</Text>
-              </Text>
-            )}
+            {/* The wordmark, plain. A studio for doodling an animation over it
+                lived on Account for a while; drawing a flipbook of your own
+                logo is a thing you do once and never look at again. */}
+            <Text style={[styles.wordmark, fontStyle("fraunces", "900"), { color: colors.ink }]}>
+              DOOEY<Text style={{ color: colors.zest }}>.</Text>
+            </Text>
             <Text style={[styles.tagline, type.sans, { color: colors.inkMuted }]}>
               make it yours
             </Text>
