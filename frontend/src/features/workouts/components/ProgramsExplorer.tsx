@@ -14,7 +14,7 @@ import { hapticTap } from "@/lib/haptics";
 import { alpha } from "@/lib/theme";
 import { usePalette, useType } from "@/stores/theme";
 import { useCardInk, type CardInk } from "../hues";
-import { exerciseGif, libraryExercise } from "../library";
+import { exerciseGif, GIF_PAPER, libraryExercise } from "../library";
 import { PROGRAMS, type CatalogProgram, type ProgramRoutine } from "../programs";
 import { CARD_HUES, type CardHue } from "../types";
 import { CardShell } from "./card-parts";
@@ -392,7 +392,7 @@ function PreviewThumb({ libId }: { libId?: string }) {
     <Image
       source={{ uri: exerciseGif(ex, 180) }}
       resizeMode="cover"
-      style={[styles.previewThumb, { borderColor: alpha(colors.rule, 0.7), backgroundColor: "#fff" }]}
+      style={[styles.previewThumb, { borderColor: alpha(colors.rule, 0.7), backgroundColor: GIF_PAPER }]}
     />
   );
 }
@@ -415,7 +415,7 @@ function RoutineFan({ routine }: { routine: ProgramRoutine }) {
           style={[
             styles.fanPhoto,
             {
-              backgroundColor: "#fff",
+              backgroundColor: GIF_PAPER,
               borderColor: colors.surface,
               left: i * 12,
               zIndex: gifs.length - i,

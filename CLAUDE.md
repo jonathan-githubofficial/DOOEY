@@ -21,6 +21,32 @@ This file is the canonical entry point. Deeper docs live in [docs/](docs/) and
 **Keep this section true.** Update it before you end a session. It is the only place that records
 where things actually stand, and it is what spares the next session from re-reading the repo.
 
+- **`goBack()` in `lib/nav.ts` is the only way back** (2026-08-09). A bare `router.back()` throws
+  Android's "GO_BACK was not handled by any navigator" the moment it is dispatched against an
+  empty stack, and Android produces that dispatch for free: a double-tapped chevron, or the
+  hardware back pressed again while a sheet's first pop is still animating out (the compose
+  Modal's `onRequestClose` routes hardware back through `onClose`, so every press lands). The
+  helper pops when `router.canGoBack()` and otherwise replaces to the page's own space, passed by
+  each call site: in the double-press race that is where the first pop just put you, so it reads
+  as nothing happening, and on a cold entry (web reload, deep link) it is the drill-out the
+  chevron promised. All fourteen back sites use it; `compose.tsx` keeps its web-reload Redirect.
+- **The design audit's worklist is done** (2026-08-09, steps 1 to 4 and 6 of
+  [docs/design-audit.md](docs/design-audit.md)). Every `shadowColor` literal is gone: standard
+  cards took `useElevation()` whole, and deliberately-shaped surfaces (stamp silhouettes, the
+  plate, the binder rings, the keypad's upward shadow, the login hero) kept their geometry but now
+  tint from `colors.ink` and scale with the shadow slider, including inside the drag-lift worklets.
+  Scrims are `alpha(colors.ink, x)`, text-on-accent is `colors.paper`, and the white mats behind
+  exercise GIFs are one named `GIF_PAPER` in `features/workouts/library.ts` (asset data, like
+  `anatomy.ts`). Nine frozen radii follow `useCardRadius()` (the Style page's 64pt doodle tiles
+  clamped at 20, the `Key` precedent); the week tray and month grid stay `12 + 4`, concentric with
+  their chips. The decorative springs are timing curves: `Check`'s tick, both `BootIntro` calls
+  (the dot still pops to 1.4, as two curves), both `TimeboxSheet` lift scales, and the theme
+  toggle's RN-Animated knob (raised to ratio 1.0; the checker only reads reanimated and never saw
+  it). `<ReducedMotionConfig mode={ReduceMotion.System} />` is mounted at the root. What the
+  checker still prints is the documented-exception list at the top of the audit doc, plus two
+  known opens: AgendaSheet's 340ms fly-off and its 700ms delete pulse. Verified: typecheck clean,
+  96/96 tests, lint still the pre-existing reanimated-idiom errors and nothing new.
+
 - **A task and a log are different sentences, and one pill says which**
   (2026-08-09). It sits in the drawer's bottom row **next to the when pill**, and it offers exactly
   two answers: **To do** and **Log**. It briefly listed the trackers by name instead, which made the
@@ -60,6 +86,59 @@ where things actually stand, and it is what spares the next session from re-read
   **The wordmark animator**: a studio for doodling a flipbook over your own logo. You do that once
   and never look at it again. `logoDoodle`/`logoInterval` and `DoodleFlipbook` went with it; the
   login screen shows the plain wordmark.
+- **"Your week" is on Stamps** (`features/digest/components/WeekCard.tsx`, 2026-08-09). Tasks done,
+  sessions, what was trained, a row per tracker with its average and days logged, and what went
+  quiet. Always the current week, never the month being browsed. The **prose is asked for, never
+  automatic** (`POST /api/digest/narrate`, same provider env as the rambler): the numbers are on
+  screen before any model is involved and stay there if the call fails, because the only part of
+  that card capable of being wrong is the sentence. The prompt forbids arithmetic, forbids any
+  number not already in the payload, and forbids explaining *why* anything happened.
+  **Deltas are never coloured.** `leaf` means done and `clay` means wrong, and neither is true of a
+  number that moved: more sleep is good, more weight might not be, more tasks finished says nothing
+  about the week you had. A change is an arrow and a number in muted ink, and what it means is left
+  to the person who lived it. A `meanDelta` of `null` renders as **silence**, never "no change".
+- **The week's numbers are counted, not generated** (`features/digest/`, 2026-08-09). `digestOf`
+  takes a date window plus the raw records and returns what actually happened: tasks finished and
+  still open, completions per tag, per-tracker readings with mean/min/max/days-logged, workouts with
+  time, volume, sets and which muscles, plus the trackers that were kept up last week and dropped
+  this one. **No model is involved and none ever should be.** Asking a language model to add up
+  forty rows is asking it to be bad at something a loop is perfect at, and a summary whose numbers
+  are quietly wrong reads exactly as confidently as a correct one. Anything that later *narrates* a
+  week gets handed finished numbers and is left with nothing to do but choose the words.
+  **The guardrail is `MIN_FOR_MEAN = 3`:** two averages are only compared when both sides have at
+  least three readings, and `meanDelta` is `null` otherwise. Null means "not enough to say" and must
+  render as silence, never as zero. Counts are exempt, because "three sessions, down from four" is a
+  complete tally rather than a sample. The digest is descriptive by design: it never says *why*, since
+  one person logging for a year is fifty-two data points and a claim drawn from six of them is a
+  guess wearing the clothes of a finding.
+  Decided against, after measuring: **the whole database is 580 KB**, so RAG, a vector index and a
+  knowledge graph all solve a problem this app does not have. Retrieval would answer aggregate
+  questions ("what did I do this week") from *some* of the rows, which is wrong in the way that looks
+  right; and the graph already exists as the relational schema. If free-text recall across months is
+  ever wanted, SQLite FTS5 before embeddings.
+- **Slips drag onto the hour** (`TimeboxSheet`, 2026-08-09). The timeline only ever offered
+  tap-the-slip-then-tap-the-hour, which is a fine fallback and a poor only option. Hold a shelf slip
+  and drag it: it lifts, a dashed zest rule follows the hour under your finger, and letting go gives
+  it that time. The hold is what keeps the day scrollable — a pan that grabbed on contact would eat
+  every swipe starting on a slip. The grid is read with reanimated's `measure()` on an
+  `useAnimatedRef` **inside the gesture worklet**, so the finger and the grid are resolved in the
+  same frame and a drop lands where it looks like it will even after the day has been scrolled.
+  Dropping above the grid leaves the slip where it was. Tap-then-tap stays: it is the only path to
+  an hour that is off the bottom of the screen.
+- **Starting a workout asks first** (2026-08-09). Every route in (Gym's up-next card, a program's
+  routine, the routine page's own button) funnels through a `confirmAction` — a new non-destructive
+  sibling of `confirmDestructive` in `lib/confirm.ts`. Reading what tonight's session *is* and being
+  timed for it were the same tap, and the only way out of an accidental start was to finish or
+  discard a session you never did.
+- **A finished session can be photographed** (migration 034, 2026-08-09). One `photo` file field on
+  `workouts` (single file — a gym photo is a moment, and "which of these six" is a worse question
+  than "here it is"). **Finishing no longer navigates back**: it used to fire you out to Gym past
+  the one screen that says what you just did, which is also the only moment anyone wants to
+  photograph a session. The page turns read-only and holds the totals and a camera invite; leaving
+  is your decision. The picture flows into the Stamps album for that day — `useMonthWorkoutPhotos`
+  is shaped exactly like the tasks' attachment map, and the album merges the two without knowing
+  where a picture came from. `expo-image-picker` is now declared in `app.json` with camera and
+  photo permission strings; it never was, so the camera would have crashed a built iOS app.
 - **The page that turns is a photograph** (`PlannerBook`, 2026-08-09, fourth pass). Three attempts
   at rotating the live page established that **iOS will not do it smoothly however little of it
   re-renders**: a full sheet of text, grain and gradients has to be rasterized to be rotated in 3D,
@@ -316,8 +395,8 @@ where things actually stand, and it is what spares the next session from re-read
   [docs/design-system.md](docs/design-system.md) and [docs/design-audit.md](docs/design-audit.md)
   now describe this app, built on "you own it" and "motion has to do a job". New:
   `frontend/src/lib/motion.ts` (durations, easings, four gesture springs) and `useElevation()` in
-  `frontend/src/stores/theme.ts`. The audit's worklist is unstarted: 21 hardcoded `shadowColor`
-  sites, 34 hex literals, 14 card radii the slider cannot move, 6 springs that visibly bounce.
+  `frontend/src/stores/theme.ts`. The audit's worklist was executed on 2026-08-09; see the bullet
+  at the top of this section and the exception list in the audit doc.
 - **Two folders now: `frontend/` and `backend/`** (2026-07-26). Was `mobile/` and `pb/`. Also gone:
   the 414MB Lynx worktree in `.worktrees/`, the dead lynx plugins in `.claude/settings.json`, a
   `mobile/.claude/` that only enabled the Expo plugin, a committed `settings.local.json` full of

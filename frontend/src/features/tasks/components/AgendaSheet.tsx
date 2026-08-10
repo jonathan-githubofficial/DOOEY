@@ -37,6 +37,7 @@ import { addDays, dayTitle, dueInfo, localDate, toLocalNoon, toPbDate } from "@/
 import { hapticLift, hapticSuccess, hapticTap, hapticWarn } from "@/lib/haptics";
 import { alpha } from "@/lib/theme";
 import { useGardenStore } from "@/stores/garden";
+import { useShadow } from "@/features/style/store";
 import { usePalette, useType } from "@/stores/theme";
 import { useDayTasks, useDeleteTask, useUpdateTask } from "../api";
 import { useCardInk } from "@/features/workouts/hues";
@@ -233,7 +234,10 @@ function SignDay({ date }: { date: string }) {
 
       <Modal visible={open} transparent animationType="fade" onRequestClose={() => setOpen(false)}>
         <GestureHandlerRootView style={styles.signRoot}>
-          <Pressable style={styles.signBackdrop} onPress={() => setOpen(false)}>
+          <Pressable
+            style={[styles.signBackdrop, { backgroundColor: alpha(colors.ink, 0.35) }]}
+            onPress={() => setOpen(false)}
+          >
             <Pressable onPress={() => {}}>
               <DoodleEditor
                 heading={`sign ${dayTitle(date).toLowerCase()}`}
@@ -479,6 +483,7 @@ function DraggableRow({
 }) {
   const colors = usePalette();
   const type = useType();
+  const shadow = useShadow();
   const router = useRouter();
   const update = useUpdateTask();
   const del = useDeleteTask();
@@ -613,8 +618,8 @@ function DraggableRow({
           top: y.value,
           zIndex: 20,
           backgroundColor: surface,
-          shadowOpacity: 0.18,
-          elevation: 6,
+          shadowOpacity: 0.18 * shadow,
+          elevation: Math.round(6 * shadow),
           transform: [{ scale: 1.02 }],
           borderTopColor: "transparent",
         }
@@ -662,7 +667,7 @@ function DraggableRow({
       <Animated.View
         entering={FadeIn.duration(180)}
         exiting={FadeOut.duration(150)}
-        style={[styles.row, { height: h }, rowStyle, { shadowColor: "#282018" }]}
+        style={[styles.row, { height: h }, rowStyle, { shadowColor: colors.ink }]}
       >
         <View style={styles.rowLayer}>
           {!web && (
@@ -1028,7 +1033,6 @@ const styles = StyleSheet.create({
     flex: 1,
     alignItems: "center",
     justifyContent: "center",
-    backgroundColor: "rgba(20, 16, 12, 0.35)",
   },
   deleteBtn: {
     height: 36,

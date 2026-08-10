@@ -129,6 +129,35 @@ export function useMonthAttachments(month: string) {
   });
 }
 
+/** Every task that touched a stretch of days: finished in it, due in it, or
+ * created in it.
+ *
+ * Deliberately over-fetched by a day at each end. `due_date` is stored at
+ * 00:00Z with date-only meaning while `done_at` is a real instant, so the two
+ * cannot share one exact boundary without being wrong by the timezone offset
+ * for one of them. Widening the net and letting the pure `digestOf` do the
+ * precise local-day filtering is cheaper than getting that arithmetic subtly
+ * wrong here. */
+export function useTasksBetween(from: string, to: string) {
+  const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
+  return useQuery({
+    queryKey: ["tasks", "between", from, to] as const,
+    enabled: isAuthenticated,
+    queryFn: async () => {
+      const lo = new Date(`${addDays(from, -1)}T00:00:00`);
+      const hi = new Date(`${addDays(to, 1)}T00:00:00`);
+      const records = await pb.collection("tasks").getFullList({
+        filter: pb.filter(
+          "(done_at >= {:lo} && done_at < {:hi}) || (due_date >= {:lo} && due_date < {:hi}) || (created >= {:lo} && created < {:hi})",
+          { lo, hi },
+        ),
+        sort: "-done_at",
+      });
+      return records.map(toTask);
+    },
+  });
+}
+
 /** Every task belonging to one project (program), across all dates. */
 export function useProjectTasks(projectId: string | undefined) {
   const isAuthenticated = useAuthStore((s) => s.isAuthenticated);

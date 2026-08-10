@@ -21,17 +21,16 @@ import { usePalette, useElevation, useType } from "@/stores/theme";
 export function Panel({ style, children }: PropsWithChildren<{ style?: StyleProp<ViewStyle> }>) {
   const colors = usePalette();
   const radius = useCardRadius();
-  const shadow = useShadow();
+  const elevation = useElevation();
   return (
     <View
       style={[
         styles.panel,
+        elevation,
         {
           borderRadius: radius,
           backgroundColor: colors.surface,
           borderColor: alpha(colors.rule, 0.7),
-          shadowOpacity: 0.08 * shadow,
-          elevation: Math.round(2 * shadow),
         },
         style,
       ]}
@@ -194,10 +193,16 @@ export function StampButton({
         // props, which RNW would turn into a rectangular box-shadow behind
         // the teeth.
         Platform.OS === "web"
-          ? ({ filter: "drop-shadow(0 1.5px 1.5px rgb(40 32 24 / 0.2))" } as unknown as ViewStyle)
+          ? ({
+              filter: `drop-shadow(0 1.5px 1.5px ${alpha(colors.ink, 0.2 * shadow)})`,
+            } as unknown as ViewStyle)
           : [
               styles.stampShadow,
-              { shadowOpacity: 0.2 * shadow, elevation: Math.round(2 * shadow) },
+              {
+                shadowColor: colors.ink,
+                shadowOpacity: 0.2 * shadow,
+                elevation: Math.round(2 * shadow),
+              },
             ],
         disabled && { opacity: 0.4 },
         style,
@@ -234,10 +239,6 @@ const styles = StyleSheet.create({
     // `padding` (or `padding: 0` for a full-bleed card). Baked in here so no
     // panel ends up with content flush against its edge.
     padding: 20,
-    // Soft two-layer web shadow approximated with one gentle native shadow.
-    shadowColor: "#282018",
-    shadowRadius: 8,
-    shadowOffset: { width: 0, height: 3 },
   },
   eyebrow: {
     fontSize: 10,
@@ -264,7 +265,6 @@ const styles = StyleSheet.create({
     paddingVertical: 9,
   },
   stampShadow: {
-    shadowColor: "#282018",
     shadowRadius: 1.5,
     shadowOffset: { width: 0, height: 1.5 },
   },

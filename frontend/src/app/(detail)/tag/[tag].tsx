@@ -1,4 +1,5 @@
 import { useLocalSearchParams, useRouter } from "expo-router";
+import { goBack } from "@/lib/nav";
 import { ChevronLeft } from "lucide-react-native";
 import { ScrollView, StyleSheet, Text, View } from "react-native";
 import Animated, { FadeIn } from "react-native-reanimated";
@@ -26,7 +27,6 @@ export default function TagPage() {
   const colors = usePalette();
   const type = useType();
   const page = usePagePadding();
-  const router = useRouter();
   const { tag = "" } = useLocalSearchParams<{ tag: string }>();
   const { data: tasks, isPending } = useTasksByTag(tag);
 
@@ -41,7 +41,7 @@ export default function TagPage() {
         <PressableScale
           scaleTo={0.85}
           accessibilityLabel="Back"
-          onPress={() => router.back()}
+          onPress={() => goBack("/")}
           style={styles.back}
         >
           <ChevronLeft size={22} color={colors.inkMuted} />

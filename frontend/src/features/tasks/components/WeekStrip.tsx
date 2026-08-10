@@ -198,7 +198,9 @@ const styles = StyleSheet.create({
     flex: 1,
     flexDirection: "row",
     alignItems: "center",
-    borderRadius: 16,
+    // Concentric with the chips it holds: their 12pt corner + this 4pt padding.
+    // A well around controls, not a card; the user's radius stays on the cards.
+    borderRadius: 12 + 4,
     padding: 4,
     gap: 2,
   },

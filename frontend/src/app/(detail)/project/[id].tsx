@@ -1,4 +1,5 @@
 import { useLocalSearchParams, useRouter } from "expo-router";
+import { goBack } from "@/lib/nav";
 import { ChevronLeft, FileText } from "lucide-react-native";
 import { useState } from "react";
 import { Modal, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
@@ -24,7 +25,6 @@ export default function ProjectPage() {
   const colors = usePalette();
   const type = useType();
   const page = usePagePadding();
-  const router = useRouter();
   const { id } = useLocalSearchParams<{ id: string }>();
   const { data: program } = useLearningProgram(id);
   const { data: tasks } = useProjectTasks(id);
@@ -44,7 +44,7 @@ export default function ProjectPage() {
         <PressableScale
           scaleTo={0.85}
           accessibilityLabel="Back to Projects"
-          onPress={() => router.back()}
+          onPress={() => goBack("/")}
           style={styles.back}
         >
           <ChevronLeft size={22} color={colors.inkMuted} />

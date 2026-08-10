@@ -15,14 +15,13 @@ import Animated, {
 import Svg, { Rect } from "react-native-svg";
 import { Grain } from "@/components/grain";
 import { PressableScale } from "@/components/pressable-scale";
-import { useShadow } from "@/features/style/store";
 import { fontStyle } from "@/features/style/tokens";
 import { confirmDestructive } from "@/lib/confirm";
 import { hapticLift, hapticSuccess, hapticTap } from "@/lib/haptics";
 import { ambient, arrive, dur, timing } from "@/lib/motion";
 import { FRAME_W } from "@/lib/shell";
 import { alpha } from "@/lib/theme";
-import { usePalette, useType } from "@/stores/theme";
+import { useElevation, usePalette, useType } from "@/stores/theme";
 import { useNow } from "../clock";
 import { BAR_H, PUCK_H } from "../live-bar";
 import { useLiveBar } from "../store";
@@ -56,7 +55,7 @@ export function LiveBar({
 }) {
   const colors = usePalette();
   const type = useType();
-  const shadow = useShadow();
+  const elevation = useElevation();
   const now = useNow();
   const tucked = useLiveBar((s) => s.tucked);
   const tuck = useLiveBar((s) => s.tuck);
@@ -71,11 +70,7 @@ export function LiveBar({
   const island = {
     backgroundColor: alpha(colors.surface, 0.95),
     borderColor: alpha(colors.rule, 0.7),
-    shadowColor: "#282018",
-    shadowOpacity: 0.1 * shadow,
-    shadowRadius: 8,
-    shadowOffset: { width: 0, height: 3 },
-    elevation: Math.round(3 * shadow),
+    ...elevation,
   } as const;
 
   const x = useSharedValue(0);

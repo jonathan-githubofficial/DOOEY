@@ -5,6 +5,26 @@ Baseline taken 2026-07-25 against `frontend/` (93 source files).
 The work list that turns [design-system.md](design-system.md) from a description of intent into a
 description of the code.
 
+**The worklist was executed on 2026-08-09** (140 source files by then). Steps 1 through 4 and 6
+below are done; the scoreboard's numbers are the baseline, kept for the record. What the checker
+still reports is the set of deliberate, documented exceptions:
+
+- The crash screen in `app/_layout.tsx`: renders when the theme is the thing that broke, so it
+  borrows nothing from it. Commented at the site.
+- Physical light, which does not follow a palette: the plate's metal sheen (`plate.tsx`), the
+  binder wire's specular gradient (`PlannerBook.tsx`), the login wall's picture-light
+  (`login.tsx`). Each commented at the site.
+- `GIF_PAPER` in `features/workouts/library.ts`: the exercise loops are drawn on flat white, so
+  the mat behind one matches the asset, not the theme. The five thumb sites reference it.
+- `anatomy.ts`: illustration data, exempt from the start.
+- The page flip's back spring in `PlannerBook.tsx` (260/26/0.9, ratio 0.85): the one deliberate
+  spring not driven by a finger, decided and documented in CLAUDE.md.
+- `Waveform.tsx`'s beat loop: ambient by admission, documented in CLAUDE.md.
+
+Still open, small and known: `AgendaSheet.tsx`'s fly-off (340ms, above the 220 ceiling; it reads
+as a paper plane leaving and wants a deliberate decision, not a mechanical clamp) and its 700ms
+delete-arming pulse (an ambient loop that should probably be `ambient.breath`).
+
 **Start with the good news.** `frontend/` is in far better shape than the frozen web app was.
 `alpha()` is used in 41 files, `usePalette()` and `useType()` are the norm, `<PressableScale>` is a
 single shared press primitive whose springs are already tuned near-critical with a comment saying
@@ -100,9 +120,9 @@ overshoots. Computed across all 15 spring configs:
 | **0.39** | `520/18` | `components/Check.tsx:28` | The checkbox tick |
 | **0.44** | `320/15 m0.9` | `components/BootIntro.tsx:84` | Boot animation, staggered |
 | **0.63** | `420/26` | `app/(detail)/board/[id].tsx:361` | Board object lift |
-| **0.72** | `260/22 m0.9` | `features/tasks/components/PlannerBook.tsx:71` | Page turn |
 | **0.78** | `420/32` | `features/tasks/components/TimeboxSheet.tsx:321` | Time block lift |
 | 0.83 | `420/34` | `AgendaSheet.tsx:52` (`LIFT`) | Swipe reveal |
+| 0.85 | `260/26 m0.9` | `features/tasks/components/PlannerBook.tsx:208` | Page turn — **settled**, see above |
 | 0.84 | `320/30` | `components/sheet.tsx:56` | Sheet entry |
 | 0.89 | `500/40` | `TimeboxSheet.tsx:276` | Drag snap to slot |
 | 0.98 | `550/46`, `700/52` | `pressable-scale.tsx` | Press and release |
@@ -123,10 +143,11 @@ being picked up. But the lift is a state change (this is now held), not a value 
 driving, so it wants `timing(dur.instant)`. Reserve `gesture.*` for values that track the finger's
 actual position.
 
-`PlannerBook` at 0.72 is the one genuine judgement call. A page turn is a physical metaphor and some
-overshoot is arguably the point. It is also the one animation in the app with a real claim to being
-meaningful rather than decorative. Decide it deliberately rather than by default; if it stays,
-document why.
+`PlannerBook` was the one genuine judgement call and it has been decided: damping went 22 to 26 on
+2026-08-09, taking the ratio from 0.72 to 0.85. A page turn is a physical metaphor and some overshoot
+was arguably the point, but a page that overshoots past flat has gone through the pad, so the
+metaphor argued for settling rather than bouncing. It stays a spring, which is the app's one
+exception to "no finger, no spring": the flip is a physical object landing, not a state change.
 
 ### 6. Six springs where a timing curve was meant
 
@@ -167,25 +188,35 @@ entrance). The rest are untouched.
 Ownership first, because it is what the user can see; motion second, because it is smaller than it
 looks. Each step is independently shippable.
 
-**Step 1. `useElevation()` across the 21 `shadowColor` sites.** Mechanical, no visual change on the
-default theme, and it makes every other theme correct. Start with `components/surface.tsx` since
-`<Panel>` covers the most surfaces at once. Verify by switching to Charcoal and confirming shadows
-go cool.
+**Step 1. `useElevation()` across the 21 `shadowColor` sites.** ✔ Done 2026-08-09. True resting
+cards (`Panel`, the dock island, the zoom stepper, `LiveBar`, the picker cards) took
+`useElevation()` whole. Sites whose geometry is deliberate (the stamp silhouettes, the plate, the
+binder rings, the toggle knob, the keypad's upward shadow, the login hero) kept their shape and
+took the two things that were stolen: tint from `colors.ink` and scale from the shadow slider. The
+drag-lift shadows in `TimeboxSheet` and `AgendaSheet` now also scale with the slider inside their
+worklets.
 
-**Step 2. The remaining colour literals.** 13 whites and 12 `rgba()`. Decide per site whether it
-wants `relight()`, `alpha(colors.paper, x)`, or a palette token. Leave `anatomy.ts` alone.
+**Step 2. The remaining colour literals.** ✔ Done 2026-08-09. Scrims became `alpha(colors.ink, x)`,
+text-on-accent became `colors.paper`, GIF mats became `GIF_PAPER`, and the physical-light sites
+were kept and commented (see the exception list at the top).
 
-**Step 3. Card radii onto `useCardRadius()`.** About 14 sites. Move the slider to both extremes and
-look for corners that did not follow.
+**Step 3. Card radii onto `useCardRadius()`.** ✔ Done 2026-08-09. The login card, both dashed
+add-tiles, the rambler draft cards, the program deal slot and the exercise detail card follow the
+slider; the Style page's 64pt doodle tiles follow it clamped at 20 so a tile stays a tile (the
+`Key` precedent). The week tray and month grid keep `12 + 4`: concentric with the 12pt chips they
+hold, a well rather than a card, written as the derivation it is.
 
-**Step 4. The four clearly decorative springs.** `Check`, both `BootIntro` calls, and the two lifts,
-onto `timing(dur.instant)`. This is where the app stops wobbling. Small diff, biggest change in feel.
+**Step 4. The four clearly decorative springs.** ✔ Done 2026-08-09. `Check`'s tick, both
+`BootIntro` calls and both `TimeboxSheet` lift scales are `timing(dur.instant)`. The dot still
+pops to 1.4 and settles, as two timing curves rather than a wobble. Also caught: the theme
+toggle's RN-Animated knob spring (500/32, ratio 0.72; invisible to the checker, which only reads
+reanimated) raised to damping 45, ratio 1.0.
 
-**Step 5. Decide on `PlannerBook`.** A conversation, not a task.
+**Step 5. Decide on `PlannerBook`.** ✔ Decided during the 2026-08-09 flip rebuild: the desk-calendar
+page turn is the app's one deliberate non-gesture spring, near-critical at 260/26/0.9 (ratio 0.85).
 
-**Step 6. Mount `<ReducedMotionConfig mode={ReduceMotion.System} />` at the app root** in
-`frontend/src/app/_layout.tsx`, so layout animations and entering/exiting presets honour the setting
-alongside the configs in `motion.ts`.
+**Step 6. Mount `<ReducedMotionConfig mode={ReduceMotion.System} />` at the app root.** ✔ Done
+2026-08-09, in `frontend/src/app/_layout.tsx`.
 
 ---
 

@@ -9,13 +9,15 @@ import { PressableScale } from "@/components/pressable-scale";
 import { Eyebrow, Panel, Stamp } from "@/components/surface";
 import { useCardRadius } from "@/features/style/store";
 import { PageDoodle } from "@/features/style/components/PageDoodle";
+import { useWeekDigest } from "@/features/digest/api";
+import { WeekCard } from "@/features/digest/components/WeekCard";
 import { useMonthAttachments } from "@/features/tasks/api";
 import { monthGrid, monthRange } from "@/features/trackers/album";
 import { AlbumGrid, type DayArt } from "@/features/trackers/components/AlbumGrid";
 import { TrackerRoll } from "@/features/trackers/components/TrackerRoll";
 import { liveTrackers, useEntriesRange, useTrackers } from "@/features/trackers/api";
 import { formatValue, type Entry, type Tracker } from "@/features/trackers/types";
-import { useWorkouts } from "@/features/workouts/api";
+import { useMonthWorkoutPhotos, useWorkouts } from "@/features/workouts/api";
 import { MuscleMap } from "@/features/workouts/components/MuscleMap";
 import { focusOf } from "@/features/workouts/focus";
 import { useCardInk } from "@/features/workouts/hues";
@@ -64,8 +66,21 @@ export default function Stamps() {
   const { data: all } = useTrackers();
   const { data: entries, isPending } = useEntriesRange(from, to);
   const { data: workouts } = useWorkouts();
-  const { data: photos } = useMonthAttachments(month);
+  const { data: taskPhotos } = useMonthAttachments(month);
+  const { data: gymPhotos } = useMonthWorkoutPhotos(month);
   const signatures = useGardenStore((s) => s.signatures);
+  const { digest } = useWeekDigest(today);
+
+  // A day's pictures, wherever they came from: something photographed onto a
+  // task, and the shot taken when a session was filed. The album has no
+  // business knowing the difference.
+  const photos = useMemo(() => {
+    const byDay: Record<string, string[]> = {};
+    for (const src of [taskPhotos, gymPhotos]) {
+      for (const [day, uris] of Object.entries(src ?? {})) (byDay[day] ??= []).push(...uris);
+    }
+    return byDay;
+  }, [taskPhotos, gymPhotos]);
 
   const kept = liveTrackers(all);
 
@@ -87,7 +102,7 @@ export default function Stamps() {
   );
 
   const art = (date: string): DayArt => ({
-    photos: photos?.[date] ?? [],
+    photos: photos[date] ?? [],
     doodle: signatures[date],
   });
 
@@ -156,7 +171,7 @@ export default function Stamps() {
               entries={entries ?? []}
               trackers={all ?? []}
               workouts={workouts ?? []}
-              photos={photos?.[open] ?? []}
+              photos={photos[open] ?? []}
               doodle={signatures[open]}
             />
           </Animated.View>
@@ -174,6 +189,12 @@ export default function Stamps() {
             Pick a day to see what it was.
           </Text>
         )}
+
+        {/* This week, counted. It sits under the album rather than above it
+            because the pictures are what this page is for; the numbers are
+            what you come down to afterwards. Always the current week, never
+            the month being browsed: "your week" means the one you are in. */}
+        {digest && <WeekCard digest={digest} />}
 
         {/* The standing achievements, under the month they were earned in.
             It loads its own half-year, so paging back to July cannot make a

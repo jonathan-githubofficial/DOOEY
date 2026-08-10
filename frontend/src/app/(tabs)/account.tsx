@@ -9,6 +9,7 @@ import { Masthead } from "@/components/Masthead";
 import { PressableScale } from "@/components/pressable-scale";
 import { Eyebrow, Panel } from "@/components/surface";
 import { signOut } from "@/features/auth/api";
+import { useShadow } from "@/features/style/store";
 import { PageDoodle } from "@/features/style/components/PageDoodle";
 import { TrackersPanel } from "@/features/trackers/components/TrackersPanel";
 import { alpha } from "@/lib/theme";
@@ -128,16 +129,18 @@ export default function Account() {
 /** A spring-loaded light/dark switch: the knob slides, sun ⇄ moon. */
 function ThemeToggle() {
   const colors = usePalette();
+  const shadow = useShadow();
   const theme = useThemeStore((s) => s.theme);
   const toggle = useThemeStore((s) => s.toggle);
   const dark = theme === "dark";
 
   const slide = useRef(new Animated.Value(dark ? 1 : 0)).current;
   useEffect(() => {
+    // Near-critical (ratio 1.0): the knob travels and stops, no wobble.
     Animated.spring(slide, {
       toValue: dark ? 1 : 0,
       stiffness: 500,
-      damping: 32,
+      damping: 45,
       mass: 1,
       useNativeDriver: true,
     }).start();
@@ -157,7 +160,12 @@ function ThemeToggle() {
       <Animated.View
         style={[
           styles.knob,
-          { backgroundColor: colors.surface },
+          {
+            backgroundColor: colors.surface,
+            shadowColor: colors.ink,
+            shadowOpacity: 0.15 * shadow,
+            elevation: Math.round(2 * shadow),
+          },
           {
             // Travel = width 68 − padding 8 − knob 28.
             transform: [
@@ -287,10 +295,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
     borderRadius: 999,
-    shadowColor: "#282018",
-    shadowOpacity: 0.15,
     shadowRadius: 4,
     shadowOffset: { width: 0, height: 1 },
-    elevation: 2,
   },
 });

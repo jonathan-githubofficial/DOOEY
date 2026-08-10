@@ -20,6 +20,7 @@ import { StatusBar } from "expo-status-bar";
 import { useEffect, useState } from "react";
 import { Appearance, Platform, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
+import { ReducedMotionConfig, ReduceMotion } from "react-native-reanimated";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 import { BootIntro } from "@/components/BootIntro";
 import { Grain } from "@/components/grain";
@@ -109,6 +110,9 @@ export default function RootLayout() {
 
   return (
     <GestureHandlerRootView style={[styles.fill, { backgroundColor: colors.paper }]}>
+      {/* Layout animations and entering/exiting presets honour the OS
+          reduced-motion setting, alongside the configs in lib/motion.ts. */}
+      <ReducedMotionConfig mode={ReduceMotion.System} />
       {/* The gutters beside the tablet frame are paper too — grain them, or
           the texture visibly stops at the frame's edges. */}
       {Platform.OS === "web" && <Grain tone={gallery ? "light" : undefined} />}

@@ -52,6 +52,11 @@ export function prettyName(name: string): string {
   return name.replace(/\b\w/g, (c) => c.toUpperCase());
 }
 
+/** The exercise loops are drawn on flat white. A mat behind one matches the
+ * asset, not the theme: on any palette a themed mat would read as a grey
+ * sticker around a white drawing. Asset data, like anatomy.ts's figures. */
+export const GIF_PAPER = "#ffffff";
+
 /** The demo animation for an exercise. Pass 180 for the small list thumbnails —
  * they render at 40–60px, where 360 is three times the bytes for no visible
  * gain. Everything shown large takes the default. `media360.json` is generated

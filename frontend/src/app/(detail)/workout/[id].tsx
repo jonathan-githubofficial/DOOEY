@@ -1,5 +1,6 @@
-import { useLocalSearchParams, useRouter } from "expo-router";
-import { Check as CheckIcon, ChevronLeft, Pause as PauseIcon, Play, Plus, Square, Trash2, X } from "lucide-react-native";
+import * as ImagePicker from "expo-image-picker";
+import { useLocalSearchParams } from "expo-router";
+import { Camera, Check as CheckIcon, ChevronLeft, Pause as PauseIcon, Play, Plus, Square, Trash2, X } from "lucide-react-native";
 import { useEffect, useRef, useState } from "react";
 import {
   Image,
@@ -25,10 +26,12 @@ import {
   restLookup,
   useDeleteWorkout,
   useFinishWorkout,
+  useSetWorkoutPhoto,
   useTogglePause,
   useUpdateWorkout,
   useWorkout,
   useWorkouts,
+  workoutPhotoUrl,
   type ExerciseRecord,
 } from "@/features/workouts/api";
 import { useNow } from "@/features/workouts/clock";
@@ -38,7 +41,9 @@ import {
   type PickedExercise,
 } from "@/features/workouts/components/ExercisePicker";
 import { KeyPad } from "@/features/workouts/components/KeyPad";
-import { exerciseGif, libraryExercise } from "@/features/workouts/library";
+import { useCardRadius } from "@/features/style/store";
+import { goBack } from "@/lib/nav";
+import { exerciseGif, GIF_PAPER, libraryExercise } from "@/features/workouts/library";
 import { formatRest, useWorkoutPrefs } from "@/features/workouts/store";
 import {
   epley1RM,
@@ -50,6 +55,7 @@ import {
   type WorkoutSet,
 } from "@/features/workouts/types";
 import { confirmDestructive } from "@/lib/confirm";
+import { openSheet } from "@/stores/sheet";
 import { hapticSuccess, hapticTap } from "@/lib/haptics";
 import { playFlip } from "@/lib/sounds";
 import { alpha } from "@/lib/theme";
@@ -79,10 +85,10 @@ function sanitize(s: string): string {
 export default function WorkoutPage() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const colors = usePalette();
+  const radius = useCardRadius();
   const type = useType();
   const insets = useSafeAreaInsets();
   const page = usePagePadding();
-  const router = useRouter();
   const unit = useWorkoutPrefs((s) => s.unit);
   const defaultRest = useWorkoutPrefs((s) => s.restSeconds);
   const autoStartRest = useWorkoutPrefs((s) => s.autoStartRest);
@@ -91,6 +97,7 @@ export default function WorkoutPage() {
   const { data: workouts } = useWorkouts();
   const update = useUpdateWorkout(id);
   const finishWorkout = useFinishWorkout();
+  const setPhoto = useSetWorkoutPhoto();
   const pause = useTogglePause();
   const del = useDeleteWorkout();
 
@@ -243,18 +250,62 @@ export default function WorkoutPage() {
       // The record still holds what was last committed; hand the mutation the
       // entries on screen so a set ticked a moment ago isn't dropped.
       finishWorkout.mutate({ ...workout, entries: effEntries });
-      router.back();
+      // Deliberately no `router.back()`. Finishing used to fire you straight
+      // out to Gym, past the one screen that says what you just did — and past
+      // the only moment anybody wants to photograph a session. The page turns
+      // read-only and holds the totals and the camera; back is a tap away and
+      // is now your decision.
     };
     if (done === 0) {
       confirmDestructive(
         "Nothing logged yet",
         "Finish anyway? This session will be discarded.",
         "Discard session",
-        () => del.mutate(id, { onSuccess: () => router.back() }),
+        () => del.mutate(id, { onSuccess: () => goBack("/gym") }),
       );
     } else {
       close();
     }
+  };
+
+  /** The picture of the session.
+   *
+   * Offered on a filed session, never on a live one: the point is what it was,
+   * not what it is. Camera first because that is the ask — "take a picture" —
+   * with the library beside it for the shot you took mid-set, or for a
+   * simulator with no camera at all. */
+  const pickPhoto = () => {
+    hapticTap();
+    const take = async (from: "camera" | "library") => {
+      const options: ImagePicker.ImagePickerOptions = {
+        mediaTypes: ["images"],
+        quality: 0.7,
+        allowsEditing: false,
+      };
+      const res =
+        from === "camera"
+          ? await ImagePicker.launchCameraAsync(options)
+          : await ImagePicker.launchImageLibraryAsync(options);
+      if (res.canceled || !res.assets[0]) return;
+      setPhoto.mutate({ id, uri: res.assets[0].uri });
+    };
+    openSheet({
+      title: "Picture of this session",
+      actions: [
+        { label: "Take a photo", symbol: "camera", onPress: () => void take("camera") },
+        { label: "Choose from library", symbol: "photo", onPress: () => void take("library") },
+        ...(workout.photo
+          ? [
+              {
+                label: "Remove photo",
+                symbol: "trash",
+                destructive: true,
+                onPress: () => setPhoto.mutate({ id, uri: "" }),
+              },
+            ]
+          : []),
+      ],
+    });
   };
 
   const paused = !!workout.paused_at;
@@ -271,7 +322,7 @@ export default function WorkoutPage() {
         <PressableScale
           scaleTo={0.85}
           accessibilityLabel="Back to Gym"
-          onPress={() => router.back()}
+          onPress={() => goBack("/gym")}
           style={styles.back}
         >
           <ChevronLeft size={22} color={colors.inkMuted} />
@@ -335,6 +386,43 @@ export default function WorkoutPage() {
           />
           <Stat label="sets" value={String(workoutSetsDone(effEntries))} tone={colors.ink} />
         </View>
+
+        {/* Only once the session is filed. A camera on a live workout is an
+            invitation to stop lifting and start staging. */}
+        {!live && (
+          <PressableScale
+            scaleTo={0.98}
+            accessibilityLabel={workout.photo ? "Change the session photo" : "Add a session photo"}
+            onPress={pickPhoto}
+            style={styles.photoWrap}
+          >
+            {workout.photo ? (
+              <Image
+                source={{ uri: workoutPhotoUrl(id, workout.photo, "900x0") }}
+                style={styles.photo}
+                resizeMode="cover"
+              />
+            ) : (
+              <View
+                style={[
+                  styles.photoEmpty,
+                  {
+                    borderColor: alpha(colors.rule, 0.9),
+                    backgroundColor: alpha(colors.zest, 0.06),
+                  },
+                ]}
+              >
+                <Camera size={18} color={colors.zest} />
+                <Text style={[styles.photoText, type.sansMedium, { color: colors.ink }]}>
+                  {setPhoto.isPending ? "Saving…" : "Take a picture of this one"}
+                </Text>
+                <Text style={[styles.photoHint, type.sans, { color: colors.inkMuted }]}>
+                  It goes on today&rsquo;s square in Stamps.
+                </Text>
+              </View>
+            )}
+          </PressableScale>
+        )}
 
         <View style={styles.entries}>
           {effEntries.map((entry, ei) => (
@@ -421,7 +509,7 @@ export default function WorkoutPage() {
               scaleTo={0.97}
               accessibilityLabel="Add an exercise"
               onPress={() => setPicking(true)}
-              style={[styles.addTile, { borderColor: alpha(colors.rule, 0.8) }]}
+              style={[styles.addTile, { borderRadius: radius, borderColor: alpha(colors.rule, 0.8) }]}
             >
               <Plus size={15} color={colors.inkMuted} />
               <Text style={[styles.addText, type.sansMedium, { color: colors.inkMuted }]}>Add exercise</Text>
@@ -434,7 +522,7 @@ export default function WorkoutPage() {
             accessibilityLabel="Delete session"
             onPress={() =>
               confirmDestructive("Delete this session?", effTitle, "Delete", () =>
-                del.mutate(id, { onSuccess: () => router.back() }),
+                del.mutate(id, { onSuccess: () => goBack("/gym") }),
               )
             }
             style={styles.deleteRow}
@@ -542,7 +630,7 @@ function EntryThumb({ libId, onPress }: { libId?: string; onPress: () => void })
       <Image
         source={{ uri: exerciseGif(ex, 180) }}
         resizeMode="cover"
-        style={[styles.entryThumb, { backgroundColor: "#ffffff", borderColor: alpha(colors.rule, 0.7) }]}
+        style={[styles.entryThumb, { backgroundColor: GIF_PAPER, borderColor: alpha(colors.rule, 0.7) }]}
       />
     </PressableScale>
   );
@@ -621,7 +709,7 @@ function SetRow({
             entering={appear()}
             style={[styles.prBadge, { backgroundColor: colors.zest }]}
           >
-            <Text style={[styles.prText, type.sansSemiBold, { color: "#fff" }]}>PR</Text>
+            <Text style={[styles.prText, type.sansSemiBold, { color: colors.paper }]}>PR</Text>
           </Animated.View>
         ) : (
           <Text numberOfLines={1} style={[styles.prevText, type.sans, { color: alpha(colors.inkMuted, 0.8) }]}>
@@ -652,7 +740,7 @@ function SetRow({
           </Text>
         ) : set.done ? (
           <PressableScale scaleTo={0.8} accessibilityLabel="Undo set" onPress={onUndo} style={[styles.actionBtn, { backgroundColor: colors.leaf }]}>
-            <CheckIcon size={15} color="#fff" />
+            <CheckIcon size={15} color={colors.paper} />
           </PressableScale>
         ) : (
           <PressableScale scaleTo={0.85} accessibilityLabel="Complete set" onPress={onComplete} style={[styles.actionBtn, styles.startBtn, { borderColor: colors.leaf }]}>
@@ -737,6 +825,20 @@ const styles = StyleSheet.create({
   stat: { gap: 2 },
   statLabel: { fontSize: 9.5, letterSpacing: 1.6, textTransform: "uppercase" },
   statValue: { fontSize: 17, fontVariant: ["tabular-nums"] },
+  photoWrap: { marginTop: 16 },
+  // 4:3, because a gym photo is a room or a person and neither wants a letterbox.
+  photo: { width: "100%", aspectRatio: 4 / 3, borderRadius: 14 },
+  photoEmpty: {
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 4,
+    paddingVertical: 22,
+    borderWidth: 1,
+    borderStyle: "dashed",
+    borderRadius: 14,
+  },
+  photoText: { marginTop: 4, fontSize: 14 },
+  photoHint: { fontSize: 12 },
   entries: { marginTop: 16, gap: 12 },
   entryCard: { gap: 6 },
   entryHead: { flexDirection: "row", alignItems: "center", gap: 10 },
@@ -802,7 +904,6 @@ const styles = StyleSheet.create({
   addTile: {
     borderWidth: 1,
     borderStyle: "dashed",
-    borderRadius: 16,
     paddingVertical: 13,
     flexDirection: "row",
     alignItems: "center",

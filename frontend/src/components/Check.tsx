@@ -1,13 +1,14 @@
 import { Check as CheckIcon } from "lucide-react-native";
 import { useEffect } from "react";
-import Animated, { useAnimatedStyle, useSharedValue, withSpring } from "react-native-reanimated";
+import Animated, { useAnimatedStyle, useSharedValue, withTiming } from "react-native-reanimated";
 import { PressableScale } from "@/components/pressable-scale";
 import { hapticTap } from "@/lib/haptics";
+import { dur, timing } from "@/lib/motion";
 import { playScratch } from "@/lib/sounds";
 import { alpha } from "@/lib/theme";
 import { usePalette } from "@/stores/theme";
 
-/** The tactile checkbox: presses in on tap, the tick springs on when done.
+/** The tactile checkbox: presses in on tap, the tick lands when done.
  * `gate` marks a learning gate — the ring turns zest until it's cleared. */
 export function Check({
   done,
@@ -25,7 +26,7 @@ export function Check({
   const colors = usePalette();
   const tick = useSharedValue(done ? 1 : 0);
   useEffect(() => {
-    tick.value = withSpring(done ? 1 : 0, { stiffness: 520, damping: 18 });
+    tick.value = withTiming(done ? 1 : 0, timing(dur.instant));
   }, [done, tick]);
   const tickStyle = useAnimatedStyle(() => ({ transform: [{ scale: tick.value }] }));
 

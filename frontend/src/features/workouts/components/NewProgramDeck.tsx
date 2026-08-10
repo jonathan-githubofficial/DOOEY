@@ -9,6 +9,7 @@ import { PressableScale } from "@/components/pressable-scale";
 import { Eyebrow, Panel } from "@/components/surface";
 import { settle } from "@/lib/motion";
 import { useSheetTop } from "@/lib/shell";
+import { useCardRadius } from "@/features/style/store";
 import { alpha } from "@/lib/theme";
 import { usePalette, useType } from "@/stores/theme";
 import { useCardInk } from "../hues";
@@ -45,6 +46,7 @@ export function NewProgramDeck({
 }) {
   const colors = usePalette();
   const type = useType();
+  const radius = useCardRadius();
   const insets = useSafeAreaInsets();
   const sheetTop = useSheetTop();
   const ink = useCardInk();
@@ -211,7 +213,7 @@ export function NewProgramDeck({
             scaleTo={0.98}
             accessibilityLabel="Add a routine"
             onPress={deal}
-            style={[styles.deal, { borderColor: alpha(colors.rule, 0.9) }]}
+            style={[styles.deal, { borderRadius: radius, borderColor: alpha(colors.rule, 0.9) }]}
           >
             <Plus size={16} color={colors.inkMuted} />
             <Text style={[styles.dealText, type.sansMedium, { color: colors.inkMuted }]}>
@@ -265,7 +267,6 @@ const styles = StyleSheet.create({
     gap: 8,
     borderWidth: 1.5,
     borderStyle: "dashed",
-    borderRadius: 18,
     paddingVertical: 20,
   },
   dealText: { fontSize: 14 },

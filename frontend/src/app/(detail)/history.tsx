@@ -1,4 +1,5 @@
 import { useRouter } from "expo-router";
+import { goBack } from "@/lib/nav";
 import { ChevronLeft, Trash2 } from "lucide-react-native";
 import { useMemo } from "react";
 import { ScrollView, StyleSheet, Text, View } from "react-native";
@@ -86,7 +87,7 @@ export default function History() {
         <PressableScale
           scaleTo={0.85}
           accessibilityLabel="Back"
-          onPress={() => router.back()}
+          onPress={() => goBack("/gym")}
           style={styles.back}
         >
           <ChevronLeft size={22} color={colors.inkMuted} />

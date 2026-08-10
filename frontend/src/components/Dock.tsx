@@ -20,12 +20,12 @@ import Animated, {
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { DoodleSvg } from "@/components/DoodleSvg";
 import { Grain } from "@/components/grain";
-import { useShadow, useStyleStore } from "@/features/style/store";
+import { useStyleStore } from "@/features/style/store";
 import { fontStyle } from "@/features/style/tokens";
 import type { Stroke } from "@/lib/doodle";
 import { alpha } from "@/lib/theme";
 import { useAuthStore } from "@/stores/auth";
-import { usePalette, useType } from "@/stores/theme";
+import { useElevation, usePalette, useType } from "@/stores/theme";
 import { settle } from "@/lib/motion";
 import { SPACES, spaceFor, type Space, type SpaceRoute } from "@/lib/spaces";
 
@@ -50,7 +50,7 @@ const DOCK_ICONS: Partial<Record<SpaceRoute, LucideIcon>> = {
  * spring — the RN counterpart of the web dock's layoutId pill. */
 export function Dock({ state, navigation }: TabBarProps) {
   const colors = usePalette();
-  const shadow = useShadow();
+  const elevation = useElevation();
   const insets = useSafeAreaInsets();
 
   // `state.routes[state.index].name` is always one of the six tab routes
@@ -119,11 +119,10 @@ export function Dock({ state, navigation }: TabBarProps) {
       <View
         style={[
           styles.island,
+          elevation,
           {
             backgroundColor: alpha(colors.surface, 0.95),
             borderColor: alpha(colors.rule, 0.7),
-            shadowOpacity: 0.1 * shadow,
-            elevation: Math.round(3 * shadow),
           },
         ]}
       >
@@ -274,9 +273,6 @@ const styles = StyleSheet.create({
     borderRadius: 999,
     borderWidth: 1,
     padding: 4,
-    shadowColor: "#282018",
-    shadowRadius: 8,
-    shadowOffset: { width: 0, height: 3 },
   },
   pill: {
     position: "absolute",

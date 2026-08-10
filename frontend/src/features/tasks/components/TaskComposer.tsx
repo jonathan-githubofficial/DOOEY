@@ -215,11 +215,15 @@ export function TaskComposer({ date }: { date: string }) {
           // into a box-shadow, a rectangle hanging behind the teeth.
           Platform.OS === "web"
             ? ({
-                filter: "drop-shadow(0 1.5px 1.5px rgb(40 32 24 / 0.25))",
+                filter: `drop-shadow(0 1.5px 1.5px ${alpha(colors.ink, 0.25 * shadow)})`,
               } as unknown as ViewStyle)
             : [
                 styles.fabShadow,
-                { shadowOpacity: 0.25 * shadow, elevation: Math.round(4 * shadow) },
+                {
+                  shadowColor: colors.ink,
+                  shadowOpacity: 0.25 * shadow,
+                  elevation: Math.round(4 * shadow),
+                },
               ],
         ]}
       >
@@ -234,13 +238,23 @@ export function TaskComposer({ date }: { date: string }) {
               <DoodleSvg strokes={companion} strokeWidth={3} />
             </View>
             {/* + rides in its own paper disc in the corner. */}
-            <View style={[styles.fabPlusBadge, { backgroundColor: colors.paper }]}>
+            <View
+              style={[
+                styles.fabPlusBadge,
+                { backgroundColor: colors.paper, shadowColor: colors.ink, shadowOpacity: 0.15 * shadow },
+              ]}
+            >
               <Plus size={12} strokeWidth={3} color={colors.zest} />
             </View>
           </>
         ) : (
           // No companion: the + sits centred in a contrasting paper disc.
-          <View style={[styles.fabPlusDisc, { backgroundColor: colors.paper }]}>
+          <View
+            style={[
+              styles.fabPlusDisc,
+              { backgroundColor: colors.paper, shadowColor: colors.ink, shadowOpacity: 0.15 * shadow },
+            ]}
+          >
             <Plus size={20} strokeWidth={2.8} color={colors.zest} />
           </View>
         )}
@@ -292,7 +306,11 @@ export function ComposerSheet({
       {/* A Modal is its own view tree, so gestures inside it need their own
           root — the same thing the doodle pad's modal does. */}
       <GestureHandlerRootView style={styles.fill}>
-        <Animated.View entering={FadeIn.duration(180)} exiting={FadeOut.duration(150)} style={styles.backdrop}>
+        <Animated.View
+          entering={FadeIn.duration(180)}
+          exiting={FadeOut.duration(150)}
+          style={[styles.backdrop, { backgroundColor: alpha(colors.ink, 0.25) }]}
+        >
           <Pressable accessibilityLabel="Close" style={StyleSheet.absoluteFill} onPress={onClose} />
         </Animated.View>
         <KeyboardAvoidingView
@@ -852,7 +870,11 @@ function WhenSheet({
 
   return (
     <Modal visible transparent animationType="none" onRequestClose={onClose}>
-      <Animated.View entering={FadeIn.duration(160)} exiting={FadeOut.duration(140)} style={styles.backdrop}>
+      <Animated.View
+        entering={FadeIn.duration(160)}
+        exiting={FadeOut.duration(140)}
+        style={[styles.backdrop, { backgroundColor: alpha(colors.ink, 0.25) }]}
+      >
         <Pressable accessibilityLabel="Cancel" style={StyleSheet.absoluteFill} onPress={onClose} />
       </Animated.View>
       <View style={styles.sheetHost} pointerEvents="box-none">
@@ -1142,7 +1164,6 @@ const styles = StyleSheet.create({
     justifyContent: "center",
   },
   fabShadow: {
-    shadowColor: "#282018",
     shadowRadius: 4,
     shadowOffset: { width: 0, height: 2 },
   },
@@ -1164,8 +1185,6 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
     borderRadius: 999,
-    shadowColor: "#282018",
-    shadowOpacity: 0.15,
     shadowRadius: 2,
     shadowOffset: { width: 0, height: 1 },
   },
@@ -1178,8 +1197,6 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
     borderRadius: 999,
-    shadowColor: "#282018",
-    shadowOpacity: 0.15,
     shadowRadius: 2,
     shadowOffset: { width: 0, height: 1 },
   },
@@ -1190,7 +1207,6 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     bottom: 0,
-    backgroundColor: "rgba(20, 16, 12, 0.25)",
   },
   sheetHost: {
     flex: 1,

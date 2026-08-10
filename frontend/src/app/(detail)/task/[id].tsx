@@ -1,4 +1,5 @@
 import { useLocalSearchParams, useRouter } from "expo-router";
+import { goBack } from "@/lib/nav";
 import {
   ChevronLeft,
   FolderOpen,
@@ -46,7 +47,6 @@ import { settle } from "@/lib/motion";
 export default function TaskPage() {
   const colors = usePalette();
   const page = usePagePadding();
-  const router = useRouter();
   const { id } = useLocalSearchParams<{ id: string }>();
   const { data: task } = useTask(id);
   const del = useDeleteTask();
@@ -60,7 +60,7 @@ export default function TaskPage() {
         <PressableScale
           scaleTo={0.85}
           accessibilityLabel="Back"
-          onPress={() => router.back()}
+          onPress={() => goBack("/")}
           style={styles.back}
         >
           <ChevronLeft size={22} color={colors.inkMuted} />
@@ -72,7 +72,7 @@ export default function TaskPage() {
             onPress={() =>
               confirmDestructive("Delete task?", task.title, "Delete task", () => {
                 del.mutate(task.id);
-                router.back();
+                goBack("/");
               })
             }
           >

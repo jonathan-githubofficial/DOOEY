@@ -14,6 +14,7 @@ import {
 import Animated, { FadeIn, FadeOut, SlideInDown } from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { PressableScale } from "@/components/pressable-scale";
+import { useCardRadius } from "@/features/style/store";
 import { fmtMin } from "@/features/tasks/timeGrid";
 import { formatValue, type Tracker } from "@/features/trackers/types";
 import { dayTitle } from "@/lib/dates";
@@ -353,9 +354,10 @@ function whenOf(date: string | null, time: string | null): string {
  * would be a scrap of the app floating in a place the app has left. */
 function TaskDraftCard({ draft, onWash }: { draft: TaskDraft; onWash: string }) {
   const type = useType();
+  const radius = useCardRadius();
   const when = whenOf(draft.date, draft.time);
   return (
-    <View style={[styles.card, { backgroundColor: alpha(onWash, 0.1) }]}>
+    <View style={[styles.card, { borderRadius: radius, backgroundColor: alpha(onWash, 0.1) }]}>
       <View style={[styles.tick, { borderColor: alpha(onWash, 0.45) }]} />
       <View style={styles.cardText}>
         <Text style={[styles.cardTitle, type.sansMedium, { color: onWash }]}>{draft.title}</Text>
@@ -379,11 +381,12 @@ function EntryDraftCard({
   onWash: string;
 }) {
   const type = useType();
+  const radius = useCardRadius();
   const when = whenOf(draft.date, draft.time);
   const label = tracker?.name ?? draft.tracker;
   const measured = tracker && draft.value !== null ? formatValue(tracker, draft.value) : "";
   return (
-    <View style={[styles.card, { backgroundColor: alpha(onWash, 0.1) }]}>
+    <View style={[styles.card, { borderRadius: radius, backgroundColor: alpha(onWash, 0.1) }]}>
       <View style={[styles.stampDot, { backgroundColor: alpha(onWash, 0.45) }]} />
       <View style={styles.cardText}>
         <Text style={[styles.cardTitle, type.sansMedium, { color: onWash }]}>
@@ -403,7 +406,7 @@ const styles = StyleSheet.create({
   round: { height: 46, width: 46, borderRadius: 999, alignItems: "center", justifyContent: "center" },
   sending: { opacity: 0.5 },
   scroll: { paddingHorizontal: 16, paddingTop: 8, paddingBottom: 24, gap: 10 },
-  card: { flexDirection: "row", alignItems: "center", gap: 12, borderRadius: 16, padding: 14 },
+  card: { flexDirection: "row", alignItems: "center", gap: 12, padding: 14 },
   tick: { height: 18, width: 18, borderRadius: 999, borderWidth: 1.5 },
   stampDot: { height: 10, width: 10, borderRadius: 3, marginHorizontal: 4 },
   cardText: { flex: 1, minWidth: 0 },

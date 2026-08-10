@@ -24,3 +24,22 @@ export function confirmDestructive(
     actions: [{ label: confirmLabel, destructive: true, onPress: onConfirm }],
   });
 }
+
+/** The same "sure?" for something that isn't destructive — starting a clock,
+ * committing to a thing. Same two ways of asking, no red button, because
+ * nothing here is being lost. */
+export function confirmAction(
+  title: string,
+  message: string,
+  confirmLabel: string,
+  onConfirm: () => void,
+) {
+  if (Platform.OS !== "web") {
+    Alert.alert(title, message || undefined, [
+      { text: "Not yet", style: "cancel" },
+      { text: confirmLabel, onPress: onConfirm },
+    ]);
+    return;
+  }
+  openSheet({ title, message, actions: [{ label: confirmLabel, onPress: onConfirm }] });
+}

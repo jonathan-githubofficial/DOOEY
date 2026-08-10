@@ -9,7 +9,6 @@ import { Grain } from "@/components/grain";
 import { MenuButton } from "@/components/menu-button";
 import { PressableScale } from "@/components/pressable-scale";
 import { useLearningPrograms, useMaterializePrograms } from "@/features/learning/api";
-import { useShadow } from "@/features/style/store";
 import { usePrefetchAdjacentDays } from "@/features/tasks/api";
 import { AgendaSheet } from "@/features/tasks/components/AgendaSheet";
 import { MonthView } from "@/features/tasks/components/MonthView";
@@ -23,7 +22,7 @@ import { hapticTap } from "@/lib/haptics";
 import { DOCK_GAP, useDockTop, usePagePadding } from "@/lib/shell";
 import { alpha } from "@/lib/theme";
 import type { Menu } from "@/stores/sheet";
-import { usePalette, useType } from "@/stores/theme";
+import { useElevation, usePalette, useType } from "@/stores/theme";
 import { useLiveBarInset } from "@/features/workouts/live-bar";
 import { dur } from "@/lib/motion";
 
@@ -73,7 +72,7 @@ export default function Today() {
   const dockTop = useDockTop();
   const liveInset = useLiveBarInset();
   const page = usePagePadding(liveInset);
-  const shadow = useShadow();
+  const elevation = useElevation();
   const router = useRouter();
 
   const [selected, setSelected] = useState(localDate);
@@ -217,11 +216,11 @@ export default function Today() {
         <View
           style={[
             styles.zoom,
+            elevation,
             {
               bottom: dockTop + DOCK_GAP,
               backgroundColor: alpha(colors.surface, 0.95),
               borderColor: alpha(colors.rule, 0.7),
-              shadowOpacity: 0.1 * shadow,
             },
           ]}
         >
@@ -320,9 +319,6 @@ const styles = StyleSheet.create({
     borderRadius: 999,
     borderWidth: 1,
     overflow: "hidden",
-    shadowColor: "#282018",
-    shadowRadius: 8,
-    shadowOffset: { width: 0, height: 3 },
   },
   zoomBtn: {
     height: 40,

@@ -1,5 +1,4 @@
 import * as ImagePicker from "expo-image-picker";
-import { useRouter } from "expo-router";
 import { ChevronLeft, Frame, Pencil, Redo2, Trash2, Undo2 } from "lucide-react-native";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Keyboard, Pressable, StyleSheet, Text, View, useWindowDimensions } from "react-native";
@@ -16,6 +15,7 @@ import { PressableScale } from "@/components/pressable-scale";
 import { confirmDestructive } from "@/lib/confirm";
 import { eraseNear, type InkColor, type Stroke } from "@/lib/doodle";
 import { dur, ease, timing } from "@/lib/motion";
+import { goBack } from "@/lib/nav";
 import { alpha } from "@/lib/theme";
 import { openPrompt, openSheet } from "@/stores/sheet";
 import { usePalette, useType } from "@/stores/theme";
@@ -90,7 +90,6 @@ export function BoardCanvas({ board }: { board: Moodboard }) {
   const colors = usePalette();
   const type = useType();
   const insets = useSafeAreaInsets();
-  const router = useRouter();
   const { width: winW, height: winH } = useWindowDimensions();
   const rename = useRenameBoard();
   const del = useDeleteBoard();
@@ -579,7 +578,7 @@ export function BoardCanvas({ board }: { board: Moodboard }) {
         <PressableScale
           scaleTo={0.85}
           accessibilityLabel="Back to Boards"
-          onPress={() => router.back()}
+          onPress={() => goBack("/boards")}
           style={[
             styles.headBtn,
             { backgroundColor: alpha(colors.surface, 0.95), borderColor: alpha(colors.rule, 0.7) },
@@ -629,7 +628,7 @@ export function BoardCanvas({ board }: { board: Moodboard }) {
                       "Delete board",
                       () => {
                         del.mutate(board.id);
-                        router.back();
+                        goBack("/boards");
                       },
                     ),
                 },

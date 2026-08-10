@@ -45,7 +45,16 @@ function toWorkout(r: RecordModel): Workout {
     paused_at: r.paused_at ?? "",
     paused_ms: r.paused_ms ?? 0,
     entries: (r.entries as WorkoutEntry[] | null) ?? [],
+    photo: r.photo ?? "",
   };
+}
+
+/** Where a session's picture lives. `thumb` asks PocketBase for one of the
+ * sizes the field declares, so a month of squares is not a month of full
+ * photographs. */
+export function workoutPhotoUrl(id: string, filename: string, thumb?: string): string {
+  const base = `${pb.baseURL}/api/files/workouts/${id}/${encodeURIComponent(filename)}`;
+  return thumb ? `${base}?thumb=${thumb}` : base;
 }
 
 export function useRoutines() {
@@ -355,6 +364,75 @@ export function useDeleteWorkout() {
     onSettled: () => qc.invalidateQueries({ queryKey: gymKeys.workouts }),
   });
 }
+
+/** Pin a picture to a session. Passing "" takes it off again.
+ *
+ * A local file URI goes up as multipart, which is the one thing PocketBase's
+ * JSON path cannot carry — hence FormData rather than the usual object. The
+ * album is invalidated too: a gym photo is one of the things a day's square is
+ * made of, so filing one has to reach Stamps. */
+export function useSetWorkoutPhoto() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ id, uri }: { id: string; uri: string }) => {
+      if (!uri) return pb.collection("workouts").update(id, { photo: null });
+      const body = new FormData();
+      body.append("photo", {
+        uri,
+        name: `workout-${id}.jpg`,
+        type: "image/jpeg",
+      } as unknown as Blob);
+      return pb.collection("workouts").update(id, body);
+    },
+    onSettled: (_d, _e, v) => {
+      qc.invalidateQueries({ queryKey: gymKeys.workout(v.id) });
+      qc.invalidateQueries({ queryKey: gymKeys.workouts });
+      qc.invalidateQueries({ queryKey: ["workouts", "monthPhotos"] });
+    },
+  });
+}
+
+/** Session photos for a month, by local day — the gym's half of what the
+ * Stamps album draws in a square. Shaped exactly like the tasks' attachment
+ * map so the album can merge the two and stay ignorant of where a picture
+ * came from. */
+export function useMonthWorkoutPhotos(month: string) {
+  const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
+  return useQuery({
+    queryKey: ["workouts", "monthPhotos", month] as const,
+    enabled: isAuthenticated,
+    queryFn: async () => {
+      const records = await pb.collection("workouts").getFullList({
+        filter: pb.filter("photo != '' && started_at >= {:from} && started_at < {:to}", {
+          from: new Date(`${month}-01T00:00:00`),
+          to: new Date(nextMonthStart(month)),
+        }),
+        fields: "id,started_at,photo",
+      });
+      const byDay: Record<string, string[]> = {};
+      for (const r of records) {
+        // The local day it was trained on, not the UTC one the string starts
+        // with: a 9pm session must not land on tomorrow.
+        const day = toLocalDay(r.started_at as string);
+        (byDay[day] ??= []).push(workoutPhotoUrl(r.id, r.photo as string, "320x320"));
+      }
+      return byDay;
+    },
+  });
+}
+
+const toLocalDay = (iso: string): string => {
+  const d = new Date(iso);
+  return `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`;
+};
+
+const pad2 = (n: number) => String(n).padStart(2, "0");
+
+/** First instant of the month after `month` ("2026-08" → "2026-09-01T00:00:00"). */
+const nextMonthStart = (month: string): string => {
+  const [y, m] = month.split("-").map(Number);
+  return m === 12 ? `${y + 1}-01-01T00:00:00` : `${y}-${pad2(m + 1)}-01T00:00:00`;
+};
 
 export function emptySet(): WorkoutSet {
   return { weight: 0, reps: 0, done: false };

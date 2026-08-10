@@ -19,6 +19,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Grain } from "@/components/grain";
 import { StampButton } from "@/components/surface";
 import { signIn, signUp } from "@/features/auth/api";
+import { useCardRadius } from "@/features/style/store";
 import { fontStyle } from "@/features/style/tokens";
 import { hapticSuccess, hapticTap, hapticWarn } from "@/lib/haptics";
 import { alpha, type Palette } from "@/lib/theme";
@@ -67,6 +68,7 @@ function strengthOf(pw: string): { score: number; label: string } {
 export default function Login() {
   // The gallery is always lit: the front door ignores the app theme.
   const colors = LIGHT_PALETTE;
+  const radius = useCardRadius();
   const type = useType();
   const insets = useSafeAreaInsets();
   const router = useRouter();
@@ -161,7 +163,8 @@ export default function Login() {
         <Grain tone="light" />
       </View>
 
-      {/* The picture-light: a soft wash spilling from above onto the wall. */}
+      {/* The picture-light: a soft wash spilling from above onto the wall.
+          Physical light in the pinned gallery scene, not a palette colour. */}
       <LinearGradient
         pointerEvents="none"
         colors={["rgba(255,255,255,0.14)", "transparent"]}
@@ -184,8 +187,13 @@ export default function Login() {
           style={styles.hang}
         >
           {/* One quiet card on the wall: no moulding, just soft paper. */}
-          <View style={[styles.card, { backgroundColor: colors.surface, shadowColor: "#282018" }]}>
-            <Grain radius={24} tone="light" />
+          <View
+            style={[
+              styles.card,
+              { borderRadius: radius, backgroundColor: colors.surface, shadowColor: colors.ink },
+            ]}
+          >
+            <Grain radius={radius} tone="light" />
 
             {/* The wordmark, plain. A studio for doodling an animation over it
                 lived on Account for a while; drawing a flipbook of your own
@@ -388,7 +396,6 @@ const styles = StyleSheet.create({
   },
   card: {
     alignSelf: "stretch",
-    borderRadius: 24,
     paddingHorizontal: 26,
     paddingTop: 32,
     paddingBottom: 26,

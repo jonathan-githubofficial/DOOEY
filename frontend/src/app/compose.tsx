@@ -2,6 +2,7 @@ import { Redirect, useLocalSearchParams, useRouter } from "expo-router";
 import { Platform } from "react-native";
 import { ComposerSheet } from "@/features/tasks/components/TaskComposer";
 import { localDate } from "@/lib/dates";
+import { goBack } from "@/lib/nav";
 import { useAuthStore } from "@/stores/auth";
 
 /** The new-task drawer.
@@ -29,7 +30,7 @@ export default function Compose() {
     <ComposerSheet
       date={date ?? localDate()}
       initialStart={start ? Number(start) : undefined}
-      onClose={() => router.back()}
+      onClose={() => goBack("/")}
     />
   );
 }

@@ -1,4 +1,5 @@
 import { useLocalSearchParams, useRouter } from "expo-router";
+import { goBack } from "@/lib/nav";
 import { ChevronDown, ChevronLeft, ChevronUp, Play, Plus, Trash2, X } from "lucide-react-native";
 import { useEffect, useRef, useState } from "react";
 import {
@@ -27,10 +28,11 @@ import { ExercisePicker, type PickedExercise } from "@/features/workouts/compone
 import { useEmblem } from "@/features/workouts/emblem";
 import { focusOf, hueOf } from "@/features/workouts/focus";
 import { useCardInk } from "@/features/workouts/hues";
-import { exerciseGif, libraryExercise } from "@/features/workouts/library";
+import { useCardRadius } from "@/features/style/store";
+import { exerciseGif, GIF_PAPER, libraryExercise } from "@/features/workouts/library";
 import { formatRest, useWorkoutPrefs } from "@/features/workouts/store";
 import type { RoutineItem } from "@/features/workouts/types";
-import { confirmDestructive } from "@/lib/confirm";
+import { confirmAction, confirmDestructive } from "@/lib/confirm";
 import { Stepper } from "@/components/stepper";
 import { hapticTap } from "@/lib/haptics";
 import { alpha } from "@/lib/theme";
@@ -43,6 +45,7 @@ import { settle } from "@/lib/motion";
 export default function RoutineEditor() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const colors = usePalette();
+  const radius = useCardRadius();
   const type = useType();
   const page = usePagePadding();
   const router = useRouter();
@@ -122,9 +125,17 @@ export default function RoutineEditor() {
     hapticTap();
     // One session at a time — if something's already running, jump to it.
     if (live) return router.push({ pathname: "/workout/[id]", params: { id: live.id } });
-    start.mutate(
-      { id, name: effName.trim() || "Routine", items: effItems },
-      { onSuccess: (w) => router.push({ pathname: "/workout/[id]", params: { id: w.id } }) },
+    // Asked here as well as on Gym: this page is where you come to *read* a
+    // routine, which is exactly where an accidental start is easiest.
+    confirmAction(
+      `Start ${effName.trim() || "this routine"}?`,
+      "The clock starts now.",
+      "Start now",
+      () =>
+        start.mutate(
+          { id, name: effName.trim() || "Routine", items: effItems },
+          { onSuccess: (w) => router.push({ pathname: "/workout/[id]", params: { id: w.id } }) },
+        ),
     );
   };
 
@@ -133,7 +144,7 @@ export default function RoutineEditor() {
       `Delete “${effName}”?`,
       "This removes the routine. Logged sessions stay in your history.",
       "Delete routine",
-      () => del.mutate(id, { onSuccess: () => router.back() }),
+      () => del.mutate(id, { onSuccess: () => goBack("/gym") }),
     );
 
   return (
@@ -145,7 +156,7 @@ export default function RoutineEditor() {
         <PressableScale
           scaleTo={0.85}
           accessibilityLabel="Back to Gym"
-          onPress={() => router.back()}
+          onPress={() => goBack("/gym")}
           style={styles.back}
         >
           <ChevronLeft size={22} color={colors.inkMuted} />
@@ -261,7 +272,7 @@ export default function RoutineEditor() {
             scaleTo={0.97}
             accessibilityLabel="Add an exercise"
             onPress={() => setPicking(true)}
-            style={[styles.addTile, { borderColor: alpha(colors.rule, 0.8) }]}
+            style={[styles.addTile, { borderRadius: radius, borderColor: alpha(colors.rule, 0.8) }]}
           >
             <Plus size={15} color={colors.inkMuted} />
             <Text style={[styles.addText, type.sansMedium, { color: colors.inkMuted }]}>
@@ -292,7 +303,7 @@ function ItemThumb({ libId }: { libId?: string }) {
     <Image
       source={{ uri: exerciseGif(ex, 180) }}
       resizeMode="cover"
-      style={[styles.thumb, { backgroundColor: "#ffffff", borderColor: alpha(colors.rule, 0.7) }]}
+      style={[styles.thumb, { backgroundColor: GIF_PAPER, borderColor: alpha(colors.rule, 0.7) }]}
     />
   );
 }
@@ -475,7 +486,6 @@ const styles = StyleSheet.create({
   addTile: {
     borderWidth: 1,
     borderStyle: "dashed",
-    borderRadius: 16,
     paddingVertical: 13,
     flexDirection: "row",
     alignItems: "center",

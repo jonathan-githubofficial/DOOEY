@@ -121,8 +121,10 @@ inputs) can use a fixed smaller radius; anything card-shaped uses the hook.
 | `lifted` | The finger is holding it. Drag, reorder, the live block. |
 
 It returns the whole shadow style, scaled by the user's shadow slider and tinted from their `ink`.
-Writing `shadowColor` by hand is the single most common ownership violation in the app; see
-[design-audit.md](design-audit.md) finding 1.
+Writing `shadowColor` by hand was the app's most common ownership violation; the 2026-08-09 pass
+moved every site onto it (see [design-audit.md](design-audit.md) finding 1). A surface whose
+geometry is deliberately its own (the stamp silhouette, the plate, the binder rings) keeps its
+shape but still takes its tint from `ink` and its scale from the slider.
 
 Depth comes from soft light, never bevels or gloss.
 

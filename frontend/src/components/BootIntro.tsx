@@ -7,12 +7,12 @@ import Animated, {
   useSharedValue,
   withDelay,
   withSequence,
-  withSpring,
   withTiming,
 } from "react-native-reanimated";
 import { Grain } from "@/components/grain";
 import { fontStyle } from "@/features/style/tokens";
 import { hapticSuccess, hapticTap } from "@/lib/haptics";
+import { dur, timing } from "@/lib/motion";
 import { usePalette } from "@/stores/theme";
 
 // Once per app launch — module scope survives remounts, not a fresh process.
@@ -22,7 +22,7 @@ const LETTERS = ["D", "O", "O", "E", "Y"];
 const STAGGER = 130; // ms between letters landing
 const HOLD = 620; // ms the finished wordmark sits before it clears
 
-/** The front-door flourish: DOOEY springs on letter by letter, each with a
+/** The front-door flourish: DOOEY lands letter by letter, each with a
  * light tick, the zest full-stop pops last, then the whole thing lifts away to
  * reveal the app. Plays once. */
 export function BootIntro({ onDone }: { onDone: () => void }) {
@@ -75,11 +75,11 @@ function BootIntroPlaying({
   );
 }
 
-/** One letter, springing up from below with a touch of overshoot. */
+/** One letter, rising from below and stopping dead: set type, not jelly. */
 function BootLetter({ ch, index, color }: { ch: string; index: number; color: string }) {
   const p = useSharedValue(0);
   useEffect(() => {
-    p.value = withDelay(index * STAGGER, withSpring(1, { stiffness: 320, damping: 15, mass: 0.9 }));
+    p.value = withDelay(index * STAGGER, withTiming(1, timing(dur.instant)));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
   const style = useAnimatedStyle(() => ({
@@ -93,16 +93,13 @@ function BootLetter({ ch, index, color }: { ch: string; index: number; color: st
   );
 }
 
-/** The full-stop lands last with a little bounce — the dot on the i, so to speak. */
+/** The full-stop pops last: one deliberate overshoot and a clean settle. */
 function BootDot({ color, index }: { color: string; index: number }) {
   const p = useSharedValue(0);
   useEffect(() => {
     p.value = withDelay(
       index * STAGGER,
-      withSequence(
-        withTiming(1.4, { duration: 140, easing: Easing.out(Easing.quad) }),
-        withSpring(1, { stiffness: 380, damping: 12 }),
-      ),
+      withSequence(withTiming(1.4, timing(dur.instant)), withTiming(1, timing(dur.instant))),
     );
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);

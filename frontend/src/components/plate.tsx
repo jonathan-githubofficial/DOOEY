@@ -1,6 +1,7 @@
 import { LinearGradient } from "expo-linear-gradient";
 import { StyleSheet, Text, type StyleProp, type ViewStyle } from "react-native";
 import { PressableScale } from "@/components/pressable-scale";
+import { useShadow } from "@/features/style/store";
 import type { Palette } from "@/lib/theme";
 import { usePalette, useType } from "@/stores/theme";
 
@@ -22,6 +23,7 @@ export function Plate({
 }) {
   const themed = usePalette();
   const type = useType();
+  const shadow = useShadow();
   const colors = palette ?? themed;
   return (
     <PressableScale
@@ -30,8 +32,19 @@ export function Plate({
       accessibilityLabel={label}
       disabled={disabled}
       onPress={onPress}
-      style={[styles.plate, { backgroundColor: colors.ink }, style, disabled && { opacity: 0.35 }]}
+      style={[
+        styles.plate,
+        {
+          backgroundColor: colors.ink,
+          shadowColor: colors.ink,
+          shadowOpacity: 0.25 * shadow,
+          elevation: Math.round(4 * shadow),
+        },
+        style,
+        disabled && { opacity: 0.35 },
+      ]}
     >
+      {/* Physical light on metal, not palette: the sheen stays white in every theme. */}
       <LinearGradient
         pointerEvents="none"
         colors={["rgba(255,255,255,0.18)", "transparent", "rgba(0,0,0,0.22)"]}
@@ -50,11 +63,8 @@ const styles = StyleSheet.create({
     paddingVertical: 13,
     paddingHorizontal: 34,
     overflow: "hidden",
-    shadowColor: "#282018",
-    shadowOpacity: 0.25,
     shadowRadius: 5,
     shadowOffset: { width: 0, height: 3 },
-    elevation: 4,
   },
   plateText: {
     fontSize: 13,

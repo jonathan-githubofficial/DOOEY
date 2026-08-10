@@ -65,7 +65,7 @@ export function KeyPad({
           // does not, because it is attached. Just enough to separate the pad
           // from a scroller sliding under it, and it honours the user's own
           // shadow setting like every other surface does.
-          shadowColor: "#282018",
+          shadowColor: colors.ink,
           shadowOpacity: 0.07 * shadow,
           shadowRadius: 10,
           shadowOffset: { width: 0, height: -2 },

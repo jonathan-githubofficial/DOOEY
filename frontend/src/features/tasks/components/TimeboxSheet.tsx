@@ -1,33 +1,43 @@
 import { useRouter } from "expo-router";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { Pressable, StyleSheet, Text, View, type GestureResponderEvent } from "react-native";
 import { Gesture, GestureDetector } from "react-native-gesture-handler";
 import Animated, {
   FadeIn,
   FadeOut,
+  measure,
   runOnJS,
+  useAnimatedRef,
   useAnimatedStyle,
   useSharedValue,
   withSpring,
+  withTiming,
+  type AnimatedRef,
+  type SharedValue,
 } from "react-native-reanimated";
 import { Check } from "@/components/Check";
 import { Eyebrow } from "@/components/surface";
+import { useShadow } from "@/features/style/store";
 import { useNowMinutes } from "@/lib/clock";
 import { localDate } from "@/lib/dates";
-import { hapticLift } from "@/lib/haptics";
+import { hapticLift, hapticSuccess } from "@/lib/haptics";
 import { alpha } from "@/lib/theme";
 import { usePalette, useType } from "@/stores/theme";
 import { useDayTasks, useUpdateTask } from "../api";
 import { DAY_END, DAY_START, GUTTER, SNAP, clamp, fmtMin, layoutLanes, snap } from "../timeGrid";
 import type { Task } from "../types";
 import { PageSheet } from "./AgendaSheet";
-import { settle } from "@/lib/motion";
+import { dur, settle, timing } from "@/lib/motion";
 
+
+/** How a slip dropped on nothing returns to the shelf. */
+const HOME = { stiffness: 420, damping: 34 };
 
 /** The day as a ruled sheet of hours. Blocks are paper slips pinned to their
- * slots; unscheduled work waits on a shelf above. Tap a shelf slip, then an
- * hour, to place it (the mobile stand-in for the web's drag) — or tap an empty
- * hour to box in a brand-new task. Long-press a slip for shelf/delete. */
+ * slots; unscheduled work waits on a shelf above. **Hold a slip and drag it
+ * onto an hour** to give it that time, or tap the slip and then the hour when
+ * the hour you want is off the bottom of the screen. Tap an empty hour to box
+ * in a brand-new task. */
 export function TimeboxSheet({
   date,
   pxPerMin,
@@ -44,7 +54,35 @@ export function TimeboxSheet({
   const { data: tasks, isPending, error } = useDayTasks(date);
   const update = useUpdateTask();
   const [placing, setPlacing] = useState<string | null>(null);
-  const gridRef = useRef<View>(null);
+  // An animated ref, so a dragging slip can `measure()` the grid on the UI
+  // thread mid-gesture: the finger's position and the grid's are then read in
+  // the same frame, which is what makes a drop land where it looks like it
+  // will even if the day has been scrolled.
+  const gridRef = useAnimatedRef<View>();
+  // Which hour a drag is hovering. A shared value, because a drop line driven
+  // by React state would re-render every block on the day at 60fps to move one
+  // hairline.
+  const hoverMin = useSharedValue(-1);
+
+  /** A worklet, and the parent's to own: the drop line belongs to this grid, so
+   * a dragging slip reports the hour it is over rather than reaching in and
+   * setting it. */
+  const showDrop = useCallback(
+    (min: number) => {
+      "worklet";
+      hoverMin.value = min;
+    },
+    [hoverMin],
+  );
+
+  const dropAt = useCallback(
+    (id: string, start_min: number) => {
+      hapticSuccess();
+      update.mutate({ id, patch: { start_min } });
+      setPlacing(null);
+    },
+    [update],
+  );
 
   const open = useMemo(() => (tasks ?? []).filter((t) => !t.done_at), [tasks]);
   const scheduled = open.filter((t) => t.start_min > 0);
@@ -114,19 +152,24 @@ export function TimeboxSheet({
                     task={t}
                     active={placing === t.id}
                     onPress={() => setPlacing((p) => (p === t.id ? null : t.id))}
+                    pxPerMin={pxPerMin}
+                    gridRef={gridRef}
+                    onHover={showDrop}
+                    onDrop={(min) => dropAt(t.id, min)}
                   />
                 ))}
               </View>
               <Text style={[styles.shelfHint, type.sans, { color: alpha(colors.inkMuted, 0.8) }]}>
                 {placing
                   ? "Now tap an hour below to give it that time."
-                  : "Tap a slip, then an hour below, to give it a time."}
+                  : "Hold a slip and drag it onto an hour — or tap it, then an hour."}
               </Text>
             </View>
           )}
 
           <View ref={gridRef} style={[styles.grid, { height: (DAY_END - DAY_START) * pxPerMin }]}>
             <HourGrid pxPerMin={pxPerMin} today={date === localDate()} />
+            <DropLine pxPerMin={pxPerMin} hoverMin={hoverMin} />
             <Pressable
               accessibilityLabel="Add a task at this time"
               onPress={tapGrid}
@@ -152,13 +195,43 @@ export function TimeboxSheet({
           {scheduled.length === 0 && (
             <Text style={[styles.emptyHint, type.sans, { color: colors.inkMuted }]}>
               {shelf.length > 0
-                ? "Tap an hour to add, or place a slip from the shelf."
+                ? "Tap an hour to add, or drag a slip down from the shelf."
                 : "Tap any hour to box in a task."}
             </Text>
           )}
         </>
       )}
     </PageSheet>
+  );
+}
+
+/** Where a dragged slip would land: one zest rule across the hour under the
+ * finger. It lives on shared values, so following a drag costs no renders. */
+function DropLine({
+  pxPerMin,
+  hoverMin,
+}: {
+  pxPerMin: number;
+  hoverMin: SharedValue<number>;
+}) {
+  const colors = usePalette();
+  const style = useAnimatedStyle(() => ({
+    opacity: hoverMin.value < 0 ? 0 : 1,
+    top: (hoverMin.value - DAY_START) * pxPerMin,
+  }));
+
+  return (
+    <Animated.View pointerEvents="none" style={[styles.tick, styles.dropLine, style]}>
+      <View style={[styles.dropDot, { left: GUTTER - 4, backgroundColor: colors.zest }]} />
+      <View
+        style={{
+          marginLeft: GUTTER + 4,
+          borderTopWidth: 2,
+          borderStyle: "dashed",
+          borderTopColor: colors.zest,
+        }}
+      />
+    </Animated.View>
   );
 }
 
@@ -246,6 +319,7 @@ function TimeBlock({
 }) {
   const colors = usePalette();
   const type = useType();
+  const shadow = useShadow();
   const router = useRouter();
   const height = task.dur_min * pxPerMin;
   const compact = height < 46;
@@ -260,7 +334,7 @@ function TimeBlock({
   }, [height, liveH]);
 
   const start = task.start_min;
-  const dur = task.dur_min;
+  const durMin = task.dur_min;
 
   const movePan = Gesture.Pan()
     .activateAfterLongPress(180)
@@ -297,13 +371,13 @@ function TimeBlock({
       resizing.value = true;
     })
     .onUpdate((e) => {
-      const rawDur = dur + e.translationY / pxPerMin;
+      const rawDur = durMin + e.translationY / pxPerMin;
       const snapped = Math.min(DAY_END - start, Math.max(SNAP, Math.round(rawDur / SNAP) * SNAP));
       liveH.value = snapped * pxPerMin;
     })
     .onEnd(() => {
       const finalDur = Math.round(liveH.value / pxPerMin / SNAP) * SNAP;
-      if (finalDur !== dur) runOnJS(onResize)(finalDur);
+      if (finalDur !== durMin) runOnJS(onResize)(finalDur);
     })
     .onFinalize(() => {
       resizing.value = false;
@@ -313,11 +387,11 @@ function TimeBlock({
     height: liveH.value,
     opacity: offSheet.value ? 0.5 : 1,
     zIndex: lifted.value || resizing.value ? 30 : 1,
-    shadowOpacity: lifted.value ? 0.25 : 0.08,
-    elevation: lifted.value ? 6 : 1,
+    shadowOpacity: (lifted.value ? 0.25 : 0.08) * shadow,
+    elevation: Math.round((lifted.value ? 6 : 1) * shadow),
     transform: [
       { translateY: offset.value },
-      { scale: withSpring(lifted.value ? 1.02 : 1, { stiffness: 420, damping: 32 }) },
+      { scale: withTiming(lifted.value ? 1.02 : 1, timing(dur.instant)) },
       { rotate: lifted.value ? "-0.4deg" : "0deg" },
     ],
   }));
@@ -337,6 +411,7 @@ function TimeBlock({
             width: `${100 / lane.lanes}%`,
             backgroundColor: colors.surface,
             borderColor: alpha(colors.rule, 0.7),
+            shadowColor: colors.ink,
           },
         ]}
       >
@@ -355,7 +430,7 @@ function TimeBlock({
             </Text>
             {!compact && (
               <Text style={[styles.blockTime, type.sans, { color: colors.inkMuted }]}>
-                {fmtMin(start)} – {fmtMin(start + dur)}
+                {fmtMin(start)} – {fmtMin(start + durMin)}
               </Text>
             )}
           </View>
@@ -371,24 +446,105 @@ function TimeBlock({
   );
 }
 
-/** An unscheduled task waiting on the shelf — tap to arm it, then tap an hour. */
+/** An unscheduled task waiting on the shelf.
+ *
+ * **Hold it and drag it onto an hour.** That is the direct way to say "this,
+ * then" and it is what anyone who has used a calendar reaches for first; the
+ * tap-then-tap path stays because it is the one that works when the hour you
+ * want is off the bottom of the screen, and because a target you must hit with
+ * a moving finger is a poor only option.
+ *
+ * The hold is what keeps the day scrollable: a pan that grabbed on contact
+ * would eat every upward swipe that happened to start on a slip. Same 180ms
+ * and the same lift as a block already on the grid, so a slip behaves like a
+ * block before it has a time. */
 function ShelfChip({
   task,
   active,
   onPress,
+  pxPerMin,
+  gridRef,
+  onHover,
+  onDrop,
 }: {
   task: Task;
   active: boolean;
   onPress: () => void;
+  pxPerMin: number;
+  /** Measured mid-gesture, so the finger and the grid are read in one frame. */
+  gridRef: AnimatedRef<View>;
+  /** Worklet. The hour this slip is over, or -1 for none. */
+  onHover: (min: number) => void;
+  onDrop: (min: number) => void;
 }) {
   const colors = usePalette();
   const type = useType();
+  const shadow = useShadow();
   const update = useUpdateTask();
+
+  const lifted = useSharedValue(false);
+  const dx = useSharedValue(0);
+  const dy = useSharedValue(0);
+
+  /** The finger's window Y as a snapped minute, or null when it is above the
+   * grid — which is how a slip gets dropped back on the shelf unchanged. */
+  const minAt = (absoluteY: number) => {
+    "worklet";
+    const box = measure(gridRef);
+    if (!box) return null;
+    const raw = DAY_START + (absoluteY - box.pageY) / pxPerMin;
+    if (raw < DAY_START - 20) return null;
+    return Math.min(DAY_END - SNAP, Math.max(DAY_START, Math.round(raw / SNAP) * SNAP));
+  };
+
+  const drag = Gesture.Pan()
+    .activateAfterLongPress(180)
+    .onStart(() => {
+      lifted.value = true;
+      runOnJS(hapticLift)();
+    })
+    .onUpdate((e) => {
+      dx.value = e.translationX;
+      dy.value = e.translationY;
+      onHover(minAt(e.absoluteY) ?? -1);
+    })
+    .onEnd((e) => {
+      const min = minAt(e.absoluteY);
+      if (min != null) runOnJS(onDrop)(min);
+    })
+    .onFinalize(() => {
+      lifted.value = false;
+      // Springs home if it was dropped nowhere; if it landed, the slip leaves
+      // the shelf anyway and this is never seen.
+      dx.value = withSpring(0, HOME);
+      dy.value = withSpring(0, HOME);
+      onHover(-1);
+    });
+
+  const chipStyle = useAnimatedStyle(() => ({
+    zIndex: lifted.value ? 40 : 0,
+    shadowOpacity: (lifted.value ? 0.22 : 0) * shadow,
+    elevation: lifted.value ? Math.round(6 * shadow) : 0,
+    transform: [
+      { translateX: dx.value },
+      { translateY: dy.value },
+      { scale: withTiming(lifted.value ? 1.06 : 1, timing(dur.instant)) },
+      { rotate: lifted.value ? "-1.5deg" : "0deg" },
+    ],
+  }));
+
   return (
-    <Animated.View entering={FadeIn.duration(160)} exiting={FadeOut.duration(140)} layout={settle()}>
+    <GestureDetector gesture={drag}>
+    <Animated.View
+      entering={FadeIn.duration(160)}
+      exiting={FadeOut.duration(140)}
+      layout={settle()}
+      style={[chipStyle, styles.shelfChipLift, { shadowColor: colors.ink }]}
+    >
       <Pressable
         onPress={onPress}
         accessibilityState={{ selected: active }}
+        accessibilityHint="Hold and drag onto an hour, or tap and then tap an hour"
         style={[
           styles.shelfChip,
           {
@@ -414,6 +570,7 @@ function ShelfChip({
         </Text>
       </Pressable>
     </Animated.View>
+    </GestureDetector>
   );
 }
 
@@ -449,6 +606,12 @@ const styles = StyleSheet.create({
     paddingVertical: 6,
     paddingLeft: 8,
     paddingRight: 14,
+  },
+  // The lifted slip needs a shadow to carry and has to sit above its
+  // neighbours while it travels.
+  shelfChipLift: {
+    shadowRadius: 8,
+    shadowOffset: { width: 0, height: 3 },
   },
   shelfChipText: {
     maxWidth: 176,
@@ -495,16 +658,25 @@ const styles = StyleSheet.create({
     width: 7,
     borderRadius: 999,
   },
+  // Above the blocks: the line says where the slip goes, so it has to be
+  // readable over whatever is already sitting there.
+  dropLine: {
+    zIndex: 35,
+  },
+  dropDot: {
+    position: "absolute",
+    top: -4,
+    height: 9,
+    width: 9,
+    borderRadius: 999,
+  },
   block: {
     position: "absolute",
     borderWidth: 1,
     borderRadius: 12,
     overflow: "hidden",
-    shadowColor: "#282018",
-    shadowOpacity: 0.08,
     shadowRadius: 4,
     shadowOffset: { width: 0, height: 2 },
-    elevation: 1,
   },
   blockAccent: {
     position: "absolute",

@@ -44,6 +44,13 @@
           "microphonePermission": "Allow $(PRODUCT_NAME) to use the microphone so you can ramble.",
           "speechRecognitionPermission": "Allow $(PRODUCT_NAME) to use speech recognition so rambles become tasks."
         }
+      ],
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "Allow $(PRODUCT_NAME) to use your photos so a board or a session can carry one.",
+          "cameraPermission": "Allow $(PRODUCT_NAME) to use the camera so you can photograph a workout."
+        }
       ]
     ],
     "experiments": {

@@ -43,7 +43,10 @@ export function AvatarDoodle() {
         {/* A native Modal is its own gesture root — without this the drawing
             pan inside never receives touches. */}
         <GestureHandlerRootView style={styles.root}>
-          <Pressable style={styles.backdrop} onPress={() => setOpen(false)}>
+          <Pressable
+            style={[styles.backdrop, { backgroundColor: alpha(colors.ink, 0.35) }]}
+            onPress={() => setOpen(false)}
+          >
             {/* Swallow taps on the card itself so only the backdrop closes. */}
             <Pressable onPress={() => {}}>
               <DoodleEditor
@@ -80,6 +83,5 @@ const styles = StyleSheet.create({
     flex: 1,
     alignItems: "center",
     justifyContent: "center",
-    backgroundColor: "rgba(20, 16, 12, 0.35)",
   },
 });

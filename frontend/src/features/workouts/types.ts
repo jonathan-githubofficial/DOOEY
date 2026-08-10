@@ -80,6 +80,8 @@ export interface Workout {
   paused_at: string; // ISO while paused, "" while running
   paused_ms: number; // banked by pauses already ended
   entries: WorkoutEntry[];
+  /** Filename of the picture taken when the session was filed, or "". */
+  photo: string;
 }
 
 /** Total weight moved: Σ weight × reps over completed weighted sets. */

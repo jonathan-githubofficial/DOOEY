@@ -56,7 +56,7 @@ import {
   type RoutineTemplate,
   type WorkoutProgram,
 } from "@/features/workouts/types";
-import { confirmDestructive } from "@/lib/confirm";
+import { confirmAction, confirmDestructive } from "@/lib/confirm";
 import { hapticTap } from "@/lib/haptics";
 import { alpha } from "@/lib/theme";
 import type { Menu } from "@/stores/sheet";
@@ -138,9 +138,19 @@ export default function Gym() {
   const openRoutine = (rid: string) =>
     router.push({ pathname: "/routine/[id]", params: { id: rid } });
 
+  /** Every way into a session comes through here, so the clock is only ever
+   * started on purpose. It used to start on the tap that opened the routine,
+   * which meant reading what tonight's session *is* and being timed for it
+   * were the same gesture — and the only way out was to finish or discard a
+   * session you never did. */
   const startWorkout = (routine: RoutineTemplate | null) => {
     if (live) return openWorkout(live.id); // one session at a time
-    start.mutate(routine, { onSuccess: (w) => openWorkout(w.id) });
+    confirmAction(
+      routine ? `Start ${routine.name}?` : "Start a workout?",
+      "The clock starts now.",
+      "Start now",
+      () => start.mutate(routine, { onSuccess: (w) => openWorkout(w.id) }),
+    );
   };
 
   const toggleCollapsed = (id: string) => {

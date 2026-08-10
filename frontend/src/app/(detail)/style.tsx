@@ -1,6 +1,6 @@
 import { ChevronLeft } from "lucide-react-native";
-import { useRouter } from "expo-router";
 import { ScrollView, StyleSheet, View } from "react-native";
+import { goBack } from "@/lib/nav";
 import { usePagePadding } from "@/lib/shell";
 import { Grain } from "@/components/grain";
 import { Masthead } from "@/components/Masthead";
@@ -12,7 +12,6 @@ import { usePalette } from "@/stores/theme";
 export default function Style() {
   const colors = usePalette();
   const page = usePagePadding();
-  const router = useRouter();
 
   return (
     <View style={[styles.screen, { backgroundColor: colors.paper, paddingTop: page.paddingTop }]}>
@@ -23,7 +22,7 @@ export default function Style() {
         <PressableScale
           scaleTo={0.85}
           accessibilityLabel="Back to You"
-          onPress={() => router.back()}
+          onPress={() => goBack("/account")}
           style={styles.back}
         >
           <ChevronLeft size={22} color={colors.inkMuted} />

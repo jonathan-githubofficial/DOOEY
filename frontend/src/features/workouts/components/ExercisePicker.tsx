@@ -20,12 +20,14 @@ import { Grain } from "@/components/grain";
 import { Plate } from "@/components/plate";
 import { PressableScale } from "@/components/pressable-scale";
 import { Eyebrow } from "@/components/surface";
+import { useCardRadius } from "@/features/style/store";
 import { hapticTap } from "@/lib/haptics";
 import { alpha } from "@/lib/theme";
-import { usePalette, useType } from "@/stores/theme";
+import { useElevation, usePalette, useType } from "@/stores/theme";
 import {
   exerciseGif,
   exerciseMuscles,
+  GIF_PAPER,
   kindOf,
   libraryExercise,
   MUSCLE_GROUPS,
@@ -287,13 +289,18 @@ function GroupCard({
 }) {
   const colors = usePalette();
   const type = useType();
+  const elevation = useElevation();
   return (
     <PressableScale
       scaleTo={0.96}
       accessibilityRole="button"
       accessibilityLabel={`${group.label}, ${group.count} exercises`}
       onPress={onPress}
-      style={[styles.groupCard, { backgroundColor: colors.surface, borderColor: alpha(colors.rule, 0.7) }]}
+      style={[
+        styles.groupCard,
+        elevation,
+        { backgroundColor: colors.surface, borderColor: alpha(colors.rule, 0.7) },
+      ]}
     >
       <Grain radius={9} />
       <View style={[styles.groupCardThumb, { backgroundColor: alpha(colors.ink, 0.04) }]}>
@@ -329,6 +336,7 @@ function ExerciseTile({
 }) {
   const colors = usePalette();
   const type = useType();
+  const elevation = useElevation();
   const lean = index % 3 === 0 ? "-1.2deg" : index % 3 === 1 ? "0.9deg" : "-0.5deg";
   return (
     <PressableScale
@@ -339,6 +347,7 @@ function ExerciseTile({
       onLongPress={onInfo}
       style={[
         styles.tile,
+        elevation,
         {
           backgroundColor: colors.surface,
           borderColor: selected ? colors.zest : alpha(colors.rule, 0.7),
@@ -351,7 +360,7 @@ function ExerciseTile({
       <Image
         source={{ uri: exerciseGif(exercise) }}
         resizeMode="cover"
-        style={[styles.tilePhoto, { backgroundColor: "#ffffff" }]}
+        style={[styles.tilePhoto, { backgroundColor: GIF_PAPER }]}
       />
       {/* The ⓘ dot — how-to without leaving your selection. */}
       <Pressable
@@ -364,7 +373,7 @@ function ExerciseTile({
       </Pressable>
       {picking && selected && (
         <View style={[styles.tileCheck, { backgroundColor: colors.zest }]}>
-          <Text style={styles.tileCheckMark}>✓</Text>
+          <Text style={[styles.tileCheckMark, { color: colors.paper }]}>✓</Text>
         </View>
       )}
       <Text numberOfLines={2} style={[styles.tileName, type.sansMedium, { color: colors.ink }]}>
@@ -392,6 +401,7 @@ function ExerciseDetail({
 }) {
   const colors = usePalette();
   const type = useType();
+  const radius = useCardRadius();
   const insets = useSafeAreaInsets();
   const { primary, secondary } = exerciseMuscles(exercise);
   return (
@@ -421,7 +431,11 @@ function ExerciseDetail({
         <View
           style={[
             styles.detailCard,
-            { backgroundColor: colors.surface, borderColor: alpha(colors.rule, 0.7) },
+            {
+              borderRadius: radius,
+              backgroundColor: colors.surface,
+              borderColor: alpha(colors.rule, 0.7),
+            },
           ]}
         >
           <Image source={{ uri: exerciseGif(exercise) }} resizeMode="contain" style={styles.detailGif} />
@@ -531,11 +545,6 @@ const styles = StyleSheet.create({
     borderRadius: 14,
     padding: 8,
     paddingBottom: 10,
-    shadowColor: "#282018",
-    shadowOpacity: 0.1,
-    shadowRadius: 6,
-    shadowOffset: { width: 0, height: 3 },
-    elevation: 2,
   },
   groupCardThumb: {
     height: 132,
@@ -595,11 +604,6 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     padding: 6,
     paddingBottom: 8,
-    shadowColor: "#282018",
-    shadowOpacity: 0.1,
-    shadowRadius: 6,
-    shadowOffset: { width: 0, height: 3 },
-    elevation: 2,
   },
   tileSelected: {
     borderWidth: 2,
@@ -632,7 +636,6 @@ const styles = StyleSheet.create({
     justifyContent: "center",
   },
   tileCheckMark: {
-    color: "#fff",
     fontSize: 12,
     fontWeight: "700",
   },
@@ -673,14 +676,13 @@ const styles = StyleSheet.create({
     width: 240,
     maxWidth: "100%",
     borderWidth: 1,
-    borderRadius: 16,
     overflow: "hidden",
-    backgroundColor: "#ffffff",
+    backgroundColor: GIF_PAPER,
   },
   detailGif: {
     width: "100%",
     aspectRatio: 1,
-    backgroundColor: "#ffffff",
+    backgroundColor: GIF_PAPER,
   },
   anatomy: {
     marginTop: 14,

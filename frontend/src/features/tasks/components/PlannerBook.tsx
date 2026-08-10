@@ -17,7 +17,7 @@ import Animated, {
   withTiming,
 } from "react-native-reanimated";
 import { captureRef, releaseCapture } from "react-native-view-shot";
-import { useCardRadius } from "@/features/style/store";
+import { useCardRadius, useShadow } from "@/features/style/store";
 import { playFlip } from "@/lib/sounds";
 import { alpha } from "@/lib/theme";
 import { usePalette, useThemeStore } from "@/stores/theme";
@@ -320,6 +320,7 @@ export function PlannerBook({
  * holes. They belong to the binder, so they sit above every flipping page. */
 function Rings() {
   const colors = usePalette();
+  const shadow = useShadow();
   const dark = useThemeStore((s) => s.theme) === "dark";
   return (
     <View pointerEvents="none" style={styles.bindingRow}>
@@ -327,7 +328,18 @@ function Rings() {
         <View key={i} style={styles.bindingSlot}>
           {/* Shadow on a wrapper: the web's 0 1px 2px drop under each wire —
               the gradient view itself would clip it. */}
-          <View style={styles.ringShadow}>
+          <View
+            style={[
+              styles.ringShadow,
+              {
+                shadowColor: colors.ink,
+                shadowOpacity: 0.3 * shadow,
+                elevation: Math.round(2 * shadow),
+              },
+            ]}
+          >
+            {/* Physical light on the metal wire, not palette: a specular
+                highlight stays white in every theme, like the plate's sheen. */}
             <LinearGradient
               colors={
                 dark
@@ -393,11 +405,8 @@ const styles = StyleSheet.create({
   },
   ringShadow: {
     borderRadius: 999,
-    shadowColor: "#282018",
-    shadowOpacity: 0.3,
     shadowRadius: 2,
     shadowOffset: { width: 0, height: 1 },
-    elevation: 2,
   },
   ring: {
     height: 36,

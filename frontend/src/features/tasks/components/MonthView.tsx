@@ -171,7 +171,8 @@ const styles = StyleSheet.create({
   grid: {
     flexDirection: "row",
     flexWrap: "wrap",
-    borderRadius: 16,
+    // Concentric with the day cells: their 12pt corner + this 4pt padding.
+    borderRadius: 12 + 4,
     padding: 4,
   },
   cell: {

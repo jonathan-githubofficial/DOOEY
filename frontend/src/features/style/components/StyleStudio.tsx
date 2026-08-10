@@ -15,7 +15,7 @@ import { Eyebrow, Panel, Stamp, StampButton } from "@/components/surface";
 import { alpha, type Palette } from "@/lib/theme";
 import { usePalette, useThemeStore, useType } from "@/stores/theme";
 import { settle } from "@/lib/motion";
-import { BASE, useStyleStore } from "../store";
+import { BASE, useCardRadius, useStyleStore } from "../store";
 import {
   BACKDROPS,
   COLOR_TOKENS,
@@ -279,6 +279,8 @@ function MixSlider({
 function PageDoodlesPanel() {
   const colors = usePalette();
   const type = useType();
+  // The user's radius until a 64pt tile would stop reading as a tile.
+  const tileRadius = Math.min(useCardRadius(), 20);
   const pageDoodles = useStyleStore((s) => s.pageDoodles);
   const setPageDoodle = useStyleStore((s) => s.setPageDoodle);
   const dockDoodles = useStyleStore((s) => s.dockDoodles);
@@ -332,12 +334,13 @@ function PageDoodlesPanel() {
                 style={[
                   styles.doodleTile,
                   {
+                    borderRadius: tileRadius,
                     backgroundColor: colors.paper,
                     borderColor: editing === p.key ? colors.zest : alpha(colors.rule, 0.7),
                   },
                 ]}
               >
-                <Grain radius={15} />
+                <Grain radius={tileRadius - 1} />
                 {strokes.length ? (
                   <View style={styles.doodleArt}>
                     <DoodleSvg strokes={strokes} />
@@ -380,6 +383,7 @@ const MAX_POSES = 4;
 function CompanionPanel() {
   const colors = usePalette();
   const type = useType();
+  const tileRadius = Math.min(useCardRadius(), 20);
   const frames = useStyleStore((s) => s.companion);
   const setCompanion = useStyleStore((s) => s.setCompanion);
   // Editing an existing pose by index; frames.length means "a new pose".
@@ -413,12 +417,13 @@ function CompanionPanel() {
               style={[
                 styles.doodleTile,
                 {
+                  borderRadius: tileRadius,
                   backgroundColor: colors.paper,
                   borderColor: editing === i ? colors.zest : alpha(colors.rule, 0.7),
                 },
               ]}
             >
-              <Grain radius={15} />
+              <Grain radius={tileRadius - 1} />
               <View style={styles.doodleArt}>
                 <DoodleSvg strokes={strokes} />
               </View>
@@ -446,6 +451,7 @@ function CompanionPanel() {
                 styles.doodleTile,
                 styles.poseAdd,
                 {
+                  borderRadius: tileRadius,
                   borderColor:
                     editing === frames.length ? colors.zest : alpha(colors.rule, 0.9),
                 },
@@ -919,7 +925,6 @@ const styles = StyleSheet.create({
     width: 64,
     alignItems: "center",
     justifyContent: "center",
-    borderRadius: 16,
     borderWidth: 1,
   },
   doodleArt: { height: 48, width: 48 },
